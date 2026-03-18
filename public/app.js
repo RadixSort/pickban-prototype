@@ -1,3 +1,5 @@
+const { buildSelectedChampionKeys, filterUnavailableResults } = globalThis.suggestionFilters;
+
 const state = {
   champions: [],
   allies: [],
@@ -136,6 +138,10 @@ function handleOutsideClick(event) {
 
     picker.suggestions.innerHTML = "";
   }
+}
+
+function getSelectedChampionKeys() {
+  return buildSelectedChampionKeys(state.allies, state.enemies);
 }
 
 function renderAll() {
@@ -412,7 +418,7 @@ async function handleFetchSuggestions() {
       throw new Error(payload.error || "Failed to fetch support suggestions.");
     }
 
-    state.lastResults = payload.results || [];
+    state.lastResults = filterUnavailableResults(payload.results || [], getSelectedChampionKeys());
     state.lastMeta = payload.meta || null;
     setStatus(`Fetched ${state.lastResults.length} support suggestions.`);
   } catch (error) {
@@ -484,10 +490,12 @@ async function handleCloseApp() {
 }
 
 function renderResults() {
+  const visibleResults = filterUnavailableResults(state.lastResults, getSelectedChampionKeys());
+
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
 
-  if (!state.lastResults.length) {
+  if (!visibleResults.length) {
     emptyState.classList.remove("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = "";
@@ -496,9 +504,9 @@ function renderResults() {
 
   emptyState.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
-  resultsMeta.textContent = `${state.lastResults.length} ranked support options`;
+  resultsMeta.textContent = `${visibleResults.length} ranked support options`;
 
-  state.lastResults.forEach((result, index) => {
+  visibleResults.forEach((result, index) => {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td class="rank-cell">${index + 1}</td>
