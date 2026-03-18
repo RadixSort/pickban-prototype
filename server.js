@@ -10,10 +10,12 @@ const PATCH_WINDOW = "7";
 const TIER = "platinum_plus";
 const QUEUE = "ranked";
 const REGION = "all";
+const MIN_SUPPORT_PICK_RATE = 0.5;
 const LOLALYTICS_BASE_URL = "https://lolalytics.com";
 const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const SUPPORT_PICK_RATE_INDEX = 4;
 
 const requestCache = new Map();
 
@@ -72,9 +74,10 @@ app.post("/suggest", async (request, response) => {
     for (const result of allyResults) {
       if (result.status === "fulfilled") {
         const rows = result.value.rows;
-        for (const [supportKey, value] of rows) {
+        for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
-          record.synergyValues.push(value);
+          record.synergyValues.push(row.value);
+          record.pickRates.push(row.pickRate);
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -84,9 +87,10 @@ app.post("/suggest", async (request, response) => {
     for (const result of enemyResults) {
       if (result.status === "fulfilled") {
         const rows = result.value.rows;
-        for (const [supportKey, value] of rows) {
+        for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
-          record.counterValues.push(value);
+          record.counterValues.push(row.value);
+          record.pickRates.push(row.pickRate);
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -98,6 +102,7 @@ app.post("/suggest", async (request, response) => {
         const synergyScore = average(candidate.synergyValues);
         const counterScore = average(candidate.counterValues);
         const finalScore = 0.5 * synergyScore + 0.5 * counterScore;
+        const pickRate = average(candidate.pickRates);
 
         return {
           support: candidate.name,
@@ -106,8 +111,10 @@ app.post("/suggest", async (request, response) => {
           synergyScore,
           counterScore,
           finalScore,
+          pickRate,
         };
       })
+      .filter((candidate) => candidate.pickRate >= MIN_SUPPORT_PICK_RATE)
       .sort(compareResults);
 
     if (results.length === 0) {
@@ -427,14 +434,19 @@ function extractSupportValues(rows, valueIndex) {
   }
 
   for (const row of rows) {
-    if (!Array.isArray(row) || row.length <= valueIndex) {
+    if (!Array.isArray(row) || row.length <= Math.max(valueIndex, SUPPORT_PICK_RATE_INDEX)) {
       continue;
     }
 
     const supportKey = String(row[0]);
     const value = row[valueIndex];
+    const pickRate = row[SUPPORT_PICK_RATE_INDEX];
 
     if (typeof value !== "number" || Number.isNaN(value)) {
+      continue;
+    }
+
+    if (typeof pickRate !== "number" || Number.isNaN(pickRate)) {
       continue;
     }
 
@@ -442,7 +454,10 @@ function extractSupportValues(rows, valueIndex) {
       continue;
     }
 
-    supportValues.set(supportKey, value);
+    supportValues.set(supportKey, {
+      value,
+      pickRate,
+    });
   }
 
   return supportValues;
@@ -465,6 +480,7 @@ function getCandidateRecord(candidateScores, supportKey) {
     icon: champion.icon,
     synergyValues: [],
     counterValues: [],
+    pickRates: [],
   };
 
   candidateScores.set(supportKey, created);
