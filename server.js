@@ -2,6 +2,10 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const { version: appVersion } = require("./package.json");
+const {
+  buildEligibleSupportTierStats,
+  extractSupportTierListRows,
+} = require("./lib/lolalytics-tier-list.js");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -16,12 +20,13 @@ const PATCH_WINDOW = "7";
 const TIER = "platinum_plus";
 const QUEUE = "ranked";
 const REGION = "all";
-const MIN_SUPPORT_PICK_RATE = 0.5;
+const MIN_SUPPORT_TIER_LIST_PICK_RATE = 0.5;
+const MIN_SUPPORT_TIER_LIST_LANE_PERCENT = 10;
 const LOLALYTICS_BASE_URL = "https://lolalytics.com";
 const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
+const LOLALYTICS_SUPPORT_TIER_LIST_URL = `${LOLALYTICS_BASE_URL}/lol/tierlist/?lane=support&tier=${TIER}&patch=${PATCH_WINDOW}&view=list`;
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const SUPPORT_PICK_RATE_INDEX = 4;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
@@ -83,6 +88,7 @@ app.post("/suggest", async (request, response) => {
     }
 
     const partialFailures = [];
+    const eligibleSupportTierStatsPromise = fetchEligibleSupportTierStats();
 
     const allyResults = await Promise.allSettled(
       allies.map(async ({ champion, lane }) => ({
@@ -99,6 +105,7 @@ app.post("/suggest", async (request, response) => {
       })),
     );
 
+    const eligibleSupportTierStats = await eligibleSupportTierStatsPromise;
     const candidateScores = new Map();
 
     for (const result of allyResults) {
@@ -107,7 +114,6 @@ app.post("/suggest", async (request, response) => {
         for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
           record.synergyValues.push(row.value);
-          record.pickRates.push(row.pickRate);
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -120,7 +126,6 @@ app.post("/suggest", async (request, response) => {
         for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
           record.counterValues.push(row.value);
-          record.pickRates.push(row.pickRate);
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -130,10 +135,14 @@ app.post("/suggest", async (request, response) => {
     const results = filterUnavailableResults(
       Array.from(candidateScores.values())
         .map((candidate) => {
+          const supportTierStats = eligibleSupportTierStats.get(String(candidate.key));
+          if (!supportTierStats) {
+            return null;
+          }
+
           const synergyScore = average(candidate.synergyValues);
           const counterScore = average(candidate.counterValues);
           const finalScore = 0.5 * synergyScore + 0.5 * counterScore;
-          const pickRate = average(candidate.pickRates);
 
           return {
             support: candidate.name,
@@ -142,10 +151,12 @@ app.post("/suggest", async (request, response) => {
             synergyScore,
             counterScore,
             finalScore,
-            pickRate,
+            lanePercent: supportTierStats.lanePercent,
+            pickRate: supportTierStats.pickRate,
+            winRate: supportTierStats.winRate,
           };
         })
-        .filter((candidate) => candidate.pickRate >= MIN_SUPPORT_PICK_RATE)
+        .filter(Boolean)
         .sort(compareResults),
       selectedChampionKeys,
     );
@@ -369,6 +380,30 @@ async function fetchSupportSynergyRowsForLane(champion, lane) {
   return extractSupportValues(payload?.team?.support, 3);
 }
 
+async function fetchEligibleSupportTierStats() {
+  const html = await fetchLolalyticsText(LOLALYTICS_SUPPORT_TIER_LIST_URL, "support tier list");
+  const rows = extractSupportTierListRows(html);
+  if (rows.length === 0) {
+    throw createHttpError(502, "Lolalytics support tier list was missing champion rows.");
+  }
+
+  const eligibleSupportTierStats = buildEligibleSupportTierStats(
+    rows,
+    championBySlug,
+    championByName,
+    {
+      minLanePercent: MIN_SUPPORT_TIER_LIST_LANE_PERCENT,
+      minPickRate: MIN_SUPPORT_TIER_LIST_PICK_RATE,
+    },
+  );
+
+  if (eligibleSupportTierStats.size === 0) {
+    throw createHttpError(502, "Lolalytics support tier list returned no eligible support picks.");
+  }
+
+  return eligibleSupportTierStats;
+}
+
 async function fetchLolalyticsBuildData(slug) {
   const payload = await fetchLolalyticsJson(
     `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?tier=${TIER}&patch=${PATCH_WINDOW}`,
@@ -392,6 +427,14 @@ async function fetchLolalyticsMegaJson(query, label) {
 }
 
 async function fetchLolalyticsJson(url, label) {
+  return fetchLolalyticsResource(url, label, "json");
+}
+
+async function fetchLolalyticsText(url, label) {
+  return fetchLolalyticsResource(url, label, "text");
+}
+
+async function fetchLolalyticsResource(url, label, responseType) {
   const cached = requestCache.get(url);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.data;
@@ -419,7 +462,7 @@ async function fetchLolalyticsJson(url, label) {
       );
     }
 
-    const data = await res.json();
+    const data = responseType === "text" ? await res.text() : await res.json();
     requestCache.set(url, {
       data,
       expiresAt: Date.now() + CACHE_TTL_MS,
@@ -509,19 +552,14 @@ function extractSupportValues(rows, valueIndex) {
   }
 
   for (const row of rows) {
-    if (!Array.isArray(row) || row.length <= Math.max(valueIndex, SUPPORT_PICK_RATE_INDEX)) {
+    if (!Array.isArray(row) || row.length <= valueIndex) {
       continue;
     }
 
     const supportKey = String(row[0]);
     const value = row[valueIndex];
-    const pickRate = row[SUPPORT_PICK_RATE_INDEX];
 
     if (typeof value !== "number" || Number.isNaN(value)) {
-      continue;
-    }
-
-    if (typeof pickRate !== "number" || Number.isNaN(pickRate)) {
       continue;
     }
 
@@ -531,7 +569,6 @@ function extractSupportValues(rows, valueIndex) {
 
     supportValues.set(supportKey, {
       value,
-      pickRate,
     });
   }
 
@@ -555,7 +592,6 @@ function getCandidateRecord(candidateScores, supportKey) {
     icon: champion.icon,
     synergyValues: [],
     counterValues: [],
-    pickRates: [],
   };
 
   candidateScores.set(supportKey, created);

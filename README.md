@@ -61,12 +61,14 @@ Rules built into the app:
 - Ally lane assignment is optional.
 - The same champion cannot be selected on both sides.
 - You must choose at least one champion before fetching suggestions.
+- Suggested champions must appear on the live support tier list with at least `10%` lane share and `0.5%` pick rate.
 
 ## What The Scores Mean
 
 - `SynergyScore`: the average support synergy value gathered from the allied champions you selected.
 - `CounterScore`: the average support counter value gathered from the enemy champions you selected.
 - `FinalScore`: `50% SynergyScore + 50% CounterScore`.
+- `WinRate`: the champion's live support win rate from the Lolalytics support tier list.
 
 Higher scores rank closer to the top.
 
@@ -85,7 +87,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.2.0`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.3.0`.
 
 ### The app does not start
 

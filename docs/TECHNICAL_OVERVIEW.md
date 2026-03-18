@@ -62,6 +62,7 @@ The project combines:
 
 - local champion metadata from `public/champions.json`
 - live Lolalytics responses for synergy and counter data
+- live Lolalytics support tier-list rows for support eligibility and win rates
 
 ### Local Metadata
 
@@ -80,6 +81,7 @@ Two remote Lolalytics sources are used:
 
 - synergy data from the Lolalytics mega endpoint
 - counter data from the Lolalytics champion build `q-data.json` endpoint
+- support tier-list data from the Lolalytics support tier-list page
 
 The server currently uses hard-coded settings:
 
@@ -136,6 +138,13 @@ The final output for each support is:
 - `counterScore = average(counterValues)`
 - `finalScore = 0.5 * synergyScore + 0.5 * counterScore`
 
+Before a support is returned, it must also appear on the live support tier list with:
+
+- `lanePercent >= 10`
+- `pickRate >= 0.5`
+
+The returned row also includes the live support `winRate` from that tier list.
+
 Sorting rules:
 
 1. higher `finalScore`
@@ -171,6 +180,7 @@ Successful responses look like this:
       "support": "Thresh",
       "supportKey": "412",
       "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
+      "winRate": 51.88,
       "synergyScore": 52.31,
       "counterScore": 50.94,
       "finalScore": 51.625

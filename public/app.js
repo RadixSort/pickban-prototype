@@ -8,7 +8,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.2.0",
+  version: "0.3.0",
   lastResults: [],
   lastMeta: null,
 };
@@ -516,6 +516,7 @@ function renderResults() {
           <span>${result.support}</span>
         </div>
       </td>
+      <td>${formatRate(result.winRate)}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
       <td class="final-score">${formatScore(result.finalScore)}</td>
@@ -541,6 +542,14 @@ function renderResults() {
 
 function formatScore(value) {
   return Number(value || 0).toFixed(2);
+}
+
+function formatRate(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "-";
+  }
+
+  return `${Number(value).toFixed(2)}%`;
 }
 
 function formatVersion(version) {
