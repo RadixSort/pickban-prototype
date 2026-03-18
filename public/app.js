@@ -1,5 +1,11 @@
 const { buildSelectedChampionKeys, filterUnavailableResults } = globalThis.suggestionFilters;
 const {
+  DEFAULT_RANK_FILTER,
+  getRankFilterLabel,
+  getRankFilterOptions,
+  normalizeRankFilter,
+} = globalThis.rankFilters;
+const {
   DEFAULT_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
   getProjectedAgency,
@@ -24,10 +30,11 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.7.0",
+  version: "0.8.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,
+  rankFilter: DEFAULT_RANK_FILTER,
   targetRole: DEFAULT_TARGET_ROLE,
 };
 
@@ -51,6 +58,7 @@ const pickers = {
   },
 };
 
+const rankFilterSelect = document.getElementById("rank-filter");
 const targetRoleSelect = document.getElementById("target-role");
 const fetchButton = document.getElementById("fetch-button");
 const resetButton = document.getElementById("reset-button");
@@ -88,10 +96,12 @@ async function initialize() {
     champion.searchText = normalizeText(`${champion.name} ${champion.id}`);
   });
   await loadAppConfig();
+  initializeRankFilterOptions();
 
   wirePicker("allies");
   wirePicker("enemies");
 
+  rankFilterSelect.addEventListener("change", handleRankFilterChange);
   targetRoleSelect.addEventListener("change", handleTargetRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   resetButton.addEventListener("click", handleResetDraft);
@@ -166,16 +176,29 @@ function getTargetRoleLabel() {
   return getRoleLabel(state.targetRole);
 }
 
+function getRankFilterDisplayLabel() {
+  return getRankFilterLabel(state.rankFilter);
+}
+
+function initializeRankFilterOptions() {
+  rankFilterSelect.innerHTML = getRankFilterOptions()
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+}
+
 function renderTargetRole() {
   const targetRoleLabel = getTargetRoleLabel();
+  const rankFilterLabel = getRankFilterDisplayLabel();
   const assignableRoleLabels = getAssignableAllyRoleOptions(state.targetRole).map(
     (option) => option.label,
   );
 
+  rankFilterSelect.value = state.rankFilter;
+  rankFilterSelect.disabled = isInteractionLocked();
   targetRoleSelect.value = state.targetRole;
   targetRoleSelect.disabled = isInteractionLocked();
   allyRoleTitle.textContent = "Assign remaining roles";
-  allyRoleCopy.textContent = `Target role: ${targetRoleLabel}. Assign allies to ${assignableRoleLabels.join(", ")}, or leave them unassigned to use all-role synergy data.`;
+  allyRoleCopy.textContent = `Target role: ${targetRoleLabel}. Rank filter: ${rankFilterLabel}. Assign allies to ${assignableRoleLabels.join(", ")}, or leave them unassigned to use all-role synergy data.`;
   resultsTitle.textContent = `${targetRoleLabel} recommendations`;
 }
 
@@ -425,7 +448,9 @@ async function handleFetchSuggestions() {
 
   setLoading(true);
   clearStatus();
-  setStatus(`Fetching live Lolalytics ${getTargetRoleLabel().toLowerCase()} data...`);
+  setStatus(
+    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} data...`,
+  );
 
   try {
     const response = await fetch("/suggest", {
@@ -434,6 +459,7 @@ async function handleFetchSuggestions() {
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        rankFilter: state.rankFilter,
         role: state.targetRole,
         allies: state.allies.map((champion) => {
           const selection = {
@@ -453,17 +479,23 @@ async function handleFetchSuggestions() {
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(
-        payload.error || `Failed to fetch ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+        payload.error ||
+          `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
       );
     }
 
     state.lastResults = filterUnavailableResults(payload.results || [], getSelectedChampionKeys());
     state.lastMeta = payload.meta || null;
-    setStatus(`Fetched ${state.lastResults.length} ${getTargetRoleLabel().toLowerCase()} suggestions.`);
+    setStatus(
+      `Fetched ${state.lastResults.length} ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+    );
   } catch (error) {
     state.lastResults = [];
     state.lastMeta = null;
-    setError(error.message || `Failed to fetch ${getTargetRoleLabel().toLowerCase()} suggestions.`);
+    setError(
+      error.message ||
+        `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+    );
   } finally {
     setLoading(false);
     renderResults();
@@ -486,6 +518,17 @@ function handleResetDraft() {
 function handleSortModeChange(event) {
   state.sortMode = normalizeSortMode(event.target.value);
   renderResults();
+}
+
+function handleRankFilterChange(event) {
+  const normalizedRankFilter = normalizeRankFilter(event.target.value) || DEFAULT_RANK_FILTER;
+  if (normalizedRankFilter === state.rankFilter) {
+    return;
+  }
+
+  state.rankFilter = normalizedRankFilter;
+  invalidateSuggestions();
+  renderAll();
 }
 
 function handleTargetRoleChange(event) {
@@ -678,6 +721,7 @@ function invalidateSuggestions() {
 }
 
 function renderActionState() {
+  rankFilterSelect.disabled = state.loading || state.shuttingDown;
   targetRoleSelect.disabled = state.loading || state.shuttingDown;
   fetchButton.disabled = state.loading || state.shuttingDown;
   fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";

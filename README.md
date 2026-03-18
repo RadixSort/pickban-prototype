@@ -48,7 +48,7 @@ If you prefer, you can still return to the terminal and press `Ctrl+C`.
 
 1. In the **Allied Champions** box, type the name of an ally champion and click a suggestion.
 2. Repeat until you have added the allied champions you want to consider.
-3. Choose the target role you want the app to fill.
+3. Choose the rank filter and target role you want the app to fill.
 4. If you want, use the **Assign remaining roles** section to label some or all allied champions.
 5. In the **Enemy Champions** box, add the enemy champions you are drafting against.
 6. Click **Fetch Suggestions**.
@@ -91,7 +91,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.7`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.8`.
 
 ### The app does not start
 

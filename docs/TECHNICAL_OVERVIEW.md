@@ -89,10 +89,10 @@ Two remote Lolalytics sources are used:
 - counter data from the Lolalytics champion build `q-data.json` endpoint
 - tier-list data from the Lolalytics role-specific tier-list page
 
-The server currently uses hard-coded settings:
+The server uses these lookup settings:
 
 - patch window: `7`
-- tier: `platinum_plus`
+- tier: selected from `all`, `platinum_plus`, default Emerald+ (no tier query), `diamond_plus`, or `d2_plus`
 - queue: `ranked`
 - region: `all`
 
@@ -102,6 +102,7 @@ The frontend sends a `POST /suggest` request with this shape:
 
 ```json
 {
+  "rankFilter": "emerald_plus",
   "role": "support",
   "allies": [
     { "champion": "Ahri", "role": "middle" },

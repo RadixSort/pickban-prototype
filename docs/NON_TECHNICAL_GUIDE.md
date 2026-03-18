@@ -97,7 +97,7 @@ http://localhost:3000
 2. Type a champion name.
 3. Click the correct champion from the suggestion list.
 4. Repeat for the other allied champions you want to include.
-5. Choose the target role you want to fill.
+5. Choose the rank filter and target role you want to fill.
 6. If you want, use the **Assign remaining roles** section to label the allied champions you already know.
 7. Add enemy champions in the **Enemy Champions** area.
 8. Click **Fetch Suggestions**.

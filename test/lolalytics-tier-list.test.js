@@ -151,8 +151,7 @@ test("extractTierListRows parses grid cards without dropping champions", () => {
 });
 
 test("extractTierListRows returns one row per grid champion card", () => {
-  const expectedChampionCount =
-    sampleGridTierListHtml.match(/href="\/lol\/[^/]+\/build\/\?tier=/g)?.length || 0;
+  const expectedChampionCount = sampleGridTierListHtml.match(/href="\/lol\/[^/]+\/build\//g)?.length || 0;
 
   assert.equal(extractTierListRows(sampleGridTierListHtml).length, expectedChampionCount);
 });
@@ -161,6 +160,14 @@ test("extractTierListRows does not depend on a support-only lane icon alt", () =
   const topLaneHtml = sampleGridTierListHtml.replaceAll('alt="support lane"', 'alt="top lane"');
 
   assert.equal(extractTierListRows(topLaneHtml).length, 2);
+});
+
+test("extractTierListRows supports default Emerald+ build links without a tier query", () => {
+  const defaultTierHtml = sampleTierListHtml.replaceAll("tier=platinum_plus&amp;", "");
+  const defaultTierGridHtml = sampleGridTierListHtml.replaceAll("tier=platinum_plus&amp;", "");
+
+  assert.equal(extractTierListRows(defaultTierHtml).length, 2);
+  assert.equal(extractTierListRows(defaultTierGridHtml).length, 2);
 });
 
 test("buildEligibleTierStats filters rows with minimum lane and pick thresholds", () => {

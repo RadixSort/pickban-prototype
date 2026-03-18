@@ -12,25 +12,32 @@
         <p class="eyebrow">Hackathon Prototype</p>
         <h1>Pick the draft. Fill the last role.</h1>
         <p class="subtitle">
-          Add allied and enemy champions, choose the role you want to fill, optionally assign the
-          other allied roles, then fetch live Lolalytics data to rank candidate picks.
+          Add allied and enemy champions, choose the rank filter and role you want to fill,
+          optionally assign the other allied roles, then fetch live Lolalytics data to rank
+          candidate picks.
         </p>
       </header>
 
-      <section class="target-role-panel" aria-label="Target role selection">
-        <label class="target-role-control" for="target-role">
-          <span class="picker-kicker">Target Role</span>
-          <select id="target-role">
-            <option value="support">Support</option>
-            <option value="top">Top</option>
-            <option value="jungle">Jungle</option>
-            <option value="middle">Mid</option>
-            <option value="bottom">Bot</option>
-          </select>
-        </label>
+      <section class="target-role-panel" aria-label="Rank filter and target role selection">
+        <div class="target-role-controls">
+          <label class="target-role-control" for="rank-filter">
+            <span class="picker-kicker">Rank Filter</span>
+            <select id="rank-filter"></select>
+          </label>
+          <label class="target-role-control" for="target-role">
+            <span class="picker-kicker">Target Role</span>
+            <select id="target-role">
+              <option value="support">Support</option>
+              <option value="top">Top</option>
+              <option value="jungle">Jungle</option>
+              <option value="middle">Mid</option>
+              <option value="bottom">Bot</option>
+            </select>
+          </label>
+        </div>
         <p class="target-role-copy">
           The ally role dropdowns below update to the other four positions for the role you are
-          trying to fill.
+          trying to fill, and the selected rank filter is used for every Lolalytics lookup.
         </p>
       </section>
 
@@ -118,8 +125,8 @@
         <div id="partial-failures" class="partial-failures"></div>
 
         <div id="empty-state" class="empty-state">
-          Select some champions, choose a target role, optionally assign the other allied roles,
-          then fetch suggestions to see the ranked list.
+          Select some champions, choose a rank filter and target role, optionally assign the other
+          allied roles, then fetch suggestions to see the ranked list.
         </div>
 
         <div id="results-table-wrap" class="results-table-wrap hidden">
@@ -142,10 +149,11 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.7</span>
+      <span id="app-version">v0.8</span>
     </div>
 
     <script src="/roles.js" defer></script>
+    <script src="/rank-filters.js" defer></script>
     <script src="/result-ranking.js" defer></script>
     <script src="/suggestion-filters.js" defer></script>
     <script src="/app.js" defer></script>

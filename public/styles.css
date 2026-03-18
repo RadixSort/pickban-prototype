@@ -99,6 +99,13 @@ select {
   gap: 8px;
 }
 
+.target-role-controls {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .target-role-control select {
   min-width: 180px;
   border: 1px solid var(--border);
@@ -555,6 +562,10 @@ select {
   }
 
   .target-role-control {
+    width: 100%;
+  }
+
+  .target-role-controls {
     width: 100%;
   }
 

@@ -20,13 +20,17 @@ const {
   normalizeRole,
 } = require(path.join(publicDir, "roles.js"));
 const {
+  DEFAULT_RANK_FILTER,
+  getLolalyticsTierQueryValue,
+  normalizeRankFilter,
+} = require(path.join(publicDir, "rank-filters.js"));
+const {
   buildSelectedChampionKeys,
   filterUnavailableResults,
 } = require(path.join(publicDir, "suggestion-filters.js"));
 
 const PORT = process.env.PORT || 3000;
 const PATCH_WINDOW = "7";
-const TIER = "platinum_plus";
 const QUEUE = "ranked";
 const REGION = "all";
 const MIN_SUPPORT_TIER_LIST_PICK_RATE = 0.5;
@@ -74,6 +78,7 @@ app.get("/app-config", (_request, response) => {
 
 app.post("/suggest", async (request, response) => {
   try {
+    const rankFilter = normalizeRequestedRankFilter(request.body?.rankFilter ?? request.body?.tier ?? null);
     const targetRole = normalizeRequestedRole(request.body?.role ?? request.body?.targetRole ?? null);
     const allies = normalizeAllySelections(request.body?.allies, 4, "allies");
     const enemies = normalizeSelections(request.body?.enemies, 5, "enemies");
@@ -87,20 +92,20 @@ app.post("/suggest", async (request, response) => {
     }
 
     const partialFailures = [];
-    const eligibleRoleTierStatsPromise = fetchEligibleTierStats(targetRole);
+    const eligibleRoleTierStatsPromise = fetchEligibleTierStats(targetRole, rankFilter);
 
     const allyResults = await Promise.allSettled(
       allies.map(async ({ champion, role }) => ({
         champion,
         role,
-        rows: await fetchRoleSynergyRows(champion, role, targetRole),
+        rows: await fetchRoleSynergyRows(champion, role, targetRole, rankFilter),
       })),
     );
 
     const enemyResults = await Promise.allSettled(
       enemies.map(async (champion) => ({
         champion,
-        rows: await fetchRoleCounterRows(champion, targetRole),
+        rows: await fetchRoleCounterRows(champion, targetRole, rankFilter),
       })),
     );
 
@@ -177,6 +182,7 @@ app.post("/suggest", async (request, response) => {
       return response.status(502).json({
         error: `No ${getRoleLabel(targetRole).toLowerCase()} data was returned from Lolalytics for the selected champions.`,
         meta: {
+          rankFilter,
           role: targetRole,
           allyCount: allies.length,
           enemyCount: enemies.length,
@@ -189,6 +195,7 @@ app.post("/suggest", async (request, response) => {
     response.json({
       results,
       meta: {
+        rankFilter,
         role: targetRole,
         allyCount: allies.length,
         enemyCount: enemies.length,
@@ -362,6 +369,23 @@ function normalizeRequestedRole(value) {
   return normalized;
 }
 
+function normalizeRequestedRankFilter(value) {
+  if (value == null || value === "") {
+    return DEFAULT_RANK_FILTER;
+  }
+
+  if (typeof value !== "string") {
+    throw createHttpError(400, 'Request field "rankFilter" contains an invalid rank filter.');
+  }
+
+  const normalized = normalizeRankFilter(value);
+  if (!normalized) {
+    throw createHttpError(400, 'Request field "rankFilter" contains an invalid rank filter.');
+  }
+
+  return normalized;
+}
+
 function normalizeAllyRole(value, label) {
   if (value == null || value === "") {
     return null;
@@ -405,41 +429,54 @@ function validateAllyRoleAssignments(allies, targetRole) {
   }
 }
 
-async function fetchRoleCounterRows(champion, targetRole) {
-  const payload = await fetchLolalyticsBuildData(champion.id);
+async function fetchRoleCounterRows(champion, targetRole, rankFilter) {
+  const payload = await fetchLolalyticsBuildData(champion.id, rankFilter);
   return extractRoleValues(payload?.enemy?.[targetRole], 2);
 }
 
-async function fetchRoleSynergyRows(champion, allyRole, targetRole) {
+async function fetchRoleSynergyRows(champion, allyRole, targetRole, rankFilter) {
   if (allyRole) {
     try {
-      const rows = await fetchRoleSynergyRowsForRole(champion, allyRole, targetRole);
+      const rows = await fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter);
       if (rows.size > 0) {
         return rows;
       }
     } catch (error) {
-      return fetchRoleSynergyRowsForRole(champion, "all", targetRole);
+      return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
     }
 
-    return fetchRoleSynergyRowsForRole(champion, "all", targetRole);
+    return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
   }
 
-  return fetchRoleSynergyRowsForRole(champion, "all", targetRole);
+  return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
 }
 
-async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole) {
+async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      ep: "build-team",
+      v: "1",
+      patch: PATCH_WINDOW,
+      c: champion.id,
+      lane: allyRole,
+      queue: QUEUE,
+      region: REGION,
+    },
+    rankFilter,
+  );
   const payload = await fetchLolalyticsMegaJson(
-    `?ep=build-team&v=1&patch=${PATCH_WINDOW}&c=${encodeURIComponent(
-      champion.id,
-    )}&lane=${encodeURIComponent(allyRole)}&tier=${TIER}&queue=${QUEUE}&region=${REGION}`,
+    `?${searchParams.toString()}`,
     `${champion.name} ${allyRole} synergy`,
   );
   return extractRoleValues(payload?.team?.[targetRole], 3);
 }
 
-async function fetchEligibleTierStats(targetRole) {
+async function fetchEligibleTierStats(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
-  const html = await fetchLolalyticsText(buildTierListUrl(targetRole), `${roleLabel} tier list`);
+  const html = await fetchLolalyticsText(
+    buildTierListUrl(targetRole, rankFilter),
+    `${roleLabel} tier list`,
+  );
   const rows = extractTierListRows(html);
   if (rows.length === 0) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier list was missing champion rows.`);
@@ -462,9 +499,15 @@ async function fetchEligibleTierStats(targetRole) {
   return eligibleRoleTierStats;
 }
 
-async function fetchLolalyticsBuildData(slug) {
+async function fetchLolalyticsBuildData(slug, rankFilter) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      patch: PATCH_WINDOW,
+    },
+    rankFilter,
+  );
   const payload = await fetchLolalyticsJson(
-    `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?tier=${TIER}&patch=${PATCH_WINDOW}`,
+    `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?${searchParams.toString()}`,
     `${slug} build q-data`,
   );
   const root = resolveQwikPayload(payload);
@@ -492,10 +535,26 @@ async function fetchLolalyticsText(url, label) {
   return fetchLolalyticsResource(url, label, "text");
 }
 
-function buildTierListUrl(targetRole) {
-  return `${LOLALYTICS_BASE_URL}/lol/tierlist/?lane=${encodeURIComponent(
-    targetRole,
-  )}&tier=${TIER}&patch=${PATCH_WINDOW}&view=grid`;
+function buildTierListUrl(targetRole, rankFilter) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      lane: targetRole,
+      patch: PATCH_WINDOW,
+      view: "grid",
+    },
+    rankFilter,
+  );
+  return `${LOLALYTICS_BASE_URL}/lol/tierlist/?${searchParams.toString()}`;
+}
+
+function buildLolalyticsSearchParams(params, rankFilter) {
+  const searchParams = new URLSearchParams(params);
+  const tierQueryValue = getLolalyticsTierQueryValue(rankFilter);
+  if (tierQueryValue) {
+    searchParams.set("tier", tierQueryValue);
+  }
+
+  return searchParams;
 }
 
 async function fetchLolalyticsResource(url, label, responseType) {
