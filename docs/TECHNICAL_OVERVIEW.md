@@ -136,7 +136,8 @@ The final output for each support is:
 
 - `synergyScore = average(synergyValues)`
 - `counterScore = average(rawCounterValues with the sign flipped)`
-- `finalScore = 0.5 * synergyScore + 0.5 * counterScore`
+- `projectedWinRate = average(all synergy and counter matchup win rates)`
+- `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
 
 Before a support is returned, it must also appear on the live support tier list with:
 
@@ -145,11 +146,14 @@ Before a support is returned, it must also appear on the live support tier list 
 
 The returned row also includes the live support `winRate` from that tier list.
 
-Sorting rules:
+Default backend sorting rules:
 
-1. higher `finalScore`
-2. higher `counterScore`
-3. alphabetical support name
+1. higher `projectedAgency`
+2. higher `projectedWinRate`
+3. higher `counterScore`
+4. alphabetical support name
+
+The frontend can also re-rank the same results by `projectedWinRate`.
 
 Behavioral implications:
 
@@ -181,9 +185,10 @@ Successful responses look like this:
       "supportKey": "412",
       "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
       "winRate": 51.88,
+      "projectedWinRate": 52.43,
       "synergyScore": 52.31,
       "counterScore": -50.94,
-      "finalScore": 0.685
+      "projectedAgency": 0.685
     }
   ],
   "meta": {

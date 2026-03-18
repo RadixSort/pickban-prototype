@@ -104,9 +104,12 @@ http://localhost:3000
 
 ## What The Results Mean
 
-- `SynergyScore`: how well a support works with your selected allies
-- `CounterScore`: how well a support performs into your selected enemies
-- `FinalScore`: the combined rank used to sort the list
+- `Synergy Score`: how well a support works with your selected allies
+- `Counter Score`: how well a support performs into your selected enemies
+- `Projected Win Rate`: the average matchup win rate taken from all selected ally/enemy inputs
+- `Projected Agency`: the combined rank used to sort the list
+
+You can sort the table by either `Projected Agency` or `Projected Win Rate`.
 
 In simple terms, the highest rows are the supports the app currently likes most for that draft.
 

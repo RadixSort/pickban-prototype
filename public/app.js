@@ -1,4 +1,12 @@
 const { buildSelectedChampionKeys, filterUnavailableResults } = globalThis.suggestionFilters;
+const {
+  DEFAULT_SORT_MODE,
+  PROJECTED_WIN_RATE_SORT_MODE,
+  getProjectedAgency,
+  getProjectedWinRate,
+  getTopSupportKeys,
+  sortResults,
+} = globalThis.resultRanking;
 
 const state = {
   champions: [],
@@ -8,9 +16,10 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.5.0",
+  version: "0.6.0",
   lastResults: [],
   lastMeta: null,
+  sortMode: DEFAULT_SORT_MODE,
 };
 
 const limits = {
@@ -53,6 +62,7 @@ const resultsWrap = document.getElementById("results-table-wrap");
 const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const partialFailures = document.getElementById("partial-failures");
+const sortSelect = document.getElementById("results-sort");
 const versionText = document.getElementById("app-version");
 
 initialize().catch((error) => {
@@ -79,6 +89,7 @@ async function initialize() {
   fetchButton.addEventListener("click", handleFetchSuggestions);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
+  sortSelect.addEventListener("change", handleSortModeChange);
   document.addEventListener("click", handleOutsideClick);
 
   clearStatus();
@@ -444,6 +455,11 @@ function handleResetDraft() {
   renderAll();
 }
 
+function handleSortModeChange(event) {
+  state.sortMode = normalizeSortMode(event.target.value);
+  renderResults();
+}
+
 async function handleCloseApp() {
   if (isInteractionLocked()) {
     return;
@@ -490,10 +506,21 @@ async function handleCloseApp() {
 }
 
 function renderResults() {
-  const visibleResults = filterUnavailableResults(state.lastResults, getSelectedChampionKeys());
+  const visibleResults = sortResults(
+    filterUnavailableResults(state.lastResults, getSelectedChampionKeys()),
+    state.sortMode,
+  );
+  const topProjectedWinRateKeys = getTopSupportKeys(
+    visibleResults,
+    PROJECTED_WIN_RATE_SORT_MODE,
+    2,
+  );
+  const topProjectedAgencyKeys = getTopSupportKeys(visibleResults, DEFAULT_SORT_MODE, 2);
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
+  sortSelect.value = state.sortMode;
+  sortSelect.disabled = state.loading || state.shuttingDown || state.lastResults.length === 0;
 
   if (!visibleResults.length) {
     emptyState.classList.remove("hidden");
@@ -507,7 +534,13 @@ function renderResults() {
   resultsMeta.textContent = `${visibleResults.length} ranked support options`;
 
   visibleResults.forEach((result, index) => {
+    const supportKey = result.supportKey == null ? "" : String(result.supportKey);
+    const isTopProjectedWinRate = topProjectedWinRateKeys.has(supportKey);
+    const isTopProjectedAgency = topProjectedAgencyKeys.has(supportKey);
     const row = document.createElement("tr");
+    row.className = isTopProjectedWinRate || isTopProjectedAgency ? "top-option" : "";
+    const projectedWinRateClassName = isTopProjectedWinRate ? ' class="metric-highlight"' : "";
+    const projectedAgencyClassName = isTopProjectedAgency ? "final-score metric-highlight" : "final-score";
     row.innerHTML = `
       <td class="rank-cell">${index + 1}</td>
       <td>
@@ -517,9 +550,10 @@ function renderResults() {
         </div>
       </td>
       <td>${formatRate(result.winRate)}</td>
+      <td${projectedWinRateClassName}>${formatRate(getProjectedWinRate(result))}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
-      <td class="final-score">${formatScore(result.finalScore)}</td>
+      <td class="${projectedAgencyClassName}">${formatScore(getProjectedAgency(result))}</td>
     `;
     resultsBody.appendChild(row);
   });
@@ -553,7 +587,12 @@ function formatRate(value) {
 }
 
 function formatVersion(version) {
-  return version.startsWith("v") ? version : `v${version}`;
+  const normalizedVersion = version.startsWith("v") ? version.slice(1) : version;
+  return `v${normalizedVersion.replace(/\.0$/, "")}`;
+}
+
+function normalizeSortMode(value) {
+  return value === PROJECTED_WIN_RATE_SORT_MODE ? PROJECTED_WIN_RATE_SORT_MODE : DEFAULT_SORT_MODE;
 }
 
 function normalizeText(value) {
@@ -601,6 +640,7 @@ function renderActionState() {
   closeHelp.classList.toggle("hidden", !state.canShutdown);
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;
   closeButton.textContent = state.shuttingDown ? "Closing..." : "Close App";
+  sortSelect.disabled = state.loading || state.shuttingDown || state.lastResults.length === 0;
 }
 
 function isInteractionLocked() {

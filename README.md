@@ -65,10 +65,13 @@ Rules built into the app:
 
 ## What The Scores Mean
 
-- `SynergyScore`: the average support synergy value gathered from the allied champions you selected.
-- `CounterScore`: the average support counter value gathered from the enemy champions you selected.
-- `FinalScore`: `50% SynergyScore + 50% CounterScore`.
-- `WinRate`: the champion's live support win rate from the Lolalytics support tier list.
+- `Synergy Score`: the average support synergy value gathered from the allied champions you selected.
+- `Counter Score`: the average support counter value gathered from the enemy champions you selected.
+- `Projected Agency`: `50% Synergy Score + 50% Counter Score`.
+- `Projected Win Rate`: the average matchup win rate gathered from every selected ally/enemy input.
+- `Win Rate`: the champion's live support win rate from the Lolalytics support tier list.
+
+You can rank the table by either `Projected Agency` or `Projected Win Rate`.
 
 Higher scores rank closer to the top.
 
@@ -87,7 +90,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.5.0`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.6`.
 
 ### The app does not start
 

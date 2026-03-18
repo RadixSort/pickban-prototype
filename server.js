@@ -9,6 +9,10 @@ const {
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
+const {
+  average,
+  compareByProjectedAgency,
+} = require(path.join(publicDir, "result-ranking.js"));
 const champions = require(path.join(publicDir, "champions.json"));
 const {
   buildSelectedChampionKeys,
@@ -114,6 +118,9 @@ app.post("/suggest", async (request, response) => {
         for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
           record.synergyValues.push(row.value);
+          if (Number.isFinite(row.winRate)) {
+            record.projectedWinRateValues.push(row.winRate);
+          }
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -127,6 +134,9 @@ app.post("/suggest", async (request, response) => {
           const record = getCandidateRecord(candidateScores, supportKey);
           // Lolalytics counter rows are oriented from the enemy pick's perspective.
           record.counterValues.push(-row.value);
+          if (Number.isFinite(row.winRate)) {
+            record.projectedWinRateValues.push(row.winRate);
+          }
         }
       } else {
         partialFailures.push(result.reason.message);
@@ -143,7 +153,8 @@ app.post("/suggest", async (request, response) => {
 
           const synergyScore = average(candidate.synergyValues);
           const counterScore = average(candidate.counterValues);
-          const finalScore = 0.5 * synergyScore + 0.5 * counterScore;
+          const projectedWinRate = average(candidate.projectedWinRateValues);
+          const projectedAgency = 0.5 * synergyScore + 0.5 * counterScore;
 
           return {
             support: candidate.name,
@@ -151,14 +162,16 @@ app.post("/suggest", async (request, response) => {
             icon: candidate.icon,
             synergyScore,
             counterScore,
-            finalScore,
+            projectedWinRate,
+            projectedAgency,
+            finalScore: projectedAgency,
             lanePercent: supportTierStats.lanePercent,
             pickRate: supportTierStats.pickRate,
             winRate: supportTierStats.winRate,
           };
         })
         .filter(Boolean)
-        .sort(compareResults),
+        .sort(compareByProjectedAgency),
       selectedChampionKeys,
     );
 
@@ -559,8 +572,9 @@ function extractSupportValues(rows, valueIndex) {
 
     const supportKey = String(row[0]);
     const value = row[valueIndex];
+    const winRate = row[1];
 
-    if (typeof value !== "number" || Number.isNaN(value)) {
+    if (!Number.isFinite(value)) {
       continue;
     }
 
@@ -570,6 +584,7 @@ function extractSupportValues(rows, valueIndex) {
 
     supportValues.set(supportKey, {
       value,
+      winRate: Number.isFinite(winRate) ? winRate : null,
     });
   }
 
@@ -593,31 +608,11 @@ function getCandidateRecord(candidateScores, supportKey) {
     icon: champion.icon,
     synergyValues: [],
     counterValues: [],
+    projectedWinRateValues: [],
   };
 
   candidateScores.set(supportKey, created);
   return created;
-}
-
-function average(values) {
-  if (!values.length) {
-    return 0;
-  }
-
-  const total = values.reduce((sum, value) => sum + value, 0);
-  return total / values.length;
-}
-
-function compareResults(left, right) {
-  if (right.finalScore !== left.finalScore) {
-    return right.finalScore - left.finalScore;
-  }
-
-  if (right.counterScore !== left.counterScore) {
-    return right.counterScore - left.counterScore;
-  }
-
-  return left.support.localeCompare(right.support);
 }
 
 function createHttpError(statusCode, message) {

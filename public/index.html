@@ -84,7 +84,16 @@
             <p class="picker-kicker">Results</p>
             <h2>Support recommendations</h2>
           </div>
-          <span id="results-meta" class="results-meta"></span>
+          <div class="results-toolbar">
+            <label class="sort-control" for="results-sort">
+              <span>Rank by</span>
+              <select id="results-sort">
+                <option value="projectedAgency">Projected Agency</option>
+                <option value="projectedWinRate">Projected Win Rate</option>
+              </select>
+            </label>
+            <span id="results-meta" class="results-meta"></span>
+          </div>
         </div>
 
         <div id="partial-failures" class="partial-failures"></div>
@@ -100,10 +109,11 @@
               <tr>
                 <th>Rank</th>
                 <th>Support</th>
-                <th>WinRate</th>
-                <th>SynergyScore</th>
-                <th>CounterScore</th>
-                <th>FinalScore</th>
+                <th>Win Rate</th>
+                <th>Projected Win Rate</th>
+                <th>Synergy Score</th>
+                <th>Counter Score</th>
+                <th>Projected Agency</th>
               </tr>
             </thead>
             <tbody id="results-body"></tbody>
@@ -113,9 +123,10 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.5.0</span>
+      <span id="app-version">v0.6</span>
     </div>
 
+    <script src="/result-ranking.js" defer></script>
     <script src="/suggestion-filters.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
