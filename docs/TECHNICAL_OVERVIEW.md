@@ -1,0 +1,226 @@
+# Technical Overview
+
+This document explains how the PickBan Prototype is structured, where its data comes from, and how the support ranking is computed.
+
+## Stack
+
+- Node.js
+- Express 5
+- Plain HTML, CSS, and browser-side JavaScript
+- No database
+- No authentication layer
+
+## High-Level Architecture
+
+The project is a single-process local web app:
+
+1. `server.js` starts an Express server.
+2. The server exposes static files from `public/`.
+3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
+4. The frontend collects user-selected champions.
+5. The frontend sends those champion names to `POST /suggest`.
+6. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
+7. The frontend renders the ranked support table.
+
+## File Responsibilities
+
+- `server.js`
+  - static file hosting
+  - request validation
+  - live Lolalytics fetches
+  - q-data payload parsing
+  - in-memory caching
+  - result aggregation and ranking
+
+- `public/champions.json`
+  - local champion metadata
+  - search source for the pickers
+  - champion names, numeric keys, and icons
+
+- `public/app.js`
+  - selection state
+  - search suggestion logic
+  - request submission
+  - loading, error, and result rendering
+
+- `public/index.html`
+  - page structure
+  - two draft pickers
+  - actions and results areas
+
+- `public/styles.css`
+  - visual styling
+  - responsive layout behavior
+
+## Data Sources
+
+The project combines:
+
+- local champion metadata from `public/champions.json`
+- live Lolalytics responses for synergy and counter data
+
+### Local Metadata
+
+`public/champions.json` contains champion:
+
+- `id`
+- `key`
+- `name`
+- `icon`
+
+The server builds lookup maps by champion key and normalized name. The frontend uses the same file to power the type-ahead search.
+
+### Remote Data
+
+Two remote Lolalytics sources are used:
+
+- synergy data from the Lolalytics mega endpoint
+- counter data from the Lolalytics champion build `q-data.json` endpoint
+
+The server currently uses hard-coded settings:
+
+- patch window: `7`
+- tier: `platinum_plus`
+- queue: `ranked`
+- region: `all`
+
+## Request And Validation Flow
+
+The frontend sends a `POST /suggest` request with this shape:
+
+```json
+{
+  "allies": ["Ahri", "Jarvan IV"],
+  "enemies": ["Jinx", "Nautilus"]
+}
+```
+
+Validation rules:
+
+- `allies` must be an array if provided
+- `enemies` must be an array if provided
+- each entry must be a non-empty string
+- champion names must exist in the local metadata file
+- duplicate champions are ignored within the same request
+- maximum 4 unique allied champions
+- maximum 5 unique enemy champions
+- at least one total champion must be provided
+
+Champion names are normalized by lowercasing and stripping non-alphanumeric characters, so minor punctuation differences are tolerated.
+
+## Scoring Model
+
+For each selected allied champion:
+
+- the server fetches support synergy rows
+- each returned support gets a synergy value appended to its candidate record
+
+For each selected enemy champion:
+
+- the server fetches support counter rows
+- each returned support gets a counter value appended to its candidate record
+
+The final output for each support is:
+
+- `synergyScore = average(synergyValues)`
+- `counterScore = average(counterValues)`
+- `finalScore = 0.5 * synergyScore + 0.5 * counterScore`
+
+Sorting rules:
+
+1. higher `finalScore`
+2. higher `counterScore`
+3. alphabetical support name
+
+Behavioral implications:
+
+- if a support only has synergy data, `counterScore` becomes `0`
+- if a support only has counter data, `synergyScore` becomes `0`
+- this means one-sided inputs intentionally lower the missing half of the score instead of excluding it from the formula
+
+## Partial Failures
+
+Synergy and counter fetches are executed with `Promise.allSettled`, not `Promise.all`.
+
+That means:
+
+- one failed source does not automatically discard successful sources
+- the API can still return ranked results if at least some remote data was usable
+- failure messages are collected in `meta.partialFailures`
+
+If no usable rows are produced at all, the API returns a `502` error.
+
+## Response Shape
+
+Successful responses look like this:
+
+```json
+{
+  "results": [
+    {
+      "support": "Thresh",
+      "supportKey": "412",
+      "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
+      "synergyScore": 52.31,
+      "counterScore": 50.94,
+      "finalScore": 51.625
+    }
+  ],
+  "meta": {
+    "allyCount": 2,
+    "enemyCount": 2,
+    "partialFailures": []
+  }
+}
+```
+
+Error responses use:
+
+```json
+{
+  "error": "Message here"
+}
+```
+
+## Caching And Timeouts
+
+The backend keeps a simple in-memory cache keyed by request URL.
+
+- cache duration: 5 minutes
+- request timeout: 15 seconds
+
+This reduces duplicate requests during repeated local testing, but the cache is lost whenever the server restarts.
+
+## Frontend Interaction Notes
+
+The browser app:
+
+- preloads all champions from `champions.json`
+- adds a normalized `searchText` field in memory
+- filters out champions already selected on either side
+- shows up to 8 search suggestions per input
+- uses the top match when the user presses `Enter`
+- disables inputs when the side-specific max is reached or while loading
+
+## Operational Notes
+
+- Default port is `3000`
+- The port can be changed with the `PORT` environment variable
+- Static assets and the API are served from the same Express process
+- No build step is required
+
+## Known Risks And Limitations
+
+- The implementation depends on external Lolalytics response formats, including their q-data structure.
+- If Lolalytics changes field names or array indexes, the prototype may stop returning results.
+- Cache is process-local and not suitable for multi-instance deployment.
+- There is no persistence, analytics, auth, or rate-limit protection.
+- The current scoring model gives equal weight to synergy and counter values without any calibration layer.
+
+## Suggested Next Improvements
+
+- move hard-coded patch, tier, queue, and region values into configuration
+- add automated tests for request validation and score aggregation
+- add a health check endpoint
+- add better user-facing explanations for partial failure cases
+- add a packaged deployment option for non-technical users

@@ -1,0 +1,1034 @@
+[
+  {
+    "id": "aatrox",
+    "key": "266",
+    "name": "Aatrox",
+    "icon": "https://cdn5.lolalytics.com/champ140/aatrox.webp"
+  },
+  {
+    "id": "ahri",
+    "key": "103",
+    "name": "Ahri",
+    "icon": "https://cdn5.lolalytics.com/champ140/ahri.webp"
+  },
+  {
+    "id": "akali",
+    "key": "84",
+    "name": "Akali",
+    "icon": "https://cdn5.lolalytics.com/champ140/akali.webp"
+  },
+  {
+    "id": "akshan",
+    "key": "166",
+    "name": "Akshan",
+    "icon": "https://cdn5.lolalytics.com/champ140/akshan.webp"
+  },
+  {
+    "id": "alistar",
+    "key": "12",
+    "name": "Alistar",
+    "icon": "https://cdn5.lolalytics.com/champ140/alistar.webp"
+  },
+  {
+    "id": "ambessa",
+    "key": "799",
+    "name": "Ambessa",
+    "icon": "https://cdn5.lolalytics.com/champ140/ambessa.webp"
+  },
+  {
+    "id": "amumu",
+    "key": "32",
+    "name": "Amumu",
+    "icon": "https://cdn5.lolalytics.com/champ140/amumu.webp"
+  },
+  {
+    "id": "anivia",
+    "key": "34",
+    "name": "Anivia",
+    "icon": "https://cdn5.lolalytics.com/champ140/anivia.webp"
+  },
+  {
+    "id": "annie",
+    "key": "1",
+    "name": "Annie",
+    "icon": "https://cdn5.lolalytics.com/champ140/annie.webp"
+  },
+  {
+    "id": "aphelios",
+    "key": "523",
+    "name": "Aphelios",
+    "icon": "https://cdn5.lolalytics.com/champ140/aphelios.webp"
+  },
+  {
+    "id": "ashe",
+    "key": "22",
+    "name": "Ashe",
+    "icon": "https://cdn5.lolalytics.com/champ140/ashe.webp"
+  },
+  {
+    "id": "aurelionsol",
+    "key": "136",
+    "name": "Aurelion Sol",
+    "icon": "https://cdn5.lolalytics.com/champ140/aurelionsol.webp"
+  },
+  {
+    "id": "aurora",
+    "key": "893",
+    "name": "Aurora",
+    "icon": "https://cdn5.lolalytics.com/champ140/aurora.webp"
+  },
+  {
+    "id": "azir",
+    "key": "268",
+    "name": "Azir",
+    "icon": "https://cdn5.lolalytics.com/champ140/azir.webp"
+  },
+  {
+    "id": "bard",
+    "key": "432",
+    "name": "Bard",
+    "icon": "https://cdn5.lolalytics.com/champ140/bard.webp"
+  },
+  {
+    "id": "belveth",
+    "key": "200",
+    "name": "Bel'Veth",
+    "icon": "https://cdn5.lolalytics.com/champ140/belveth.webp"
+  },
+  {
+    "id": "blitzcrank",
+    "key": "53",
+    "name": "Blitzcrank",
+    "icon": "https://cdn5.lolalytics.com/champ140/blitzcrank.webp"
+  },
+  {
+    "id": "brand",
+    "key": "63",
+    "name": "Brand",
+    "icon": "https://cdn5.lolalytics.com/champ140/brand.webp"
+  },
+  {
+    "id": "braum",
+    "key": "201",
+    "name": "Braum",
+    "icon": "https://cdn5.lolalytics.com/champ140/braum.webp"
+  },
+  {
+    "id": "briar",
+    "key": "233",
+    "name": "Briar",
+    "icon": "https://cdn5.lolalytics.com/champ140/briar.webp"
+  },
+  {
+    "id": "caitlyn",
+    "key": "51",
+    "name": "Caitlyn",
+    "icon": "https://cdn5.lolalytics.com/champ140/caitlyn.webp"
+  },
+  {
+    "id": "camille",
+    "key": "164",
+    "name": "Camille",
+    "icon": "https://cdn5.lolalytics.com/champ140/camille.webp"
+  },
+  {
+    "id": "cassiopeia",
+    "key": "69",
+    "name": "Cassiopeia",
+    "icon": "https://cdn5.lolalytics.com/champ140/cassiopeia.webp"
+  },
+  {
+    "id": "chogath",
+    "key": "31",
+    "name": "Cho'Gath",
+    "icon": "https://cdn5.lolalytics.com/champ140/chogath.webp"
+  },
+  {
+    "id": "corki",
+    "key": "42",
+    "name": "Corki",
+    "icon": "https://cdn5.lolalytics.com/champ140/corki.webp"
+  },
+  {
+    "id": "darius",
+    "key": "122",
+    "name": "Darius",
+    "icon": "https://cdn5.lolalytics.com/champ140/darius.webp"
+  },
+  {
+    "id": "diana",
+    "key": "131",
+    "name": "Diana",
+    "icon": "https://cdn5.lolalytics.com/champ140/diana.webp"
+  },
+  {
+    "id": "drmundo",
+    "key": "36",
+    "name": "Dr. Mundo",
+    "icon": "https://cdn5.lolalytics.com/champ140/drmundo.webp"
+  },
+  {
+    "id": "draven",
+    "key": "119",
+    "name": "Draven",
+    "icon": "https://cdn5.lolalytics.com/champ140/draven.webp"
+  },
+  {
+    "id": "ekko",
+    "key": "245",
+    "name": "Ekko",
+    "icon": "https://cdn5.lolalytics.com/champ140/ekko.webp"
+  },
+  {
+    "id": "elise",
+    "key": "60",
+    "name": "Elise",
+    "icon": "https://cdn5.lolalytics.com/champ140/elise.webp"
+  },
+  {
+    "id": "evelynn",
+    "key": "28",
+    "name": "Evelynn",
+    "icon": "https://cdn5.lolalytics.com/champ140/evelynn.webp"
+  },
+  {
+    "id": "ezreal",
+    "key": "81",
+    "name": "Ezreal",
+    "icon": "https://cdn5.lolalytics.com/champ140/ezreal.webp"
+  },
+  {
+    "id": "fiddlesticks",
+    "key": "9",
+    "name": "Fiddlesticks",
+    "icon": "https://cdn5.lolalytics.com/champ140/fiddlesticks.webp"
+  },
+  {
+    "id": "fiora",
+    "key": "114",
+    "name": "Fiora",
+    "icon": "https://cdn5.lolalytics.com/champ140/fiora.webp"
+  },
+  {
+    "id": "fizz",
+    "key": "105",
+    "name": "Fizz",
+    "icon": "https://cdn5.lolalytics.com/champ140/fizz.webp"
+  },
+  {
+    "id": "galio",
+    "key": "3",
+    "name": "Galio",
+    "icon": "https://cdn5.lolalytics.com/champ140/galio.webp"
+  },
+  {
+    "id": "gangplank",
+    "key": "41",
+    "name": "Gangplank",
+    "icon": "https://cdn5.lolalytics.com/champ140/gangplank.webp"
+  },
+  {
+    "id": "garen",
+    "key": "86",
+    "name": "Garen",
+    "icon": "https://cdn5.lolalytics.com/champ140/garen.webp"
+  },
+  {
+    "id": "gnar",
+    "key": "150",
+    "name": "Gnar",
+    "icon": "https://cdn5.lolalytics.com/champ140/gnar.webp"
+  },
+  {
+    "id": "gragas",
+    "key": "79",
+    "name": "Gragas",
+    "icon": "https://cdn5.lolalytics.com/champ140/gragas.webp"
+  },
+  {
+    "id": "graves",
+    "key": "104",
+    "name": "Graves",
+    "icon": "https://cdn5.lolalytics.com/champ140/graves.webp"
+  },
+  {
+    "id": "gwen",
+    "key": "887",
+    "name": "Gwen",
+    "icon": "https://cdn5.lolalytics.com/champ140/gwen.webp"
+  },
+  {
+    "id": "hecarim",
+    "key": "120",
+    "name": "Hecarim",
+    "icon": "https://cdn5.lolalytics.com/champ140/hecarim.webp"
+  },
+  {
+    "id": "heimerdinger",
+    "key": "74",
+    "name": "Heimerdinger",
+    "icon": "https://cdn5.lolalytics.com/champ140/heimerdinger.webp"
+  },
+  {
+    "id": "hwei",
+    "key": "910",
+    "name": "Hwei",
+    "icon": "https://cdn5.lolalytics.com/champ140/hwei.webp"
+  },
+  {
+    "id": "illaoi",
+    "key": "420",
+    "name": "Illaoi",
+    "icon": "https://cdn5.lolalytics.com/champ140/illaoi.webp"
+  },
+  {
+    "id": "irelia",
+    "key": "39",
+    "name": "Irelia",
+    "icon": "https://cdn5.lolalytics.com/champ140/irelia.webp"
+  },
+  {
+    "id": "ivern",
+    "key": "427",
+    "name": "Ivern",
+    "icon": "https://cdn5.lolalytics.com/champ140/ivern.webp"
+  },
+  {
+    "id": "janna",
+    "key": "40",
+    "name": "Janna",
+    "icon": "https://cdn5.lolalytics.com/champ140/janna.webp"
+  },
+  {
+    "id": "jarvaniv",
+    "key": "59",
+    "name": "Jarvan IV",
+    "icon": "https://cdn5.lolalytics.com/champ140/jarvaniv.webp"
+  },
+  {
+    "id": "jax",
+    "key": "24",
+    "name": "Jax",
+    "icon": "https://cdn5.lolalytics.com/champ140/jax.webp"
+  },
+  {
+    "id": "jayce",
+    "key": "126",
+    "name": "Jayce",
+    "icon": "https://cdn5.lolalytics.com/champ140/jayce.webp"
+  },
+  {
+    "id": "jhin",
+    "key": "202",
+    "name": "Jhin",
+    "icon": "https://cdn5.lolalytics.com/champ140/jhin.webp"
+  },
+  {
+    "id": "jinx",
+    "key": "222",
+    "name": "Jinx",
+    "icon": "https://cdn5.lolalytics.com/champ140/jinx.webp"
+  },
+  {
+    "id": "ksante",
+    "key": "897",
+    "name": "K'Sante",
+    "icon": "https://cdn5.lolalytics.com/champ140/ksante.webp"
+  },
+  {
+    "id": "kaisa",
+    "key": "145",
+    "name": "Kai'Sa",
+    "icon": "https://cdn5.lolalytics.com/champ140/kaisa.webp"
+  },
+  {
+    "id": "kalista",
+    "key": "429",
+    "name": "Kalista",
+    "icon": "https://cdn5.lolalytics.com/champ140/kalista.webp"
+  },
+  {
+    "id": "karma",
+    "key": "43",
+    "name": "Karma",
+    "icon": "https://cdn5.lolalytics.com/champ140/karma.webp"
+  },
+  {
+    "id": "karthus",
+    "key": "30",
+    "name": "Karthus",
+    "icon": "https://cdn5.lolalytics.com/champ140/karthus.webp"
+  },
+  {
+    "id": "kassadin",
+    "key": "38",
+    "name": "Kassadin",
+    "icon": "https://cdn5.lolalytics.com/champ140/kassadin.webp"
+  },
+  {
+    "id": "katarina",
+    "key": "55",
+    "name": "Katarina",
+    "icon": "https://cdn5.lolalytics.com/champ140/katarina.webp"
+  },
+  {
+    "id": "kayle",
+    "key": "10",
+    "name": "Kayle",
+    "icon": "https://cdn5.lolalytics.com/champ140/kayle.webp"
+  },
+  {
+    "id": "kayn",
+    "key": "141",
+    "name": "Kayn",
+    "icon": "https://cdn5.lolalytics.com/champ140/kayn.webp"
+  },
+  {
+    "id": "kennen",
+    "key": "85",
+    "name": "Kennen",
+    "icon": "https://cdn5.lolalytics.com/champ140/kennen.webp"
+  },
+  {
+    "id": "khazix",
+    "key": "121",
+    "name": "Kha'Zix",
+    "icon": "https://cdn5.lolalytics.com/champ140/khazix.webp"
+  },
+  {
+    "id": "kindred",
+    "key": "203",
+    "name": "Kindred",
+    "icon": "https://cdn5.lolalytics.com/champ140/kindred.webp"
+  },
+  {
+    "id": "kled",
+    "key": "240",
+    "name": "Kled",
+    "icon": "https://cdn5.lolalytics.com/champ140/kled.webp"
+  },
+  {
+    "id": "kogmaw",
+    "key": "96",
+    "name": "Kog'Maw",
+    "icon": "https://cdn5.lolalytics.com/champ140/kogmaw.webp"
+  },
+  {
+    "id": "leblanc",
+    "key": "7",
+    "name": "LeBlanc",
+    "icon": "https://cdn5.lolalytics.com/champ140/leblanc.webp"
+  },
+  {
+    "id": "leesin",
+    "key": "64",
+    "name": "Lee Sin",
+    "icon": "https://cdn5.lolalytics.com/champ140/leesin.webp"
+  },
+  {
+    "id": "leona",
+    "key": "89",
+    "name": "Leona",
+    "icon": "https://cdn5.lolalytics.com/champ140/leona.webp"
+  },
+  {
+    "id": "lillia",
+    "key": "876",
+    "name": "Lillia",
+    "icon": "https://cdn5.lolalytics.com/champ140/lillia.webp"
+  },
+  {
+    "id": "lissandra",
+    "key": "127",
+    "name": "Lissandra",
+    "icon": "https://cdn5.lolalytics.com/champ140/lissandra.webp"
+  },
+  {
+    "id": "lucian",
+    "key": "236",
+    "name": "Lucian",
+    "icon": "https://cdn5.lolalytics.com/champ140/lucian.webp"
+  },
+  {
+    "id": "lulu",
+    "key": "117",
+    "name": "Lulu",
+    "icon": "https://cdn5.lolalytics.com/champ140/lulu.webp"
+  },
+  {
+    "id": "lux",
+    "key": "99",
+    "name": "Lux",
+    "icon": "https://cdn5.lolalytics.com/champ140/lux.webp"
+  },
+  {
+    "id": "malphite",
+    "key": "54",
+    "name": "Malphite",
+    "icon": "https://cdn5.lolalytics.com/champ140/malphite.webp"
+  },
+  {
+    "id": "malzahar",
+    "key": "90",
+    "name": "Malzahar",
+    "icon": "https://cdn5.lolalytics.com/champ140/malzahar.webp"
+  },
+  {
+    "id": "maokai",
+    "key": "57",
+    "name": "Maokai",
+    "icon": "https://cdn5.lolalytics.com/champ140/maokai.webp"
+  },
+  {
+    "id": "masteryi",
+    "key": "11",
+    "name": "Master Yi",
+    "icon": "https://cdn5.lolalytics.com/champ140/masteryi.webp"
+  },
+  {
+    "id": "mel",
+    "key": "800",
+    "name": "Mel",
+    "icon": "https://cdn5.lolalytics.com/champ140/mel.webp"
+  },
+  {
+    "id": "milio",
+    "key": "902",
+    "name": "Milio",
+    "icon": "https://cdn5.lolalytics.com/champ140/milio.webp"
+  },
+  {
+    "id": "missfortune",
+    "key": "21",
+    "name": "Miss Fortune",
+    "icon": "https://cdn5.lolalytics.com/champ140/missfortune.webp"
+  },
+  {
+    "id": "mordekaiser",
+    "key": "82",
+    "name": "Mordekaiser",
+    "icon": "https://cdn5.lolalytics.com/champ140/mordekaiser.webp"
+  },
+  {
+    "id": "morgana",
+    "key": "25",
+    "name": "Morgana",
+    "icon": "https://cdn5.lolalytics.com/champ140/morgana.webp"
+  },
+  {
+    "id": "naafiri",
+    "key": "950",
+    "name": "Naafiri",
+    "icon": "https://cdn5.lolalytics.com/champ140/naafiri.webp"
+  },
+  {
+    "id": "nami",
+    "key": "267",
+    "name": "Nami",
+    "icon": "https://cdn5.lolalytics.com/champ140/nami.webp"
+  },
+  {
+    "id": "nasus",
+    "key": "75",
+    "name": "Nasus",
+    "icon": "https://cdn5.lolalytics.com/champ140/nasus.webp"
+  },
+  {
+    "id": "nautilus",
+    "key": "111",
+    "name": "Nautilus",
+    "icon": "https://cdn5.lolalytics.com/champ140/nautilus.webp"
+  },
+  {
+    "id": "neeko",
+    "key": "518",
+    "name": "Neeko",
+    "icon": "https://cdn5.lolalytics.com/champ140/neeko.webp"
+  },
+  {
+    "id": "nidalee",
+    "key": "76",
+    "name": "Nidalee",
+    "icon": "https://cdn5.lolalytics.com/champ140/nidalee.webp"
+  },
+  {
+    "id": "nilah",
+    "key": "895",
+    "name": "Nilah",
+    "icon": "https://cdn5.lolalytics.com/champ140/nilah.webp"
+  },
+  {
+    "id": "nocturne",
+    "key": "56",
+    "name": "Nocturne",
+    "icon": "https://cdn5.lolalytics.com/champ140/nocturne.webp"
+  },
+  {
+    "id": "nunu",
+    "key": "20",
+    "name": "Nunu & Willump",
+    "icon": "https://cdn5.lolalytics.com/champ140/nunu.webp"
+  },
+  {
+    "id": "olaf",
+    "key": "2",
+    "name": "Olaf",
+    "icon": "https://cdn5.lolalytics.com/champ140/olaf.webp"
+  },
+  {
+    "id": "orianna",
+    "key": "61",
+    "name": "Orianna",
+    "icon": "https://cdn5.lolalytics.com/champ140/orianna.webp"
+  },
+  {
+    "id": "ornn",
+    "key": "516",
+    "name": "Ornn",
+    "icon": "https://cdn5.lolalytics.com/champ140/ornn.webp"
+  },
+  {
+    "id": "pantheon",
+    "key": "80",
+    "name": "Pantheon",
+    "icon": "https://cdn5.lolalytics.com/champ140/pantheon.webp"
+  },
+  {
+    "id": "poppy",
+    "key": "78",
+    "name": "Poppy",
+    "icon": "https://cdn5.lolalytics.com/champ140/poppy.webp"
+  },
+  {
+    "id": "pyke",
+    "key": "555",
+    "name": "Pyke",
+    "icon": "https://cdn5.lolalytics.com/champ140/pyke.webp"
+  },
+  {
+    "id": "qiyana",
+    "key": "246",
+    "name": "Qiyana",
+    "icon": "https://cdn5.lolalytics.com/champ140/qiyana.webp"
+  },
+  {
+    "id": "quinn",
+    "key": "133",
+    "name": "Quinn",
+    "icon": "https://cdn5.lolalytics.com/champ140/quinn.webp"
+  },
+  {
+    "id": "rakan",
+    "key": "497",
+    "name": "Rakan",
+    "icon": "https://cdn5.lolalytics.com/champ140/rakan.webp"
+  },
+  {
+    "id": "rammus",
+    "key": "33",
+    "name": "Rammus",
+    "icon": "https://cdn5.lolalytics.com/champ140/rammus.webp"
+  },
+  {
+    "id": "reksai",
+    "key": "421",
+    "name": "Rek'Sai",
+    "icon": "https://cdn5.lolalytics.com/champ140/reksai.webp"
+  },
+  {
+    "id": "rell",
+    "key": "526",
+    "name": "Rell",
+    "icon": "https://cdn5.lolalytics.com/champ140/rell.webp"
+  },
+  {
+    "id": "renata",
+    "key": "888",
+    "name": "Renata Glasc",
+    "icon": "https://cdn5.lolalytics.com/champ140/renata.webp"
+  },
+  {
+    "id": "renekton",
+    "key": "58",
+    "name": "Renekton",
+    "icon": "https://cdn5.lolalytics.com/champ140/renekton.webp"
+  },
+  {
+    "id": "rengar",
+    "key": "107",
+    "name": "Rengar",
+    "icon": "https://cdn5.lolalytics.com/champ140/rengar.webp"
+  },
+  {
+    "id": "riven",
+    "key": "92",
+    "name": "Riven",
+    "icon": "https://cdn5.lolalytics.com/champ140/riven.webp"
+  },
+  {
+    "id": "rumble",
+    "key": "68",
+    "name": "Rumble",
+    "icon": "https://cdn5.lolalytics.com/champ140/rumble.webp"
+  },
+  {
+    "id": "ryze",
+    "key": "13",
+    "name": "Ryze",
+    "icon": "https://cdn5.lolalytics.com/champ140/ryze.webp"
+  },
+  {
+    "id": "samira",
+    "key": "360",
+    "name": "Samira",
+    "icon": "https://cdn5.lolalytics.com/champ140/samira.webp"
+  },
+  {
+    "id": "sejuani",
+    "key": "113",
+    "name": "Sejuani",
+    "icon": "https://cdn5.lolalytics.com/champ140/sejuani.webp"
+  },
+  {
+    "id": "senna",
+    "key": "235",
+    "name": "Senna",
+    "icon": "https://cdn5.lolalytics.com/champ140/senna.webp"
+  },
+  {
+    "id": "seraphine",
+    "key": "147",
+    "name": "Seraphine",
+    "icon": "https://cdn5.lolalytics.com/champ140/seraphine.webp"
+  },
+  {
+    "id": "sett",
+    "key": "875",
+    "name": "Sett",
+    "icon": "https://cdn5.lolalytics.com/champ140/sett.webp"
+  },
+  {
+    "id": "shaco",
+    "key": "35",
+    "name": "Shaco",
+    "icon": "https://cdn5.lolalytics.com/champ140/shaco.webp"
+  },
+  {
+    "id": "shen",
+    "key": "98",
+    "name": "Shen",
+    "icon": "https://cdn5.lolalytics.com/champ140/shen.webp"
+  },
+  {
+    "id": "shyvana",
+    "key": "102",
+    "name": "Shyvana",
+    "icon": "https://cdn5.lolalytics.com/champ140/shyvana.webp"
+  },
+  {
+    "id": "singed",
+    "key": "27",
+    "name": "Singed",
+    "icon": "https://cdn5.lolalytics.com/champ140/singed.webp"
+  },
+  {
+    "id": "sion",
+    "key": "14",
+    "name": "Sion",
+    "icon": "https://cdn5.lolalytics.com/champ140/sion.webp"
+  },
+  {
+    "id": "sivir",
+    "key": "15",
+    "name": "Sivir",
+    "icon": "https://cdn5.lolalytics.com/champ140/sivir.webp"
+  },
+  {
+    "id": "skarner",
+    "key": "72",
+    "name": "Skarner",
+    "icon": "https://cdn5.lolalytics.com/champ140/skarner.webp"
+  },
+  {
+    "id": "smolder",
+    "key": "901",
+    "name": "Smolder",
+    "icon": "https://cdn5.lolalytics.com/champ140/smolder.webp"
+  },
+  {
+    "id": "sona",
+    "key": "37",
+    "name": "Sona",
+    "icon": "https://cdn5.lolalytics.com/champ140/sona.webp"
+  },
+  {
+    "id": "soraka",
+    "key": "16",
+    "name": "Soraka",
+    "icon": "https://cdn5.lolalytics.com/champ140/soraka.webp"
+  },
+  {
+    "id": "swain",
+    "key": "50",
+    "name": "Swain",
+    "icon": "https://cdn5.lolalytics.com/champ140/swain.webp"
+  },
+  {
+    "id": "sylas",
+    "key": "517",
+    "name": "Sylas",
+    "icon": "https://cdn5.lolalytics.com/champ140/sylas.webp"
+  },
+  {
+    "id": "syndra",
+    "key": "134",
+    "name": "Syndra",
+    "icon": "https://cdn5.lolalytics.com/champ140/syndra.webp"
+  },
+  {
+    "id": "tahmkench",
+    "key": "223",
+    "name": "Tahm Kench",
+    "icon": "https://cdn5.lolalytics.com/champ140/tahmkench.webp"
+  },
+  {
+    "id": "taliyah",
+    "key": "163",
+    "name": "Taliyah",
+    "icon": "https://cdn5.lolalytics.com/champ140/taliyah.webp"
+  },
+  {
+    "id": "talon",
+    "key": "91",
+    "name": "Talon",
+    "icon": "https://cdn5.lolalytics.com/champ140/talon.webp"
+  },
+  {
+    "id": "taric",
+    "key": "44",
+    "name": "Taric",
+    "icon": "https://cdn5.lolalytics.com/champ140/taric.webp"
+  },
+  {
+    "id": "teemo",
+    "key": "17",
+    "name": "Teemo",
+    "icon": "https://cdn5.lolalytics.com/champ140/teemo.webp"
+  },
+  {
+    "id": "thresh",
+    "key": "412",
+    "name": "Thresh",
+    "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp"
+  },
+  {
+    "id": "tristana",
+    "key": "18",
+    "name": "Tristana",
+    "icon": "https://cdn5.lolalytics.com/champ140/tristana.webp"
+  },
+  {
+    "id": "trundle",
+    "key": "48",
+    "name": "Trundle",
+    "icon": "https://cdn5.lolalytics.com/champ140/trundle.webp"
+  },
+  {
+    "id": "tryndamere",
+    "key": "23",
+    "name": "Tryndamere",
+    "icon": "https://cdn5.lolalytics.com/champ140/tryndamere.webp"
+  },
+  {
+    "id": "twistedfate",
+    "key": "4",
+    "name": "Twisted Fate",
+    "icon": "https://cdn5.lolalytics.com/champ140/twistedfate.webp"
+  },
+  {
+    "id": "twitch",
+    "key": "29",
+    "name": "Twitch",
+    "icon": "https://cdn5.lolalytics.com/champ140/twitch.webp"
+  },
+  {
+    "id": "udyr",
+    "key": "77",
+    "name": "Udyr",
+    "icon": "https://cdn5.lolalytics.com/champ140/udyr.webp"
+  },
+  {
+    "id": "urgot",
+    "key": "6",
+    "name": "Urgot",
+    "icon": "https://cdn5.lolalytics.com/champ140/urgot.webp"
+  },
+  {
+    "id": "varus",
+    "key": "110",
+    "name": "Varus",
+    "icon": "https://cdn5.lolalytics.com/champ140/varus.webp"
+  },
+  {
+    "id": "vayne",
+    "key": "67",
+    "name": "Vayne",
+    "icon": "https://cdn5.lolalytics.com/champ140/vayne.webp"
+  },
+  {
+    "id": "veigar",
+    "key": "45",
+    "name": "Veigar",
+    "icon": "https://cdn5.lolalytics.com/champ140/veigar.webp"
+  },
+  {
+    "id": "velkoz",
+    "key": "161",
+    "name": "Vel'Koz",
+    "icon": "https://cdn5.lolalytics.com/champ140/velkoz.webp"
+  },
+  {
+    "id": "vex",
+    "key": "711",
+    "name": "Vex",
+    "icon": "https://cdn5.lolalytics.com/champ140/vex.webp"
+  },
+  {
+    "id": "vi",
+    "key": "254",
+    "name": "Vi",
+    "icon": "https://cdn5.lolalytics.com/champ140/vi.webp"
+  },
+  {
+    "id": "viego",
+    "key": "234",
+    "name": "Viego",
+    "icon": "https://cdn5.lolalytics.com/champ140/viego.webp"
+  },
+  {
+    "id": "viktor",
+    "key": "112",
+    "name": "Viktor",
+    "icon": "https://cdn5.lolalytics.com/champ140/viktor.webp"
+  },
+  {
+    "id": "vladimir",
+    "key": "8",
+    "name": "Vladimir",
+    "icon": "https://cdn5.lolalytics.com/champ140/vladimir.webp"
+  },
+  {
+    "id": "volibear",
+    "key": "106",
+    "name": "Volibear",
+    "icon": "https://cdn5.lolalytics.com/champ140/volibear.webp"
+  },
+  {
+    "id": "warwick",
+    "key": "19",
+    "name": "Warwick",
+    "icon": "https://cdn5.lolalytics.com/champ140/warwick.webp"
+  },
+  {
+    "id": "wukong",
+    "key": "62",
+    "name": "Wukong",
+    "icon": "https://cdn5.lolalytics.com/champ140/wukong.webp"
+  },
+  {
+    "id": "xayah",
+    "key": "498",
+    "name": "Xayah",
+    "icon": "https://cdn5.lolalytics.com/champ140/xayah.webp"
+  },
+  {
+    "id": "xerath",
+    "key": "101",
+    "name": "Xerath",
+    "icon": "https://cdn5.lolalytics.com/champ140/xerath.webp"
+  },
+  {
+    "id": "xinzhao",
+    "key": "5",
+    "name": "Xin Zhao",
+    "icon": "https://cdn5.lolalytics.com/champ140/xinzhao.webp"
+  },
+  {
+    "id": "yasuo",
+    "key": "157",
+    "name": "Yasuo",
+    "icon": "https://cdn5.lolalytics.com/champ140/yasuo.webp"
+  },
+  {
+    "id": "yone",
+    "key": "777",
+    "name": "Yone",
+    "icon": "https://cdn5.lolalytics.com/champ140/yone.webp"
+  },
+  {
+    "id": "yorick",
+    "key": "83",
+    "name": "Yorick",
+    "icon": "https://cdn5.lolalytics.com/champ140/yorick.webp"
+  },
+  {
+    "id": "yunara",
+    "key": "804",
+    "name": "Yunara",
+    "icon": "https://cdn5.lolalytics.com/champ140/yunara.webp"
+  },
+  {
+    "id": "yuumi",
+    "key": "350",
+    "name": "Yuumi",
+    "icon": "https://cdn5.lolalytics.com/champ140/yuumi.webp"
+  },
+  {
+    "id": "zaahen",
+    "key": "904",
+    "name": "Zaahen",
+    "icon": "https://cdn5.lolalytics.com/champ140/zaahen.webp"
+  },
+  {
+    "id": "zac",
+    "key": "154",
+    "name": "Zac",
+    "icon": "https://cdn5.lolalytics.com/champ140/zac.webp"
+  },
+  {
+    "id": "zed",
+    "key": "238",
+    "name": "Zed",
+    "icon": "https://cdn5.lolalytics.com/champ140/zed.webp"
+  },
+  {
+    "id": "zeri",
+    "key": "221",
+    "name": "Zeri",
+    "icon": "https://cdn5.lolalytics.com/champ140/zeri.webp"
+  },
+  {
+    "id": "ziggs",
+    "key": "115",
+    "name": "Ziggs",
+    "icon": "https://cdn5.lolalytics.com/champ140/ziggs.webp"
+  },
+  {
+    "id": "zilean",
+    "key": "26",
+    "name": "Zilean",
+    "icon": "https://cdn5.lolalytics.com/champ140/zilean.webp"
+  },
+  {
+    "id": "zoe",
+    "key": "142",
+    "name": "Zoe",
+    "icon": "https://cdn5.lolalytics.com/champ140/zoe.webp"
+  },
+  {
+    "id": "zyra",
+    "key": "143",
+    "name": "Zyra",
+    "icon": "https://cdn5.lolalytics.com/champ140/zyra.webp"
+  }
+]

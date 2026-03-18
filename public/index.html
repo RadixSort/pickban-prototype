@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PickBan Support Suggestions</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <p class="eyebrow">Hackathon Prototype</p>
+        <h1>Pick the draft. Get a support shortlist.</h1>
+        <p class="subtitle">
+          Add allied and enemy champions, then fetch live Lolalytics data to rank support picks.
+        </p>
+      </header>
+
+      <section class="draft-grid" aria-label="Champion draft inputs">
+        <div class="picker-card picker-card--ally">
+          <div class="picker-header">
+            <div>
+              <p class="picker-kicker">Allied Champions</p>
+              <h2>Synergy inputs</h2>
+            </div>
+            <span id="allies-count" class="picker-count">0 / 4</span>
+          </div>
+
+          <label class="search-field" for="allies-input">
+            <span class="sr-only">Search allied champions</span>
+            <input id="allies-input" type="text" autocomplete="off" placeholder="Search ally champions" />
+          </label>
+          <div id="allies-suggestions" class="suggestions" role="listbox" aria-label="Ally suggestions"></div>
+          <div id="allies-selected" class="selected-list" aria-live="polite"></div>
+        </div>
+
+        <div class="picker-card picker-card--enemy">
+          <div class="picker-header">
+            <div>
+              <p class="picker-kicker">Enemy Champions</p>
+              <h2>Counter inputs</h2>
+            </div>
+            <span id="enemies-count" class="picker-count">0 / 5</span>
+          </div>
+
+          <label class="search-field" for="enemies-input">
+            <span class="sr-only">Search enemy champions</span>
+            <input id="enemies-input" type="text" autocomplete="off" placeholder="Search enemy champions" />
+          </label>
+          <div id="enemies-suggestions" class="suggestions" role="listbox" aria-label="Enemy suggestions"></div>
+          <div id="enemies-selected" class="selected-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="actions">
+        <button id="fetch-button" class="primary-button" type="button">Fetch Suggestions</button>
+        <p id="status-text" class="status-text" aria-live="polite"></p>
+        <p id="error-text" class="error-text" aria-live="polite"></p>
+      </section>
+
+      <section class="results-panel" aria-label="Support recommendation results">
+        <div class="results-header">
+          <div>
+            <p class="picker-kicker">Results</p>
+            <h2>Support recommendations</h2>
+          </div>
+          <span id="results-meta" class="results-meta"></span>
+        </div>
+
+        <div id="partial-failures" class="partial-failures"></div>
+
+        <div id="empty-state" class="empty-state">
+          Select some champions, then fetch suggestions to see the ranked support list.
+        </div>
+
+        <div id="results-table-wrap" class="results-table-wrap hidden">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Support</th>
+                <th>SynergyScore</th>
+                <th>CounterScore</th>
+                <th>FinalScore</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
