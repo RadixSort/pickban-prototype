@@ -19,18 +19,21 @@ The project is a single-process local web app:
 3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
 4. The frontend collects user-selected champions and optional ally lane assignments.
 5. The frontend sends those selections to `POST /suggest`.
-6. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
-7. The frontend renders the ranked support table.
+6. The frontend can also load `GET /app-config` and request `POST /shutdown` when the user clicks `Close App`.
+7. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
+8. The frontend renders the ranked support table.
 
 ## File Responsibilities
 
 - `server.js`
   - static file hosting
+  - local app config and shutdown endpoints
   - request validation
   - live Lolalytics fetches
   - q-data payload parsing
   - in-memory caching
   - result aggregation and ranking
+  - graceful shutdown for `Ctrl+C`, `SIGTERM`, and browser-triggered app close
 
 - `public/champions.json`
   - local champion metadata
@@ -189,6 +192,8 @@ Error responses use:
 }
 ```
 
+The frontend also requests `GET /app-config` to obtain the local shutdown token used by `POST /shutdown`.
+
 ## Caching And Timeouts
 
 The backend keeps a simple in-memory cache keyed by request URL.
@@ -214,6 +219,8 @@ The browser app:
 - Default port is `3000`
 - The port can be changed with the `PORT` environment variable
 - Static assets and the API are served from the same Express process
+- The browser `Close App` control sends a loopback-only shutdown request with a per-process token
+- `Ctrl+C` now performs graceful shutdown and force-closes lingering sockets if needed
 - No build step is required
 
 ## Known Risks And Limitations

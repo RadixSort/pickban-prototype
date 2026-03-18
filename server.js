@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const path = require("path");
 
 const app = express();
@@ -16,8 +17,14 @@ const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SUPPORT_PICK_RATE_INDEX = 4;
+const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
+const shutdownToken = crypto.randomBytes(24).toString("hex");
+const openSockets = new Set();
+let server;
+let shuttingDown = false;
+let forcedShutdownTimer = null;
 
 const championByKey = new Map(
   champions.map((champion) => [String(champion.key), champion]),
@@ -40,6 +47,13 @@ const allyLaneByAlias = new Map([
 
 app.use(express.json());
 app.use(express.static(publicDir));
+
+app.get("/app-config", (_request, response) => {
+  response.json({
+    canShutdown: true,
+    shutdownToken,
+  });
+});
 
 app.post("/suggest", async (request, response) => {
   try {
@@ -146,8 +160,50 @@ app.post("/suggest", async (request, response) => {
   }
 });
 
-app.listen(PORT, () => {
+app.post("/shutdown", (request, response) => {
+  if (!isAuthorizedShutdownRequest(request)) {
+    return response.status(403).json({
+      error: "Only the local app page can stop this server.",
+    });
+  }
+
+  if (shuttingDown) {
+    return response.status(202).json({
+      message: "App shutdown is already in progress.",
+    });
+  }
+
+  response.json({
+    message: "PickBan is closing. You can close this browser tab.",
+  });
+
+  setImmediate(() => {
+    beginShutdown("browser close request");
+  });
+});
+
+server = app.listen(PORT, () => {
   console.log(`PickBan prototype running at http://localhost:${PORT}`);
+  console.log("Press Ctrl+C in this terminal or use the in-app Close App button to stop it.");
+});
+
+server.on("connection", (socket) => {
+  openSockets.add(socket);
+  socket.on("close", () => {
+    openSockets.delete(socket);
+  });
+});
+
+process.on("SIGINT", () => {
+  if (shuttingDown) {
+    process.exit(1);
+  }
+
+  beginShutdown("Ctrl+C");
+});
+
+process.on("SIGTERM", () => {
+  beginShutdown("SIGTERM");
 });
 
 function normalizeSelections(value, maxCount, label) {
@@ -512,4 +568,47 @@ function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function isAuthorizedShutdownRequest(request) {
+  const requestToken = request.get("x-shutdown-token");
+  const remoteAddress = request.socket?.remoteAddress || "";
+
+  return requestToken === shutdownToken && isLoopbackAddress(remoteAddress);
+}
+
+function isLoopbackAddress(address) {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+function beginShutdown(reason) {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  console.log(`Shutting down PickBan prototype (${reason})...`);
+  requestCache.clear();
+
+  forcedShutdownTimer = setTimeout(() => {
+    for (const socket of openSockets) {
+      socket.destroy();
+    }
+  }, SHUTDOWN_GRACE_PERIOD_MS);
+
+  if (typeof forcedShutdownTimer.unref === "function") {
+    forcedShutdownTimer.unref();
+  }
+
+  server.close((error) => {
+    clearTimeout(forcedShutdownTimer);
+
+    if (error) {
+      console.error("Failed to stop the PickBan prototype cleanly.", error);
+      process.exit(1);
+    }
+
+    console.log("PickBan prototype stopped.");
+    process.exit(0);
+  });
 }

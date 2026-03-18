@@ -65,7 +65,14 @@
       </section>
 
       <section class="actions">
-        <button id="fetch-button" class="primary-button" type="button">Fetch Suggestions</button>
+        <div class="action-row">
+          <button id="fetch-button" class="primary-button" type="button">Fetch Suggestions</button>
+          <button id="close-button" class="secondary-button" type="button" hidden>Close App</button>
+        </div>
+        <p id="close-help" class="actions-help hidden">
+          Close App stops the local server so you can close this tab without going back to the
+          terminal.
+        </p>
         <p id="status-text" class="status-text" aria-live="polite"></p>
         <p id="error-text" class="error-text" aria-live="polite"></p>
       </section>

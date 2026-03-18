@@ -3,6 +3,9 @@ const state = {
   allies: [],
   enemies: [],
   loading: false,
+  shuttingDown: false,
+  canShutdown: false,
+  shutdownToken: "",
   lastResults: [],
   lastMeta: null,
 };
@@ -35,6 +38,8 @@ const pickers = {
 };
 
 const fetchButton = document.getElementById("fetch-button");
+const closeButton = document.getElementById("close-button");
+const closeHelp = document.getElementById("close-help");
 const allyRolePanel = document.getElementById("ally-role-panel");
 const allyRoleList = document.getElementById("ally-role-list");
 const statusText = document.getElementById("status-text");
@@ -59,14 +64,35 @@ async function initialize() {
   state.champions.forEach((champion) => {
     champion.searchText = normalizeText(`${champion.name} ${champion.id}`);
   });
+  await loadAppConfig();
 
   wirePicker("allies");
   wirePicker("enemies");
 
   fetchButton.addEventListener("click", handleFetchSuggestions);
+  closeButton.addEventListener("click", handleCloseApp);
   document.addEventListener("click", handleOutsideClick);
 
   renderAll();
+}
+
+async function loadAppConfig() {
+  try {
+    const response = await fetch("/app-config", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const config = await response.json();
+    state.canShutdown = Boolean(config.canShutdown);
+    state.shutdownToken = typeof config.shutdownToken === "string" ? config.shutdownToken : "";
+  } catch (_error) {
+    state.canShutdown = false;
+    state.shutdownToken = "";
+  }
 }
 
 function wirePicker(side) {
@@ -107,15 +133,17 @@ function renderAll() {
   renderPicker("enemies");
   renderAllyLaneAssignments();
   renderResults();
+  renderActionState();
 }
 
 function renderPicker(side) {
   const picker = pickers[side];
   const selectedChampions = state[side];
   const max = limits[side];
+  const busy = isInteractionLocked();
 
   picker.count.textContent = `${selectedChampions.length} / ${max}`;
-  picker.input.disabled = state.loading || selectedChampions.length >= max;
+  picker.input.disabled = busy || selectedChampions.length >= max;
   picker.input.placeholder =
     selectedChampions.length >= max
       ? `Maximum ${max} champions selected`
@@ -166,7 +194,7 @@ function renderAllyLaneAssignments() {
 
     const select = document.createElement("select");
     select.className = "lane-select";
-    select.disabled = state.loading;
+    select.disabled = isInteractionLocked();
     select.setAttribute("aria-label", `Assign lane for ${ally.name}`);
     select.innerHTML = buildLaneOptionsMarkup(ally.id);
     select.value = ally.lane || "";
@@ -182,7 +210,7 @@ function renderSuggestions(side) {
   const picker = pickers[side];
   const query = picker.input.value.trim();
 
-  if (!query || state.loading || state[side].length >= limits[side]) {
+  if (!query || isInteractionLocked() || state[side].length >= limits[side]) {
     picker.suggestions.innerHTML = "";
     return;
   }
@@ -241,7 +269,7 @@ function scoreChampionMatch(champion, query) {
 }
 
 function addChampion(side, championId) {
-  if (state[side].length >= limits[side]) {
+  if (isInteractionLocked() || state[side].length >= limits[side]) {
     return;
   }
 
@@ -280,6 +308,10 @@ function createSelectedChampion(champion, side) {
 }
 
 function removeChampion(side, championId) {
+  if (isInteractionLocked()) {
+    return;
+  }
+
   state[side] = state[side].filter((champion) => champion.id !== championId);
   renderAll();
 }
@@ -303,6 +335,10 @@ function buildLaneOptionsMarkup(championId) {
 }
 
 function assignAllyLane(championId, lane) {
+  if (isInteractionLocked()) {
+    return;
+  }
+
   if (
     lane &&
     state.allies.some((ally) => ally.id !== championId && ally.lane === lane)
@@ -324,7 +360,7 @@ function assignAllyLane(championId, lane) {
 }
 
 async function handleFetchSuggestions() {
-  if (state.loading) {
+  if (isInteractionLocked()) {
     return;
   }
 
@@ -374,6 +410,51 @@ async function handleFetchSuggestions() {
   } finally {
     setLoading(false);
     renderResults();
+  }
+}
+
+async function handleCloseApp() {
+  if (isInteractionLocked()) {
+    return;
+  }
+
+  if (!state.canShutdown || !state.shutdownToken) {
+    setError("Close App is unavailable. Stop the server from the terminal with Ctrl+C.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Stop the local PickBan app now? Anyone using it on this computer will be disconnected.",
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  state.shuttingDown = true;
+  clearStatus();
+  setStatus("Stopping the local server...");
+  renderAll();
+
+  try {
+    const response = await fetch("/shutdown", {
+      method: "POST",
+      headers: {
+        "x-shutdown-token": state.shutdownToken,
+      },
+    });
+
+    const payload = await parseJsonSafely(response);
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to stop the app.");
+    }
+
+    setStatus(payload.message || "PickBan is closing. You can close this browser tab.");
+  } catch (error) {
+    state.shuttingDown = false;
+    setError(error.message || "Failed to stop the app.");
+  } finally {
+    renderAll();
   }
 }
 
@@ -435,11 +516,10 @@ function normalizeText(value) {
 
 function setLoading(loading) {
   state.loading = loading;
-  fetchButton.disabled = loading;
-  fetchButton.textContent = loading ? "Fetching..." : "Fetch Suggestions";
   renderPicker("allies");
   renderPicker("enemies");
   renderAllyLaneAssignments();
+  renderActionState();
 }
 
 function setStatus(message) {
@@ -454,4 +534,26 @@ function setError(message) {
 function clearStatus() {
   errorText.textContent = "";
   statusText.textContent = "";
+}
+
+function renderActionState() {
+  fetchButton.disabled = state.loading || state.shuttingDown;
+  fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
+
+  closeButton.hidden = !state.canShutdown;
+  closeHelp.classList.toggle("hidden", !state.canShutdown);
+  closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;
+  closeButton.textContent = state.shuttingDown ? "Closing..." : "Close App";
+}
+
+function isInteractionLocked() {
+  return state.loading || state.shuttingDown;
+}
+
+async function parseJsonSafely(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return {};
+  }
 }

@@ -40,7 +40,9 @@ http://localhost:3000
 
 5. Leave the terminal window open while you use the app.
 
-To stop the app later, return to the terminal and press `Ctrl+C`.
+To stop the app later, click `Close App` in the browser.
+
+If you prefer, you can still return to the terminal and press `Ctrl+C`.
 
 ## How To Use The App
 
@@ -91,6 +93,11 @@ If the version is below 18, install a newer version of Node.js.
 
 - Make sure `npm start` is still running in the terminal.
 - Make sure you opened `http://localhost:3000`.
+
+### The app does not stop when I press `Ctrl+C`
+
+- Use the `Close App` button in the browser instead.
+- If the browser page is already gone, return to the terminal and press `Ctrl+C` again.
 
 ### Port 3000 is already in use
 

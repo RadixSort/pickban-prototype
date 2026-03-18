@@ -295,6 +295,12 @@ select {
   gap: 8px;
 }
 
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .primary-button {
   width: fit-content;
   min-width: 220px;
@@ -307,9 +313,33 @@ select {
   cursor: pointer;
 }
 
-.primary-button:disabled {
+.secondary-button {
+  width: fit-content;
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(10, 15, 22, 0.95);
+  color: var(--text);
+  font-weight: 700;
+  padding: 14px 22px;
+  cursor: pointer;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
   opacity: 0.65;
   cursor: wait;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.actions-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .status-text,
@@ -408,6 +438,10 @@ select {
   }
 
   .primary-button {
+    width: 100%;
+  }
+
+  .secondary-button {
     width: 100%;
   }
 

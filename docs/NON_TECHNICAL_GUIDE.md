@@ -135,10 +135,15 @@ npm start
 
 When you are done:
 
-1. Go back to the terminal window.
-2. Press `Ctrl+C`.
+1. In the browser, click `Close App`.
+2. Close the browser tab if you want.
 
 That stops the local server.
+
+If `Close App` is not available for some reason:
+
+1. Go back to the terminal window.
+2. Press `Ctrl+C`.
 
 ## Common Problems
 
