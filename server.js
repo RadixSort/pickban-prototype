@@ -125,7 +125,8 @@ app.post("/suggest", async (request, response) => {
         const rows = result.value.rows;
         for (const [supportKey, row] of rows) {
           const record = getCandidateRecord(candidateScores, supportKey);
-          record.counterValues.push(row.value);
+          // Lolalytics counter rows are oriented from the enemy pick's perspective.
+          record.counterValues.push(-row.value);
         }
       } else {
         partialFailures.push(result.reason.message);

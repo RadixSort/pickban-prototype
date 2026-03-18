@@ -135,7 +135,7 @@ For each selected enemy champion:
 The final output for each support is:
 
 - `synergyScore = average(synergyValues)`
-- `counterScore = average(counterValues)`
+- `counterScore = average(rawCounterValues with the sign flipped)`
 - `finalScore = 0.5 * synergyScore + 0.5 * counterScore`
 
 Before a support is returned, it must also appear on the live support tier list with:
@@ -182,8 +182,8 @@ Successful responses look like this:
       "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
       "winRate": 51.88,
       "synergyScore": 52.31,
-      "counterScore": 50.94,
-      "finalScore": 51.625
+      "counterScore": -50.94,
+      "finalScore": 0.685
     }
   ],
   "meta": {
