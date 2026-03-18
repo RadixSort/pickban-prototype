@@ -24,13 +24,24 @@ const championBySlug = new Map(champions.map((champion) => [champion.id, champio
 const championByName = new Map(
   champions.map((champion) => [normalizeChampionName(champion.name), champion]),
 );
+const allyLaneByAlias = new Map([
+  ["top", "top"],
+  ["jungle", "jungle"],
+  ["jg", "jungle"],
+  ["jng", "jungle"],
+  ["mid", "middle"],
+  ["middle", "middle"],
+  ["bot", "bottom"],
+  ["bottom", "bottom"],
+  ["adc", "bottom"],
+]);
 
 app.use(express.json());
 app.use(express.static(publicDir));
 
 app.post("/suggest", async (request, response) => {
   try {
-    const allies = normalizeSelections(request.body?.allies, 4, "allies");
+    const allies = normalizeAllySelections(request.body?.allies, 4, "allies");
     const enemies = normalizeSelections(request.body?.enemies, 5, "enemies");
 
     if (allies.length === 0 && enemies.length === 0) {
@@ -42,9 +53,10 @@ app.post("/suggest", async (request, response) => {
     const partialFailures = [];
 
     const allyResults = await Promise.allSettled(
-      allies.map(async (champion) => ({
+      allies.map(async ({ champion, lane }) => ({
         champion,
-        rows: await fetchSupportSynergyRows(champion),
+        lane,
+        rows: await fetchSupportSynergyRows(champion, lane),
       })),
     );
 
@@ -104,6 +116,7 @@ app.post("/suggest", async (request, response) => {
         meta: {
           allyCount: allies.length,
           enemyCount: enemies.length,
+          assignedLaneCount: allies.filter((ally) => ally.lane).length,
           partialFailures,
         },
       });
@@ -114,6 +127,7 @@ app.post("/suggest", async (request, response) => {
       meta: {
         allyCount: allies.length,
         enemyCount: enemies.length,
+        assignedLaneCount: allies.filter((ally) => ally.lane).length,
         partialFailures,
       },
     });
@@ -169,8 +183,76 @@ function normalizeSelections(value, maxCount, label) {
   return normalized;
 }
 
+function normalizeAllySelections(value, maxCount, label) {
+  if (value == null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw createHttpError(400, `Request field "${label}" must be an array.`);
+  }
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const entry of value) {
+    let championName = entry;
+    let lane = null;
+
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      championName = entry.champion ?? entry.name;
+      lane = normalizeAllyLane(entry.lane ?? entry.role ?? null, label);
+    }
+
+    if (typeof championName !== "string" || championName.trim() === "") {
+      throw createHttpError(400, `Request field "${label}" contains an invalid champion name.`);
+    }
+
+    const champion = championByName.get(normalizeChampionName(championName));
+    if (!champion) {
+      throw createHttpError(400, `Unknown champion "${championName}".`);
+    }
+
+    if (seen.has(champion.key)) {
+      continue;
+    }
+
+    seen.add(champion.key);
+    normalized.push({
+      champion,
+      lane,
+    });
+  }
+
+  if (normalized.length > maxCount) {
+    throw createHttpError(
+      400,
+      `Request field "${label}" can contain at most ${maxCount} unique champions.`,
+    );
+  }
+
+  return normalized;
+}
+
 function normalizeChampionName(value) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeAllyLane(value, label) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw createHttpError(400, `Request field "${label}" contains an invalid ally lane.`);
+  }
+
+  const normalized = allyLaneByAlias.get(value.trim().toLowerCase());
+  if (!normalized) {
+    throw createHttpError(400, `Request field "${label}" contains an invalid ally lane.`);
+  }
+
+  return normalized;
 }
 
 async function fetchSupportCounterRows(champion) {
@@ -178,12 +260,29 @@ async function fetchSupportCounterRows(champion) {
   return extractSupportValues(payload?.enemy?.support, 2);
 }
 
-async function fetchSupportSynergyRows(champion) {
+async function fetchSupportSynergyRows(champion, lane) {
+  if (lane) {
+    try {
+      const rows = await fetchSupportSynergyRowsForLane(champion, lane);
+      if (rows.size > 0) {
+        return rows;
+      }
+    } catch (error) {
+      return fetchSupportSynergyRowsForLane(champion, "all");
+    }
+
+    return fetchSupportSynergyRowsForLane(champion, "all");
+  }
+
+  return fetchSupportSynergyRowsForLane(champion, "all");
+}
+
+async function fetchSupportSynergyRowsForLane(champion, lane) {
   const payload = await fetchLolalyticsMegaJson(
     `?ep=build-team&v=1&patch=${PATCH_WINDOW}&c=${encodeURIComponent(
       champion.id,
-    )}&lane=all&tier=${TIER}&queue=${QUEUE}&region=${REGION}`,
-    `${champion.name} synergy`,
+    )}&lane=${encodeURIComponent(lane)}&tier=${TIER}&queue=${QUEUE}&region=${REGION}`,
+    `${champion.name} ${lane} synergy`,
   );
   return extractSupportValues(payload?.team?.support, 3);
 }

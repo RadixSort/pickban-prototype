@@ -1,6 +1,6 @@
 # PickBan Prototype
 
-PickBan Prototype is a small local web app that helps rank League of Legends support picks during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, and the app fetches live Lolalytics data to build a ranked support shortlist.
+PickBan Prototype is a small local web app that helps rank League of Legends support picks during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, can optionally assign lanes to the allied picks, and then fetch live Lolalytics data to build a ranked support shortlist.
 
 This project is meant to be run on your own computer. It is not packaged as a hosted product yet.
 
@@ -46,15 +46,17 @@ To stop the app later, return to the terminal and press `Ctrl+C`.
 
 1. In the **Allied Champions** box, type the name of an ally champion and click a suggestion.
 2. Repeat until you have added the allied champions you want to consider.
-3. In the **Enemy Champions** box, add the enemy champions you are drafting against.
-4. Click **Fetch Suggestions**.
-5. Review the ranked support table.
-6. Click any selected champion chip if you want to remove it and try a different draft.
+3. If you want, use the **Assign lanes** section to set `Top`, `Jungle`, `Mid`, or `Bot` for some or all allied champions.
+4. In the **Enemy Champions** box, add the enemy champions you are drafting against.
+5. Click **Fetch Suggestions**.
+6. Review the ranked support table.
+7. Click any selected champion chip if you want to remove it and try a different draft.
 
 Rules built into the app:
 
 - You can add up to 4 allied champions.
 - You can add up to 5 enemy champions.
+- Ally lane assignment is optional.
 - The same champion cannot be selected on both sides.
 - You must choose at least one champion before fetching suggestions.
 
@@ -70,6 +72,7 @@ Important behavior:
 
 - If you only enter allied champions, the counter portion is treated as `0`.
 - If you only enter enemy champions, the synergy portion is treated as `0`.
+- If you assign ally lanes, the app tries lane-specific synergy first and falls back to all-lane data if needed.
 - If some live requests fail, the app can still show partial results and will list those failures above the results table.
 
 ## Troubleshooting

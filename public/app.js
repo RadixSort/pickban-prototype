@@ -12,6 +12,13 @@ const limits = {
   enemies: 5,
 };
 
+const allyLaneOptions = [
+  { value: "top", label: "Top" },
+  { value: "jungle", label: "Jungle" },
+  { value: "middle", label: "Mid" },
+  { value: "bottom", label: "Bot" },
+];
+
 const pickers = {
   allies: {
     input: document.getElementById("allies-input"),
@@ -28,6 +35,8 @@ const pickers = {
 };
 
 const fetchButton = document.getElementById("fetch-button");
+const allyRolePanel = document.getElementById("ally-role-panel");
+const allyRoleList = document.getElementById("ally-role-list");
 const statusText = document.getElementById("status-text");
 const errorText = document.getElementById("error-text");
 const emptyState = document.getElementById("empty-state");
@@ -96,6 +105,7 @@ function handleOutsideClick(event) {
 function renderAll() {
   renderPicker("allies");
   renderPicker("enemies");
+  renderAllyLaneAssignments();
   renderResults();
 }
 
@@ -131,6 +141,41 @@ function renderPicker(side) {
   }
 
   renderSuggestions(side);
+}
+
+function renderAllyLaneAssignments() {
+  allyRoleList.innerHTML = "";
+
+  if (state.allies.length === 0) {
+    allyRolePanel.classList.add("hidden");
+    return;
+  }
+
+  allyRolePanel.classList.remove("hidden");
+
+  for (const ally of state.allies) {
+    const row = document.createElement("div");
+    row.className = "role-row";
+
+    const main = document.createElement("div");
+    main.className = "role-row-main";
+    main.innerHTML = `
+      <img src="${ally.icon}" alt="${ally.name}" width="36" height="36" />
+      <span class="role-row-name">${ally.name}</span>
+    `;
+
+    const select = document.createElement("select");
+    select.className = "lane-select";
+    select.disabled = state.loading;
+    select.setAttribute("aria-label", `Assign lane for ${ally.name}`);
+    select.innerHTML = buildLaneOptionsMarkup(ally.id);
+    select.value = ally.lane || "";
+    select.addEventListener("change", (event) => assignAllyLane(ally.id, event.target.value));
+
+    row.appendChild(main);
+    row.appendChild(select);
+    allyRoleList.appendChild(row);
+  }
 }
 
 function renderSuggestions(side) {
@@ -213,14 +258,68 @@ function addChampion(side, championId) {
     return;
   }
 
-  state[side].push(champion);
+  state[side].push(createSelectedChampion(champion, side));
   pickers[side].input.value = "";
   clearStatus();
   renderAll();
 }
 
+function createSelectedChampion(champion, side) {
+  const selected = {
+    id: champion.id,
+    key: champion.key,
+    name: champion.name,
+    icon: champion.icon,
+  };
+
+  if (side === "allies") {
+    selected.lane = "";
+  }
+
+  return selected;
+}
+
 function removeChampion(side, championId) {
   state[side] = state[side].filter((champion) => champion.id !== championId);
+  renderAll();
+}
+
+function buildLaneOptionsMarkup(championId) {
+  const takenLanes = new Set(
+    state.allies
+      .filter((ally) => ally.id !== championId && ally.lane)
+      .map((ally) => ally.lane),
+  );
+
+  const options = ['<option value="">Unassigned</option>'];
+  for (const option of allyLaneOptions) {
+    const disabled = takenLanes.has(option.value) ? " disabled" : "";
+    options.push(
+      `<option value="${option.value}"${disabled}>${option.label}</option>`,
+    );
+  }
+
+  return options.join("");
+}
+
+function assignAllyLane(championId, lane) {
+  if (
+    lane &&
+    state.allies.some((ally) => ally.id !== championId && ally.lane === lane)
+  ) {
+    return;
+  }
+
+  state.allies = state.allies.map((ally) =>
+    ally.id === championId
+      ? {
+          ...ally,
+          lane,
+        }
+      : ally,
+  );
+
+  clearStatus();
   renderAll();
 }
 
@@ -245,7 +344,17 @@ async function handleFetchSuggestions() {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        allies: state.allies.map((champion) => champion.name),
+        allies: state.allies.map((champion) => {
+          const selection = {
+            champion: champion.name,
+          };
+
+          if (champion.lane) {
+            selection.lane = champion.lane;
+          }
+
+          return selection;
+        }),
         enemies: state.enemies.map((champion) => champion.name),
       }),
     });
@@ -330,6 +439,7 @@ function setLoading(loading) {
   fetchButton.textContent = loading ? "Fetching..." : "Fetch Suggestions";
   renderPicker("allies");
   renderPicker("enemies");
+  renderAllyLaneAssignments();
 }
 
 function setStatus(message) {

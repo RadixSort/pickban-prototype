@@ -17,8 +17,8 @@ The project is a single-process local web app:
 1. `server.js` starts an Express server.
 2. The server exposes static files from `public/`.
 3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
-4. The frontend collects user-selected champions.
-5. The frontend sends those champion names to `POST /suggest`.
+4. The frontend collects user-selected champions and optional ally lane assignments.
+5. The frontend sends those selections to `POST /suggest`.
 6. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
 7. The frontend renders the ranked support table.
 
@@ -39,6 +39,7 @@ The project is a single-process local web app:
 
 - `public/app.js`
   - selection state
+  - optional ally lane assignments
   - search suggestion logic
   - request submission
   - loading, error, and result rendering
@@ -90,7 +91,10 @@ The frontend sends a `POST /suggest` request with this shape:
 
 ```json
 {
-  "allies": ["Ahri", "Jarvan IV"],
+  "allies": [
+    { "champion": "Ahri", "lane": "middle" },
+    { "champion": "Jarvan IV" }
+  ],
   "enemies": ["Jinx", "Nautilus"]
 }
 ```
@@ -99,8 +103,10 @@ Validation rules:
 
 - `allies` must be an array if provided
 - `enemies` must be an array if provided
-- each entry must be a non-empty string
+- each enemy entry must be a non-empty string
+- each ally entry must be either a non-empty champion string or an object with a champion name and optional lane
 - champion names must exist in the local metadata file
+- ally lane values are normalized to `top`, `jungle`, `middle`, or `bottom`
 - duplicate champions are ignored within the same request
 - maximum 4 unique allied champions
 - maximum 5 unique enemy champions
@@ -113,6 +119,7 @@ Champion names are normalized by lowercasing and stripping non-alphanumeric char
 For each selected allied champion:
 
 - the server fetches support synergy rows
+- if a lane is assigned, the server tries that lane first and falls back to `all`
 - each returned support gets a synergy value appended to its candidate record
 
 For each selected enemy champion:

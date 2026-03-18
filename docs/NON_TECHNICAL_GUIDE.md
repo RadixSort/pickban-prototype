@@ -97,9 +97,10 @@ http://localhost:3000
 2. Type a champion name.
 3. Click the correct champion from the suggestion list.
 4. Repeat for the other allied champions you want to include.
-5. Add enemy champions in the **Enemy Champions** area.
-6. Click **Fetch Suggestions**.
-7. Read the ranked support list in the results section.
+5. If you want, use the **Assign lanes** section to mark allies as `Top`, `Jungle`, `Mid`, or `Bot`.
+6. Add enemy champions in the **Enemy Champions** area.
+7. Click **Fetch Suggestions**.
+8. Read the ranked support list in the results section.
 
 ## What The Results Mean
 
@@ -113,6 +114,7 @@ In simple terms, the highest rows are the supports the app currently likes most 
 
 - Up to 4 allied champions
 - Up to 5 enemy champions
+- Ally lane assignment is optional
 - At least 1 champion must be selected before fetching suggestions
 - A champion can only appear once
 
