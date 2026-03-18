@@ -69,7 +69,7 @@ Rules built into the app:
 - `Synergy Score`: the average role-specific synergy value gathered from the allied champions you selected.
 - `Counter Score`: the average role-specific counter value gathered from the enemy champions you selected.
 - `Projected Agency`: `50% Synergy Score + 50% Counter Score`.
-- `Projected Win Rate`: the average matchup win rate gathered from every selected ally/enemy input.
+- `Projected Win Rate`: the average matchup win rate gathered from every selected ally/enemy input, with enemy matchups flipped back to the suggested pick's perspective.
 - `Win Rate`: the champion's live win rate for the selected role from the matching Lolalytics tier list.
 
 You can rank the table by either `Projected Agency` or `Projected Win Rate`.
@@ -91,7 +91,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.8`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.9`.
 
 ### The app does not start
 

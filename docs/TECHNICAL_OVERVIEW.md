@@ -141,12 +141,13 @@ For each selected enemy champion:
 
 - the server fetches target-role counter rows
 - each returned candidate gets a counter value appended to its candidate record
+- enemy matchup win rates are flipped back to the candidate's perspective before they contribute to projected win rate
 
 The final output for each candidate is:
 
 - `synergyScore = average(synergyValues)`
 - `counterScore = average(rawCounterValues with the sign flipped)`
-- `projectedWinRate = average(all synergy and counter matchup win rates)`
+- `projectedWinRate = average(all synergy matchup win rates plus enemy matchup win rates after perspective-flipping them with 100 - rawWinRate)`
 - `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
 
 Before a candidate is returned, it must also appear on the live tier list for the requested role with:

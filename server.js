@@ -6,6 +6,7 @@ const {
   buildEligibleTierStats,
   extractTierListRows,
 } = require("./lib/lolalytics-tier-list.js");
+const { orientEnemyMatchupWinRate } = require("./lib/matchup-orientation.js");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -134,8 +135,9 @@ app.post("/suggest", async (request, response) => {
           const record = getCandidateRecord(candidateScores, candidateKey);
           // Lolalytics counter rows are oriented from the enemy pick's perspective.
           record.counterValues.push(-row.value);
-          if (Number.isFinite(row.winRate)) {
-            record.projectedWinRateValues.push(row.winRate);
+          const projectedWinRateValue = orientEnemyMatchupWinRate(row.winRate);
+          if (Number.isFinite(projectedWinRateValue)) {
+            record.projectedWinRateValues.push(projectedWinRateValue);
           }
         }
       } else {

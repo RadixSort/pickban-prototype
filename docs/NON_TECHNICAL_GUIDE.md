@@ -107,7 +107,7 @@ http://localhost:3000
 
 - `Synergy Score`: how well a candidate works with your selected allies for the chosen role
 - `Counter Score`: how well a candidate performs into your selected enemies for the chosen role
-- `Projected Win Rate`: the average matchup win rate taken from all selected ally/enemy inputs
+- `Projected Win Rate`: the average matchup win rate taken from all selected ally/enemy inputs, with enemy matchups flipped to your suggested pick's side of the matchup
 - `Projected Agency`: the combined rank used to sort the list
 
 You can sort the table by either `Projected Agency` or `Projected Win Rate`.

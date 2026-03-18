@@ -30,7 +30,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.0",
+  version: "0.9.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,

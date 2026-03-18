@@ -1,6 +1,6 @@
 {
   "name": "pickban-prototype",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "Local PickBan prototype for live role recommendations",
   "scripts": {

@@ -11,6 +11,9 @@
   --accent-strong: #f2d88d;
   --success: #90f1c3;
   --error: #ff9a9a;
+  --danger-border: rgba(184, 87, 87, 0.42);
+  --danger-surface: rgba(72, 20, 20, 0.56);
+  --danger-text: #efb0b0;
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
   font-family:
     "Trebuchet MS",
@@ -377,6 +380,7 @@ select {
 .action-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 
@@ -412,6 +416,19 @@ select {
 
 .secondary-button:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+.close-button {
+  margin-left: auto;
+  min-width: 150px;
+  border-color: var(--danger-border);
+  background: var(--danger-surface);
+  color: var(--danger-text);
+}
+
+.close-button:hover:not(:disabled) {
+  border-color: rgba(239, 176, 176, 0.72);
+  background: rgba(86, 24, 24, 0.72);
 }
 
 .actions-help {
@@ -548,6 +565,10 @@ select {
 
   .secondary-button {
     width: 100%;
+  }
+
+  .close-button {
+    margin-left: 0;
   }
 
   .results-toolbar {
