@@ -59,6 +59,10 @@ app.post("/suggest", async (request, response) => {
   try {
     const allies = normalizeAllySelections(request.body?.allies, 4, "allies");
     const enemies = normalizeSelections(request.body?.enemies, 5, "enemies");
+    const selectedChampionKeys = new Set([
+      ...allies.map(({ champion }) => String(champion.key)),
+      ...enemies.map((champion) => String(champion.key)),
+    ]);
 
     if (allies.length === 0 && enemies.length === 0) {
       return response.status(400).json({
@@ -89,6 +93,10 @@ app.post("/suggest", async (request, response) => {
       if (result.status === "fulfilled") {
         const rows = result.value.rows;
         for (const [supportKey, row] of rows) {
+          if (selectedChampionKeys.has(supportKey)) {
+            continue;
+          }
+
           const record = getCandidateRecord(candidateScores, supportKey);
           record.synergyValues.push(row.value);
           record.pickRates.push(row.pickRate);
@@ -102,6 +110,10 @@ app.post("/suggest", async (request, response) => {
       if (result.status === "fulfilled") {
         const rows = result.value.rows;
         for (const [supportKey, row] of rows) {
+          if (selectedChampionKeys.has(supportKey)) {
+            continue;
+          }
+
           const record = getCandidateRecord(candidateScores, supportKey);
           record.counterValues.push(row.value);
           record.pickRates.push(row.pickRate);
