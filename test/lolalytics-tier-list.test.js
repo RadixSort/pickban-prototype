@@ -59,6 +59,59 @@ const sampleTierListHtml = `
   </div>
 `;
 
+const sampleGridTierListHtml = `
+  <div class="h-[151px] min-w-[150px] max-w-[190px] flex-auto overflow-hidden border border-[#4e6a6c] hover:border-white" q:key="hE_6">
+    <a href="/lol/maokai/build/?tier=platinum_plus&amp;patch=7">
+      <div>
+        <div class="h-[20px] flex-auto border-b-[1px] border-[#4e6a6c] pt-[2px] text-center text-[15px]">Maokai</div>
+        <div class="flex">
+          <div class="w-[100px] overflow-hidden">
+            <img src="https://cdn5.lolalytics.com/champ280/maokai.webp" alt="Maokai" />
+            <div class="relative left-[60px] top-[-82px] flex h-[48px]  w-[37px] items-center justify-center bg-black bg-opacity-50 text-[12px]" q:key="hE_1">
+              <div class="w-[33px] text-center text-[11px]">
+                <img src="https://cdn5.lolalytics.com/lane27/support.webp" alt="support lane" class="m-auto mb-[2px]" />
+                66.71
+              </div>
+            </div>
+          </div>
+          <div class="flex-auto overflow-hidden text-center">
+            <div class="text-[22px] font-semibold">A-</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#4bc84b]">52.45</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#88f]">2.22</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#ec7878]">0.25</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#007800]">56.05</div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <div class="h-[151px] min-w-[150px] max-w-[190px] flex-auto overflow-hidden border border-[#4e6a6c] hover:border-white" q:key="hE_6">
+    <a href="/lol/morgana/build/?tier=platinum_plus&amp;patch=7">
+      <div>
+        <div class="h-[20px] flex-auto border-b-[1px] border-[#4e6a6c] pt-[2px] text-center text-[15px]">Morgana</div>
+        <div class="flex">
+          <div class="w-[100px] overflow-hidden">
+            <img src="https://cdn5.lolalytics.com/champ280/morgana.webp" alt="Morgana" />
+            <div class="relative left-[60px] top-[-82px] flex h-[48px]  w-[37px] items-center justify-center bg-black bg-opacity-50 text-[12px]" q:key="hE_1">
+              <div class="w-[33px] text-center text-[11px]">
+                <img src="https://cdn5.lolalytics.com/lane27/support.webp" alt="support lane" class="m-auto mb-[2px]" />
+                87.45
+              </div>
+            </div>
+          </div>
+          <div class="flex-auto overflow-hidden text-center">
+            <div class="text-[22px] font-semibold">B+</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#4bc84b]">51.92</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#88f]">1.84</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#ec7878]">0.91</div>
+            <div class="mt-[2px] text-[12px] font-semibold text-[#007800]">53.64</div>
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+`;
+
 test("extractSupportTierListRows parses lane percent, win rate, and pick rate", () => {
   assert.deepEqual(extractSupportTierListRows(sampleTierListHtml), [
     {
@@ -76,6 +129,32 @@ test("extractSupportTierListRows parses lane percent, win rate, and pick rate", 
       pickRate: 0.37,
     },
   ]);
+});
+
+test("extractSupportTierListRows parses grid cards without dropping champions", () => {
+  assert.deepEqual(extractSupportTierListRows(sampleGridTierListHtml), [
+    {
+      slug: "maokai",
+      name: "Maokai",
+      lanePercent: 66.71,
+      winRate: 52.45,
+      pickRate: 2.22,
+    },
+    {
+      slug: "morgana",
+      name: "Morgana",
+      lanePercent: 87.45,
+      winRate: 51.92,
+      pickRate: 1.84,
+    },
+  ]);
+});
+
+test("extractSupportTierListRows returns one row per grid champion card", () => {
+  const expectedChampionCount =
+    sampleGridTierListHtml.match(/href="\/lol\/[^/]+\/build\/\?tier=/g)?.length || 0;
+
+  assert.equal(extractSupportTierListRows(sampleGridTierListHtml).length, expectedChampionCount);
 });
 
 test("buildEligibleSupportTierStats filters rows with minimum lane and pick thresholds", () => {

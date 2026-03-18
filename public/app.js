@@ -8,7 +8,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.3.0",
+  version: "0.4.0",
   lastResults: [],
   lastMeta: null,
 };

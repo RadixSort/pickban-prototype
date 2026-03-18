@@ -24,7 +24,7 @@ const MIN_SUPPORT_TIER_LIST_PICK_RATE = 0.5;
 const MIN_SUPPORT_TIER_LIST_LANE_PERCENT = 10;
 const LOLALYTICS_BASE_URL = "https://lolalytics.com";
 const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
-const LOLALYTICS_SUPPORT_TIER_LIST_URL = `${LOLALYTICS_BASE_URL}/lol/tierlist/?lane=support&tier=${TIER}&patch=${PATCH_WINDOW}&view=list`;
+const LOLALYTICS_SUPPORT_TIER_LIST_URL = `${LOLALYTICS_BASE_URL}/lol/tierlist/?lane=support&tier=${TIER}&patch=${PATCH_WINDOW}&view=grid`;
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
