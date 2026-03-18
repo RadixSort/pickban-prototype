@@ -6,6 +6,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
+  version: "0.2.0",
   lastResults: [],
   lastMeta: null,
 };
@@ -38,6 +39,7 @@ const pickers = {
 };
 
 const fetchButton = document.getElementById("fetch-button");
+const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
 const closeHelp = document.getElementById("close-help");
 const allyRolePanel = document.getElementById("ally-role-panel");
@@ -49,13 +51,16 @@ const resultsWrap = document.getElementById("results-table-wrap");
 const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const partialFailures = document.getElementById("partial-failures");
+const versionText = document.getElementById("app-version");
 
 initialize().catch((error) => {
   setError(error.message || "Failed to initialize champion metadata.");
 });
 
 async function initialize() {
-  const response = await fetch("/champions.json");
+  const response = await fetch("/champions.json", {
+    cache: "no-store",
+  });
   if (!response.ok) {
     throw new Error("Failed to load champion metadata.");
   }
@@ -70,9 +75,11 @@ async function initialize() {
   wirePicker("enemies");
 
   fetchButton.addEventListener("click", handleFetchSuggestions);
+  resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
   document.addEventListener("click", handleOutsideClick);
 
+  clearStatus();
   renderAll();
 }
 
@@ -87,12 +94,15 @@ async function loadAppConfig() {
     }
 
     const config = await response.json();
+    state.version = typeof config.version === "string" ? config.version : state.version;
     state.canShutdown = Boolean(config.canShutdown);
     state.shutdownToken = typeof config.shutdownToken === "string" ? config.shutdownToken : "";
   } catch (_error) {
     state.canShutdown = false;
     state.shutdownToken = "";
   }
+
+  renderVersion();
 }
 
 function wirePicker(side) {
@@ -134,6 +144,7 @@ function renderAll() {
   renderAllyLaneAssignments();
   renderResults();
   renderActionState();
+  renderVersion();
 }
 
 function renderPicker(side) {
@@ -288,7 +299,7 @@ function addChampion(side, championId) {
 
   state[side].push(createSelectedChampion(champion, side));
   pickers[side].input.value = "";
-  clearStatus();
+  invalidateSuggestions();
   renderAll();
 }
 
@@ -313,6 +324,7 @@ function removeChampion(side, championId) {
   }
 
   state[side] = state[side].filter((champion) => champion.id !== championId);
+  invalidateSuggestions();
   renderAll();
 }
 
@@ -355,7 +367,7 @@ function assignAllyLane(championId, lane) {
       : ally,
   );
 
-  clearStatus();
+  invalidateSuggestions();
   renderAll();
 }
 
@@ -411,6 +423,19 @@ async function handleFetchSuggestions() {
     setLoading(false);
     renderResults();
   }
+}
+
+function handleResetDraft() {
+  if (isInteractionLocked()) {
+    return;
+  }
+
+  state.allies = [];
+  state.enemies = [];
+  pickers.allies.input.value = "";
+  pickers.enemies.input.value = "";
+  invalidateSuggestions();
+  renderAll();
 }
 
 async function handleCloseApp() {
@@ -510,6 +535,10 @@ function formatScore(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function formatVersion(version) {
+  return version.startsWith("v") ? version : `v${version}`;
+}
+
 function normalizeText(value) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -520,6 +549,10 @@ function setLoading(loading) {
   renderPicker("enemies");
   renderAllyLaneAssignments();
   renderActionState();
+}
+
+function renderVersion() {
+  versionText.textContent = formatVersion(state.version);
 }
 
 function setStatus(message) {
@@ -536,10 +569,17 @@ function clearStatus() {
   statusText.textContent = "";
 }
 
+function invalidateSuggestions() {
+  state.lastResults = [];
+  state.lastMeta = null;
+  clearStatus();
+}
+
 function renderActionState() {
   fetchButton.disabled = state.loading || state.shuttingDown;
   fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
 
+  resetButton.disabled = state.loading || state.shuttingDown;
   closeButton.hidden = !state.canShutdown;
   closeHelp.classList.toggle("hidden", !state.canShutdown);
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;

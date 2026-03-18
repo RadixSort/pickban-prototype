@@ -79,6 +79,14 @@ Important behavior:
 
 ## Troubleshooting
 
+### I pulled new commits but the page still looks old
+
+1. Stop the current server with `Close App` or `Ctrl+C`.
+2. Start it again with `npm start`.
+3. Refresh the browser tab.
+
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.2.0`.
+
 ### The app does not start
 
 Check that Node.js is installed:

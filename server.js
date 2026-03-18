@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
+const { version: appVersion } = require("./package.json");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -46,10 +47,20 @@ const allyLaneByAlias = new Map([
 ]);
 
 app.use(express.json());
-app.use(express.static(publicDir));
+app.use(
+  express.static(publicDir, {
+    etag: false,
+    lastModified: false,
+    setHeaders(response) {
+      response.setHeader("Cache-Control", "no-store");
+    },
+  }),
+);
 
 app.get("/app-config", (_request, response) => {
+  response.set("Cache-Control", "no-store");
   response.json({
+    version: appVersion,
     canShutdown: true,
     shutdownToken,
   });

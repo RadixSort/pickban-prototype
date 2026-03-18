@@ -30,6 +30,7 @@ body {
     radial-gradient(circle at top left, rgba(36, 73, 101, 0.35), transparent 32%),
     radial-gradient(circle at top right, rgba(123, 45, 45, 0.25), transparent 28%),
     linear-gradient(180deg, #0a0f16, #0f141c 45%, #0c1016);
+  padding-bottom: 72px;
 }
 
 button,
@@ -412,6 +413,23 @@ select {
   background: rgba(10, 15, 22, 0.6);
 }
 
+.app-version-badge {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10;
+  border: 1px solid rgba(211, 188, 124, 0.28);
+  border-radius: 999px;
+  background: rgba(9, 14, 20, 0.9);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+  text-transform: uppercase;
+}
+
 .hidden {
   display: none;
 }
@@ -443,6 +461,11 @@ select {
 
   .secondary-button {
     width: 100%;
+  }
+
+  .app-version-badge {
+    right: 12px;
+    bottom: 12px;
   }
 
   .role-panel-header,
