@@ -2,6 +2,8 @@
 
 This document explains how the PickBan Prototype is structured, where its data comes from, and how the role-specific ranking is computed.
 
+The app is powered by live Lolalytics data, and this project is built independently with appreciation for their matchup and tier-list work.
+
 ## Stack
 
 - Node.js
@@ -88,6 +90,8 @@ Two remote Lolalytics sources are used:
 - synergy data from the Lolalytics mega endpoint
 - counter data from the Lolalytics champion build `q-data.json` endpoint
 - tier-list data from the Lolalytics role-specific tier-list page
+
+The implementation depends on those live Lolalytics responses and is intended to treat them as the authoritative external data source for this local tool.
 
 The server uses these lookup settings:
 

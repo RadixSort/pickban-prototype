@@ -2,6 +2,8 @@
 
 This guide is for someone who wants to use the app but does not have a software background.
 
+The app uses live Lolalytics data and is built independently with appreciation for their matchup and tier-list work.
+
 You do not need to know programming to use this project. You only need to install one tool, open a terminal window, and copy a few commands.
 
 ## What This App Does

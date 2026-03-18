@@ -2,6 +2,8 @@
 
 PickBan Prototype is a small local web app that helps rank League of Legends picks for the last open role during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, select the role you want to fill, can optionally assign roles to the allied picks, and then fetch live Lolalytics data to build a ranked shortlist for that role.
 
+It is powered by live Lolalytics data, and this project is built independently with appreciation for their matchup and tier-list work.
+
 This project is meant to be run on your own computer. It is not packaged as a hosted product yet.
 
 ## Start Here
@@ -91,7 +93,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.9`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.0`.
 
 ### The app does not start
 
