@@ -33,19 +33,19 @@ test("filterUnavailableResults removes champions already confirmed in the draft"
   );
 
   const results = [
-    { support: "Brand", supportKey: 63, finalScore: 9.1 },
-    { support: "Thresh", supportKey: 412, finalScore: 8.7 },
-    { support: "Janna", supportKey: "40", finalScore: 8.4 },
-    { support: "Nami", supportKey: 267, finalScore: 8.1 },
+    { candidate: "Brand", candidateKey: 63, finalScore: 9.1 },
+    { candidate: "Thresh", candidateKey: 412, finalScore: 8.7 },
+    { candidate: "Janna", candidateKey: "40", finalScore: 8.4 },
+    { candidate: "Nami", candidateKey: 267, finalScore: 8.1 },
   ];
 
   assert.deepEqual(filterUnavailableResults(results, selectedChampionKeys), [
-    { support: "Thresh", supportKey: 412, finalScore: 8.7 },
-    { support: "Nami", supportKey: 267, finalScore: 8.1 },
+    { candidate: "Thresh", candidateKey: 412, finalScore: 8.7 },
+    { candidate: "Nami", candidateKey: 267, finalScore: 8.1 },
   ]);
 });
 
-test("filterUnavailableResults leaves legacy rows without supportKey untouched", () => {
+test("filterUnavailableResults leaves legacy rows without a candidate key untouched", () => {
   const filteredResults = filterUnavailableResults(
     [
       { support: "Mystery Support", finalScore: 5.2 },
@@ -55,4 +55,16 @@ test("filterUnavailableResults leaves legacy rows without supportKey untouched",
   );
 
   assert.deepEqual(filteredResults, [{ support: "Mystery Support", finalScore: 5.2 }]);
+});
+
+test("filterUnavailableResults still supports legacy supportKey rows", () => {
+  const filteredResults = filterUnavailableResults(
+    [
+      { support: "Lulu", supportKey: 117, finalScore: 7.4 },
+      { support: "Nami", supportKey: 267, finalScore: 7.2 },
+    ],
+    new Set(["267"]),
+  );
+
+  assert.deepEqual(filteredResults, [{ support: "Lulu", supportKey: 117, finalScore: 7.4 }]);
 });

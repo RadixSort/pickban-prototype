@@ -41,11 +41,16 @@
 
   function filterUnavailableResults(results = [], selectedChampionKeys = new Set()) {
     return results.filter((result) => {
-      if (!result || typeof result !== "object" || result.supportKey == null) {
+      if (!result || typeof result !== "object") {
         return true;
       }
 
-      return !selectedChampionKeys.has(String(result.supportKey));
+      const resultKey = result.candidateKey ?? result.supportKey;
+      if (resultKey == null) {
+        return true;
+      }
+
+      return !selectedChampionKeys.has(String(resultKey));
     });
   }
 

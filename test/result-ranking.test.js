@@ -5,7 +5,7 @@ const {
   average,
   getProjectedAgency,
   getProjectedWinRate,
-  getTopSupportKeys,
+  getTopResultKeys,
   sortResults,
 } = require("../public/result-ranking.js");
 
@@ -28,15 +28,15 @@ test("projected win rate defaults to 0 when missing", () => {
 test("sortResults ranks projected agency with projected win rate as the first tie-breaker", () => {
   const ranked = sortResults(
     [
-      { support: "Lulu", supportKey: 117, projectedAgency: 1.1, projectedWinRate: 53.2 },
-      { support: "Nami", supportKey: 267, projectedAgency: 1.1, projectedWinRate: 54.1 },
-      { support: "Alistar", supportKey: 12, projectedAgency: 0.5, projectedWinRate: 55.0 },
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 1.1, projectedWinRate: 53.2 },
+      { candidate: "Nami", candidateKey: 267, projectedAgency: 1.1, projectedWinRate: 54.1 },
+      { candidate: "Alistar", candidateKey: 12, projectedAgency: 0.5, projectedWinRate: 55.0 },
     ],
     "projectedAgency",
   );
 
   assert.deepEqual(
-    ranked.map((result) => result.support),
+    ranked.map((result) => result.candidate),
     ["Nami", "Lulu", "Alistar"],
   );
 });
@@ -44,30 +44,30 @@ test("sortResults ranks projected agency with projected win rate as the first ti
 test("sortResults ranks projected win rate with projected agency as the first tie-breaker", () => {
   const ranked = sortResults(
     [
-      { support: "Janna", supportKey: 40, projectedAgency: 1.6, projectedWinRate: 53.8 },
-      { support: "Thresh", supportKey: 412, projectedAgency: 1.2, projectedWinRate: 53.8 },
-      { support: "Braum", supportKey: 201, projectedAgency: 1.9, projectedWinRate: 52.2 },
+      { candidate: "Janna", candidateKey: 40, projectedAgency: 1.6, projectedWinRate: 53.8 },
+      { candidate: "Thresh", candidateKey: 412, projectedAgency: 1.2, projectedWinRate: 53.8 },
+      { candidate: "Braum", candidateKey: 201, projectedAgency: 1.9, projectedWinRate: 52.2 },
     ],
     "projectedWinRate",
   );
 
   assert.deepEqual(
-    ranked.map((result) => result.support),
+    ranked.map((result) => result.candidate),
     ["Janna", "Thresh", "Braum"],
   );
 });
 
-test("getTopSupportKeys returns the top two ranked support keys for the selected sort mode", () => {
-  const topSupportKeys = getTopSupportKeys(
+test("getTopResultKeys returns the top two ranked candidate keys for the selected sort mode", () => {
+  const topResultKeys = getTopResultKeys(
     [
-      { support: "Soraka", supportKey: 16, projectedAgency: 0.8, projectedWinRate: 55.2 },
+      { candidate: "Soraka", candidateKey: 16, projectedAgency: 0.8, projectedWinRate: 55.2 },
       { support: "Leona", projectedAgency: 1.7, projectedWinRate: 52.4 },
-      { support: "Rakan", supportKey: "497", projectedAgency: 1.4, projectedWinRate: 54.1 },
-      { support: "Taric", supportKey: 44, projectedAgency: 1.1, projectedWinRate: 53.0 },
+      { candidate: "Rakan", candidateKey: "497", projectedAgency: 1.4, projectedWinRate: 54.1 },
+      { candidate: "Taric", candidateKey: 44, projectedAgency: 1.1, projectedWinRate: 53.0 },
     ],
     "projectedWinRate",
     2,
   );
 
-  assert.deepEqual(Array.from(topSupportKeys), ["16", "497"]);
+  assert.deepEqual(Array.from(topResultKeys), ["16", "497"]);
 });

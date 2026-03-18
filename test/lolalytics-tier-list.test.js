@@ -2,8 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  buildEligibleSupportTierStats,
-  extractSupportTierListRows,
+  buildEligibleTierStats,
+  extractTierListRows,
 } = require("../lib/lolalytics-tier-list.js");
 
 const sampleTierListHtml = `
@@ -112,8 +112,8 @@ const sampleGridTierListHtml = `
   </div>
 `;
 
-test("extractSupportTierListRows parses lane percent, win rate, and pick rate", () => {
-  assert.deepEqual(extractSupportTierListRows(sampleTierListHtml), [
+test("extractTierListRows parses lane percent, win rate, and pick rate", () => {
+  assert.deepEqual(extractTierListRows(sampleTierListHtml), [
     {
       slug: "thresh",
       name: "Thresh",
@@ -131,8 +131,8 @@ test("extractSupportTierListRows parses lane percent, win rate, and pick rate", 
   ]);
 });
 
-test("extractSupportTierListRows parses grid cards without dropping champions", () => {
-  assert.deepEqual(extractSupportTierListRows(sampleGridTierListHtml), [
+test("extractTierListRows parses grid cards without dropping champions", () => {
+  assert.deepEqual(extractTierListRows(sampleGridTierListHtml), [
     {
       slug: "maokai",
       name: "Maokai",
@@ -150,15 +150,21 @@ test("extractSupportTierListRows parses grid cards without dropping champions", 
   ]);
 });
 
-test("extractSupportTierListRows returns one row per grid champion card", () => {
+test("extractTierListRows returns one row per grid champion card", () => {
   const expectedChampionCount =
     sampleGridTierListHtml.match(/href="\/lol\/[^/]+\/build\/\?tier=/g)?.length || 0;
 
-  assert.equal(extractSupportTierListRows(sampleGridTierListHtml).length, expectedChampionCount);
+  assert.equal(extractTierListRows(sampleGridTierListHtml).length, expectedChampionCount);
 });
 
-test("buildEligibleSupportTierStats filters rows with minimum lane and pick thresholds", () => {
-  const rows = extractSupportTierListRows(sampleTierListHtml);
+test("extractTierListRows does not depend on a support-only lane icon alt", () => {
+  const topLaneHtml = sampleGridTierListHtml.replaceAll('alt="support lane"', 'alt="top lane"');
+
+  assert.equal(extractTierListRows(topLaneHtml).length, 2);
+});
+
+test("buildEligibleTierStats filters rows with minimum lane and pick thresholds", () => {
+  const rows = extractTierListRows(sampleTierListHtml);
   const championBySlug = new Map([
     ["thresh", { key: "412", name: "Thresh" }],
     ["sona", { key: "37", name: "Sona" }],
@@ -168,7 +174,7 @@ test("buildEligibleSupportTierStats filters rows with minimum lane and pick thre
     ["sona", { key: "37", name: "Sona" }],
   ]);
 
-  const eligibleSupportTierStats = buildEligibleSupportTierStats(
+  const eligibleTierStats = buildEligibleTierStats(
     rows,
     championBySlug,
     championByName,
@@ -178,11 +184,11 @@ test("buildEligibleSupportTierStats filters rows with minimum lane and pick thre
     },
   );
 
-  assert.deepEqual(Array.from(eligibleSupportTierStats.values()), [
+  assert.deepEqual(Array.from(eligibleTierStats.values()), [
     {
-      supportKey: "412",
-      supportSlug: "thresh",
-      support: "Thresh",
+      candidateKey: "412",
+      candidateSlug: "thresh",
+      candidate: "Thresh",
       lanePercent: 99.63,
       winRate: 51.88,
       pickRate: 13.73,

@@ -1,6 +1,6 @@
 # Technical Overview
 
-This document explains how the PickBan Prototype is structured, where its data comes from, and how the support ranking is computed.
+This document explains how the PickBan Prototype is structured, where its data comes from, and how the role-specific ranking is computed.
 
 ## Stack
 
@@ -17,11 +17,11 @@ The project is a single-process local web app:
 1. `server.js` starts an Express server.
 2. The server exposes static files from `public/`.
 3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
-4. The frontend collects user-selected champions and optional ally lane assignments.
+4. The frontend collects user-selected champions, the target role, and optional ally role assignments.
 5. The frontend sends those selections to `POST /suggest`.
 6. The frontend can also load `GET /app-config` and request `POST /shutdown` when the user clicks `Close App`.
 7. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
-8. The frontend renders the ranked support table.
+8. The frontend renders the ranked results table.
 
 ## File Responsibilities
 
@@ -42,10 +42,16 @@ The project is a single-process local web app:
 
 - `public/app.js`
   - selection state
-  - optional ally lane assignments
+  - target role selection
+  - optional ally role assignments
   - search suggestion logic
   - request submission
   - loading, error, and result rendering
+
+- `public/roles.js`
+  - shared role labels
+  - alias normalization
+  - target-role and ally-role dropdown options
 
 - `public/index.html`
   - page structure
@@ -62,7 +68,7 @@ The project combines:
 
 - local champion metadata from `public/champions.json`
 - live Lolalytics responses for synergy and counter data
-- live Lolalytics support tier-list rows for support eligibility and win rates
+- live Lolalytics tier-list rows for role eligibility and win rates
 
 ### Local Metadata
 
@@ -81,7 +87,7 @@ Two remote Lolalytics sources are used:
 
 - synergy data from the Lolalytics mega endpoint
 - counter data from the Lolalytics champion build `q-data.json` endpoint
-- support tier-list data from the Lolalytics support tier-list page
+- tier-list data from the Lolalytics role-specific tier-list page
 
 The server currently uses hard-coded settings:
 
@@ -96,8 +102,9 @@ The frontend sends a `POST /suggest` request with this shape:
 
 ```json
 {
+  "role": "support",
   "allies": [
-    { "champion": "Ahri", "lane": "middle" },
+    { "champion": "Ahri", "role": "middle" },
     { "champion": "Jarvan IV" }
   ],
   "enemies": ["Jinx", "Nautilus"]
@@ -108,10 +115,12 @@ Validation rules:
 
 - `allies` must be an array if provided
 - `enemies` must be an array if provided
+- `role` defaults to `support` when omitted
 - each enemy entry must be a non-empty string
-- each ally entry must be either a non-empty champion string or an object with a champion name and optional lane
+- each ally entry must be either a non-empty champion string or an object with a champion name and optional role
 - champion names must exist in the local metadata file
-- ally lane values are normalized to `top`, `jungle`, `middle`, or `bottom`
+- target role and ally role values are normalized to `top`, `jungle`, `middle`, `bottom`, or `support`
+- ally role assignments cannot reuse the target role or duplicate each other
 - duplicate champions are ignored within the same request
 - maximum 4 unique allied champions
 - maximum 5 unique enemy champions
@@ -123,42 +132,42 @@ Champion names are normalized by lowercasing and stripping non-alphanumeric char
 
 For each selected allied champion:
 
-- the server fetches support synergy rows
-- if a lane is assigned, the server tries that lane first and falls back to `all`
-- each returned support gets a synergy value appended to its candidate record
+- the server fetches target-role synergy rows
+- if an ally role is assigned, the server tries that role first and falls back to `all`
+- each returned candidate gets a synergy value appended to its candidate record
 
 For each selected enemy champion:
 
-- the server fetches support counter rows
-- each returned support gets a counter value appended to its candidate record
+- the server fetches target-role counter rows
+- each returned candidate gets a counter value appended to its candidate record
 
-The final output for each support is:
+The final output for each candidate is:
 
 - `synergyScore = average(synergyValues)`
 - `counterScore = average(rawCounterValues with the sign flipped)`
 - `projectedWinRate = average(all synergy and counter matchup win rates)`
 - `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
 
-Before a support is returned, it must also appear on the live support tier list with:
+Before a candidate is returned, it must also appear on the live tier list for the requested role with:
 
 - `lanePercent >= 10`
 - `pickRate >= 0.5`
 
-The returned row also includes the live support `winRate` from that tier list.
+The returned row also includes the live role `winRate` from that tier list.
 
 Default backend sorting rules:
 
 1. higher `projectedAgency`
 2. higher `projectedWinRate`
 3. higher `counterScore`
-4. alphabetical support name
+4. alphabetical candidate name
 
 The frontend can also re-rank the same results by `projectedWinRate`.
 
 Behavioral implications:
 
-- if a support only has synergy data, `counterScore` becomes `0`
-- if a support only has counter data, `synergyScore` becomes `0`
+- if a candidate only has synergy data, `counterScore` becomes `0`
+- if a candidate only has counter data, `synergyScore` becomes `0`
 - this means one-sided inputs intentionally lower the missing half of the score instead of excluding it from the formula
 
 ## Partial Failures
@@ -181,9 +190,10 @@ Successful responses look like this:
 {
   "results": [
     {
-      "support": "Thresh",
-      "supportKey": "412",
+      "candidate": "Thresh",
+      "candidateKey": "412",
       "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
+      "role": "support",
       "winRate": 51.88,
       "projectedWinRate": 52.43,
       "synergyScore": 52.31,
@@ -192,6 +202,7 @@ Successful responses look like this:
     }
   ],
   "meta": {
+    "role": "support",
     "allyCount": 2,
     "enemyCount": 2,
     "partialFailures": []

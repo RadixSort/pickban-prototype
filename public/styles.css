@@ -81,6 +81,45 @@ select {
   line-height: 1.6;
 }
 
+.target-role-panel {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(211, 188, 124, 0.2);
+  border-radius: 18px;
+  background: rgba(12, 18, 26, 0.72);
+}
+
+.target-role-control {
+  display: inline-grid;
+  gap: 8px;
+}
+
+.target-role-control select {
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(10, 15, 22, 0.95);
+  color: var(--text);
+  padding: 12px 14px;
+  outline: none;
+}
+
+.target-role-control select:focus {
+  border-color: var(--accent);
+}
+
+.target-role-copy {
+  margin: 0;
+  max-width: 520px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .draft-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -509,11 +548,17 @@ select {
     justify-content: flex-start;
   }
 
+  .target-role-panel,
   .sort-control {
     width: 100%;
     justify-content: space-between;
   }
 
+  .target-role-control {
+    width: 100%;
+  }
+
+  .target-role-control select,
   .sort-control select {
     flex: 1;
   }

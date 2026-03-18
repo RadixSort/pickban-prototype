@@ -93,21 +93,50 @@
     return [...results].sort(getSortComparator(sortMode));
   }
 
-  function getTopSupportKeys(results = [], sortMode = DEFAULT_SORT_MODE, limit = 2) {
-    const topSupportKeys = new Set();
+  function getResultKey(result) {
+    if (!result || typeof result !== "object") {
+      return null;
+    }
+
+    if (result.candidateKey != null) {
+      return String(result.candidateKey);
+    }
+
+    if (result.supportKey != null) {
+      return String(result.supportKey);
+    }
+
+    return null;
+  }
+
+  function getResultName(result) {
+    if (!result || typeof result !== "object") {
+      return "";
+    }
+
+    return String(result.candidate || result.support || "");
+  }
+
+  function getTopResultKeys(results = [], sortMode = DEFAULT_SORT_MODE, limit = 2) {
+    const topResultKeys = new Set();
 
     for (const result of sortResults(results, sortMode)) {
-      if (!result || result.supportKey == null) {
+      const resultKey = getResultKey(result);
+      if (resultKey == null) {
         continue;
       }
 
-      topSupportKeys.add(String(result.supportKey));
-      if (topSupportKeys.size >= limit) {
+      topResultKeys.add(resultKey);
+      if (topResultKeys.size >= limit) {
         break;
       }
     }
 
-    return topSupportKeys;
+    return topResultKeys;
+  }
+
+  function getTopSupportKeys(results = [], sortMode = DEFAULT_SORT_MODE, limit = 2) {
+    return getTopResultKeys(results, sortMode, limit);
   }
 
   function getSortComparator(sortMode) {
@@ -119,7 +148,7 @@
   }
 
   function compareSupportNames(left, right) {
-    return String(left?.support || "").localeCompare(String(right?.support || ""));
+    return getResultName(left).localeCompare(getResultName(right));
   }
 
   function getNumericCounterScore(result) {
@@ -143,6 +172,9 @@
     compareByProjectedWinRate,
     getProjectedAgency,
     getProjectedWinRate,
+    getResultKey,
+    getResultName,
+    getTopResultKeys,
     getTopSupportKeys,
     sortResults,
   };

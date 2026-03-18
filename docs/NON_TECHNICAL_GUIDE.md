@@ -6,14 +6,14 @@ You do not need to know programming to use this project. You only need to instal
 
 ## What This App Does
 
-The app helps you choose support champions during draft in League of Legends.
+The app helps you choose champions for the last open role during draft in League of Legends.
 
 You tell it:
 
 - which champions are on your team
 - which champions are on the enemy team
 
-It then fetches live data and shows a ranked list of support options.
+It then fetches live data and shows a ranked list of options for the role you selected.
 
 ## Before You Start
 
@@ -97,27 +97,28 @@ http://localhost:3000
 2. Type a champion name.
 3. Click the correct champion from the suggestion list.
 4. Repeat for the other allied champions you want to include.
-5. If you want, use the **Assign lanes** section to mark allies as `Top`, `Jungle`, `Mid`, or `Bot`.
-6. Add enemy champions in the **Enemy Champions** area.
-7. Click **Fetch Suggestions**.
-8. Read the ranked support list in the results section.
+5. Choose the target role you want to fill.
+6. If you want, use the **Assign remaining roles** section to label the allied champions you already know.
+7. Add enemy champions in the **Enemy Champions** area.
+8. Click **Fetch Suggestions**.
+9. Read the ranked list in the results section.
 
 ## What The Results Mean
 
-- `Synergy Score`: how well a support works with your selected allies
-- `Counter Score`: how well a support performs into your selected enemies
+- `Synergy Score`: how well a candidate works with your selected allies for the chosen role
+- `Counter Score`: how well a candidate performs into your selected enemies for the chosen role
 - `Projected Win Rate`: the average matchup win rate taken from all selected ally/enemy inputs
 - `Projected Agency`: the combined rank used to sort the list
 
 You can sort the table by either `Projected Agency` or `Projected Win Rate`.
 
-In simple terms, the highest rows are the supports the app currently likes most for that draft.
+In simple terms, the highest rows are the picks the app currently likes most for that draft and role.
 
 ## What The Limits Are
 
 - Up to 4 allied champions
 - Up to 5 enemy champions
-- Ally lane assignment is optional
+- Ally role assignment is optional
 - At least 1 champion must be selected before fetching suggestions
 - A champion can only appear once
 

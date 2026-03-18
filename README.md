@@ -1,6 +1,6 @@
 # PickBan Prototype
 
-PickBan Prototype is a small local web app that helps rank League of Legends support picks during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, can optionally assign lanes to the allied picks, and then fetch live Lolalytics data to build a ranked support shortlist.
+PickBan Prototype is a small local web app that helps rank League of Legends picks for the last open role during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, select the role you want to fill, can optionally assign roles to the allied picks, and then fetch live Lolalytics data to build a ranked shortlist for that role.
 
 This project is meant to be run on your own computer. It is not packaged as a hosted product yet.
 
@@ -48,28 +48,29 @@ If you prefer, you can still return to the terminal and press `Ctrl+C`.
 
 1. In the **Allied Champions** box, type the name of an ally champion and click a suggestion.
 2. Repeat until you have added the allied champions you want to consider.
-3. If you want, use the **Assign lanes** section to set `Top`, `Jungle`, `Mid`, or `Bot` for some or all allied champions.
-4. In the **Enemy Champions** box, add the enemy champions you are drafting against.
-5. Click **Fetch Suggestions**.
-6. Review the ranked support table.
-7. Click any selected champion chip if you want to remove it and try a different draft.
+3. Choose the target role you want the app to fill.
+4. If you want, use the **Assign remaining roles** section to label some or all allied champions.
+5. In the **Enemy Champions** box, add the enemy champions you are drafting against.
+6. Click **Fetch Suggestions**.
+7. Review the ranked results table.
+8. Click any selected champion chip if you want to remove it and try a different draft.
 
 Rules built into the app:
 
 - You can add up to 4 allied champions.
 - You can add up to 5 enemy champions.
-- Ally lane assignment is optional.
+- Ally role assignment is optional.
 - The same champion cannot be selected on both sides.
 - You must choose at least one champion before fetching suggestions.
-- Suggested champions must appear on the live support tier list with at least `10%` lane share and `0.5%` pick rate.
+- Suggested champions must appear on the live tier list for the selected role with at least `10%` lane share and `0.5%` pick rate.
 
 ## What The Scores Mean
 
-- `Synergy Score`: the average support synergy value gathered from the allied champions you selected.
-- `Counter Score`: the average support counter value gathered from the enemy champions you selected.
+- `Synergy Score`: the average role-specific synergy value gathered from the allied champions you selected.
+- `Counter Score`: the average role-specific counter value gathered from the enemy champions you selected.
 - `Projected Agency`: `50% Synergy Score + 50% Counter Score`.
 - `Projected Win Rate`: the average matchup win rate gathered from every selected ally/enemy input.
-- `Win Rate`: the champion's live support win rate from the Lolalytics support tier list.
+- `Win Rate`: the champion's live win rate for the selected role from the matching Lolalytics tier list.
 
 You can rank the table by either `Projected Agency` or `Projected Win Rate`.
 
@@ -79,7 +80,7 @@ Important behavior:
 
 - If you only enter allied champions, the counter portion is treated as `0`.
 - If you only enter enemy champions, the synergy portion is treated as `0`.
-- If you assign ally lanes, the app tries lane-specific synergy first and falls back to all-lane data if needed.
+- If you assign ally roles, the app tries role-specific synergy first and falls back to all-role data if needed.
 - If some live requests fail, the app can still show partial results and will list those failures above the results table.
 
 ## Troubleshooting
@@ -90,7 +91,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.6`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v0.7`.
 
 ### The app does not start
 
@@ -145,6 +146,7 @@ That usually means one or more live data requests failed, but other requests sti
 - `server.js`: Express server, API endpoint, live Lolalytics requests, scoring, and caching
 - `public/index.html`: page structure
 - `public/app.js`: browser-side interactions and rendering
+- `public/roles.js`: shared role labels, aliases, and dropdown options
 - `public/styles.css`: styling
 - `public/champions.json`: local champion metadata used for search and icons
 - `docs/NON_TECHNICAL_GUIDE.md`: step-by-step guide for non-technical users

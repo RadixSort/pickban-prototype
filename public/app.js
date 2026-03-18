@@ -4,9 +4,17 @@ const {
   PROJECTED_WIN_RATE_SORT_MODE,
   getProjectedAgency,
   getProjectedWinRate,
-  getTopSupportKeys,
+  getResultKey,
+  getResultName,
+  getTopResultKeys,
   sortResults,
 } = globalThis.resultRanking;
+const {
+  DEFAULT_TARGET_ROLE,
+  getAssignableAllyRoleOptions,
+  getRoleLabel,
+  normalizeRole,
+} = globalThis.roles;
 
 const state = {
   champions: [],
@@ -16,23 +24,17 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.0",
+  version: "0.7.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,
+  targetRole: DEFAULT_TARGET_ROLE,
 };
 
 const limits = {
   allies: 4,
   enemies: 5,
 };
-
-const allyLaneOptions = [
-  { value: "top", label: "Top" },
-  { value: "jungle", label: "Jungle" },
-  { value: "middle", label: "Mid" },
-  { value: "bottom", label: "Bot" },
-];
 
 const pickers = {
   allies: {
@@ -49,18 +51,22 @@ const pickers = {
   },
 };
 
+const targetRoleSelect = document.getElementById("target-role");
 const fetchButton = document.getElementById("fetch-button");
 const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
 const closeHelp = document.getElementById("close-help");
 const allyRolePanel = document.getElementById("ally-role-panel");
 const allyRoleList = document.getElementById("ally-role-list");
+const allyRoleTitle = document.getElementById("ally-role-title");
+const allyRoleCopy = document.getElementById("ally-role-copy");
 const statusText = document.getElementById("status-text");
 const errorText = document.getElementById("error-text");
 const emptyState = document.getElementById("empty-state");
 const resultsWrap = document.getElementById("results-table-wrap");
 const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
+const resultsTitle = document.getElementById("results-title");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
 const versionText = document.getElementById("app-version");
@@ -86,6 +92,7 @@ async function initialize() {
   wirePicker("allies");
   wirePicker("enemies");
 
+  targetRoleSelect.addEventListener("change", handleTargetRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
@@ -155,10 +162,28 @@ function getSelectedChampionKeys() {
   return buildSelectedChampionKeys(state.allies, state.enemies);
 }
 
+function getTargetRoleLabel() {
+  return getRoleLabel(state.targetRole);
+}
+
+function renderTargetRole() {
+  const targetRoleLabel = getTargetRoleLabel();
+  const assignableRoleLabels = getAssignableAllyRoleOptions(state.targetRole).map(
+    (option) => option.label,
+  );
+
+  targetRoleSelect.value = state.targetRole;
+  targetRoleSelect.disabled = isInteractionLocked();
+  allyRoleTitle.textContent = "Assign remaining roles";
+  allyRoleCopy.textContent = `Target role: ${targetRoleLabel}. Assign allies to ${assignableRoleLabels.join(", ")}, or leave them unassigned to use all-role synergy data.`;
+  resultsTitle.textContent = `${targetRoleLabel} recommendations`;
+}
+
 function renderAll() {
+  renderTargetRole();
   renderPicker("allies");
   renderPicker("enemies");
-  renderAllyLaneAssignments();
+  renderAllyRoleAssignments();
   renderResults();
   renderActionState();
   renderVersion();
@@ -199,7 +224,7 @@ function renderPicker(side) {
   renderSuggestions(side);
 }
 
-function renderAllyLaneAssignments() {
+function renderAllyRoleAssignments() {
   allyRoleList.innerHTML = "";
 
   if (state.allies.length === 0) {
@@ -223,10 +248,10 @@ function renderAllyLaneAssignments() {
     const select = document.createElement("select");
     select.className = "lane-select";
     select.disabled = isInteractionLocked();
-    select.setAttribute("aria-label", `Assign lane for ${ally.name}`);
-    select.innerHTML = buildLaneOptionsMarkup(ally.id);
-    select.value = ally.lane || "";
-    select.addEventListener("change", (event) => assignAllyLane(ally.id, event.target.value));
+    select.setAttribute("aria-label", `Assign role for ${ally.name}`);
+    select.innerHTML = buildRoleOptionsMarkup(ally.id);
+    select.value = ally.role || "";
+    select.addEventListener("change", (event) => assignAllyRole(ally.id, event.target.value));
 
     row.appendChild(main);
     row.appendChild(select);
@@ -329,7 +354,7 @@ function createSelectedChampion(champion, side) {
   };
 
   if (side === "allies") {
-    selected.lane = "";
+    selected.role = "";
   }
 
   return selected;
@@ -345,16 +370,16 @@ function removeChampion(side, championId) {
   renderAll();
 }
 
-function buildLaneOptionsMarkup(championId) {
-  const takenLanes = new Set(
+function buildRoleOptionsMarkup(championId) {
+  const takenRoles = new Set(
     state.allies
-      .filter((ally) => ally.id !== championId && ally.lane)
-      .map((ally) => ally.lane),
+      .filter((ally) => ally.id !== championId && ally.role)
+      .map((ally) => ally.role),
   );
 
   const options = ['<option value="">Unassigned</option>'];
-  for (const option of allyLaneOptions) {
-    const disabled = takenLanes.has(option.value) ? " disabled" : "";
+  for (const option of getAssignableAllyRoleOptions(state.targetRole)) {
+    const disabled = takenRoles.has(option.value) ? " disabled" : "";
     options.push(
       `<option value="${option.value}"${disabled}>${option.label}</option>`,
     );
@@ -363,14 +388,14 @@ function buildLaneOptionsMarkup(championId) {
   return options.join("");
 }
 
-function assignAllyLane(championId, lane) {
+function assignAllyRole(championId, role) {
   if (isInteractionLocked()) {
     return;
   }
 
   if (
-    lane &&
-    state.allies.some((ally) => ally.id !== championId && ally.lane === lane)
+    role &&
+    state.allies.some((ally) => ally.id !== championId && ally.role === role)
   ) {
     return;
   }
@@ -379,7 +404,7 @@ function assignAllyLane(championId, lane) {
     ally.id === championId
       ? {
           ...ally,
-          lane,
+          role,
         }
       : ally,
   );
@@ -400,7 +425,7 @@ async function handleFetchSuggestions() {
 
   setLoading(true);
   clearStatus();
-  setStatus("Fetching live Lolalytics data...");
+  setStatus(`Fetching live Lolalytics ${getTargetRoleLabel().toLowerCase()} data...`);
 
   try {
     const response = await fetch("/suggest", {
@@ -409,13 +434,14 @@ async function handleFetchSuggestions() {
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        role: state.targetRole,
         allies: state.allies.map((champion) => {
           const selection = {
             champion: champion.name,
           };
 
-          if (champion.lane) {
-            selection.lane = champion.lane;
+          if (champion.role) {
+            selection.role = champion.role;
           }
 
           return selection;
@@ -426,16 +452,18 @@ async function handleFetchSuggestions() {
 
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.error || "Failed to fetch support suggestions.");
+      throw new Error(
+        payload.error || `Failed to fetch ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+      );
     }
 
     state.lastResults = filterUnavailableResults(payload.results || [], getSelectedChampionKeys());
     state.lastMeta = payload.meta || null;
-    setStatus(`Fetched ${state.lastResults.length} support suggestions.`);
+    setStatus(`Fetched ${state.lastResults.length} ${getTargetRoleLabel().toLowerCase()} suggestions.`);
   } catch (error) {
     state.lastResults = [];
     state.lastMeta = null;
-    setError(error.message || "Failed to fetch support suggestions.");
+    setError(error.message || `Failed to fetch ${getTargetRoleLabel().toLowerCase()} suggestions.`);
   } finally {
     setLoading(false);
     renderResults();
@@ -458,6 +486,26 @@ function handleResetDraft() {
 function handleSortModeChange(event) {
   state.sortMode = normalizeSortMode(event.target.value);
   renderResults();
+}
+
+function handleTargetRoleChange(event) {
+  const normalizedRole = normalizeRole(event.target.value) || DEFAULT_TARGET_ROLE;
+  if (normalizedRole === state.targetRole) {
+    return;
+  }
+
+  state.targetRole = normalizedRole;
+  state.allies = state.allies.map((ally) =>
+    ally.role === normalizedRole
+      ? {
+          ...ally,
+          role: "",
+        }
+      : ally,
+  );
+
+  invalidateSuggestions();
+  renderAll();
 }
 
 async function handleCloseApp() {
@@ -510,12 +558,8 @@ function renderResults() {
     filterUnavailableResults(state.lastResults, getSelectedChampionKeys()),
     state.sortMode,
   );
-  const topProjectedWinRateKeys = getTopSupportKeys(
-    visibleResults,
-    PROJECTED_WIN_RATE_SORT_MODE,
-    2,
-  );
-  const topProjectedAgencyKeys = getTopSupportKeys(visibleResults, DEFAULT_SORT_MODE, 2);
+  const topProjectedWinRateKeys = getTopResultKeys(visibleResults, PROJECTED_WIN_RATE_SORT_MODE, 2);
+  const topProjectedAgencyKeys = getTopResultKeys(visibleResults, DEFAULT_SORT_MODE, 2);
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
@@ -531,12 +575,13 @@ function renderResults() {
 
   emptyState.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
-  resultsMeta.textContent = `${visibleResults.length} ranked support options`;
+  resultsMeta.textContent = `${visibleResults.length} ranked ${getTargetRoleLabel().toLowerCase()} options`;
 
   visibleResults.forEach((result, index) => {
-    const supportKey = result.supportKey == null ? "" : String(result.supportKey);
-    const isTopProjectedWinRate = topProjectedWinRateKeys.has(supportKey);
-    const isTopProjectedAgency = topProjectedAgencyKeys.has(supportKey);
+    const resultKey = getResultKey(result) || "";
+    const resultName = getResultName(result);
+    const isTopProjectedWinRate = topProjectedWinRateKeys.has(resultKey);
+    const isTopProjectedAgency = topProjectedAgencyKeys.has(resultKey);
     const row = document.createElement("tr");
     row.className = isTopProjectedWinRate || isTopProjectedAgency ? "top-option" : "";
     const projectedWinRateClassName = isTopProjectedWinRate ? ' class="metric-highlight"' : "";
@@ -545,8 +590,8 @@ function renderResults() {
       <td class="rank-cell">${index + 1}</td>
       <td>
         <div class="support-cell">
-          <img src="${result.icon}" alt="${result.support}" width="36" height="36" />
-          <span>${result.support}</span>
+          <img src="${result.icon}" alt="${resultName}" width="36" height="36" />
+          <span>${resultName}</span>
         </div>
       </td>
       <td>${formatRate(result.winRate)}</td>
@@ -601,9 +646,10 @@ function normalizeText(value) {
 
 function setLoading(loading) {
   state.loading = loading;
+  renderTargetRole();
   renderPicker("allies");
   renderPicker("enemies");
-  renderAllyLaneAssignments();
+  renderAllyRoleAssignments();
   renderActionState();
 }
 
@@ -632,6 +678,7 @@ function invalidateSuggestions() {
 }
 
 function renderActionState() {
+  targetRoleSelect.disabled = state.loading || state.shuttingDown;
   fetchButton.disabled = state.loading || state.shuttingDown;
   fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
 

@@ -10,12 +10,29 @@
     <main class="app-shell">
       <header class="hero">
         <p class="eyebrow">Hackathon Prototype</p>
-        <h1>Pick the draft. Get a support shortlist.</h1>
+        <h1>Pick the draft. Fill the last role.</h1>
         <p class="subtitle">
-          Add allied and enemy champions, optionally assign ally lanes, then fetch live Lolalytics
-          data to rank support picks.
+          Add allied and enemy champions, choose the role you want to fill, optionally assign the
+          other allied roles, then fetch live Lolalytics data to rank candidate picks.
         </p>
       </header>
+
+      <section class="target-role-panel" aria-label="Target role selection">
+        <label class="target-role-control" for="target-role">
+          <span class="picker-kicker">Target Role</span>
+          <select id="target-role">
+            <option value="support">Support</option>
+            <option value="top">Top</option>
+            <option value="jungle">Jungle</option>
+            <option value="middle">Mid</option>
+            <option value="bottom">Bot</option>
+          </select>
+        </label>
+        <p class="target-role-copy">
+          The ally role dropdowns below update to the other four positions for the role you are
+          trying to fill.
+        </p>
+      </section>
 
       <section class="draft-grid" aria-label="Champion draft inputs">
         <div class="picker-card picker-card--ally">
@@ -34,13 +51,15 @@
           <div id="allies-suggestions" class="suggestions" role="listbox" aria-label="Ally suggestions"></div>
           <div id="allies-selected" class="selected-list" aria-live="polite"></div>
 
-          <section id="ally-role-panel" class="role-panel hidden" aria-label="Optional ally lane assignments">
+          <section id="ally-role-panel" class="role-panel hidden" aria-label="Optional ally role assignments">
             <div class="role-panel-header">
               <div>
                 <p class="picker-kicker">Optional</p>
-                <h3>Assign lanes</h3>
+                <h3 id="ally-role-title">Assign roles</h3>
               </div>
-              <p class="role-panel-copy">Leave any ally unassigned to use all-lane synergy data.</p>
+              <p id="ally-role-copy" class="role-panel-copy">
+                Leave any ally unassigned to use all-role synergy data.
+              </p>
             </div>
             <div id="ally-role-list" class="role-list" aria-live="polite"></div>
           </section>
@@ -78,11 +97,11 @@
         <p id="error-text" class="error-text" aria-live="polite"></p>
       </section>
 
-      <section class="results-panel" aria-label="Support recommendation results">
+      <section class="results-panel" aria-label="Role recommendation results">
         <div class="results-header">
           <div>
             <p class="picker-kicker">Results</p>
-            <h2>Support recommendations</h2>
+            <h2 id="results-title">Support recommendations</h2>
           </div>
           <div class="results-toolbar">
             <label class="sort-control" for="results-sort">
@@ -99,8 +118,8 @@
         <div id="partial-failures" class="partial-failures"></div>
 
         <div id="empty-state" class="empty-state">
-          Select some champions, optionally assign ally lanes, then fetch suggestions to see the
-          ranked support list.
+          Select some champions, choose a target role, optionally assign the other allied roles,
+          then fetch suggestions to see the ranked list.
         </div>
 
         <div id="results-table-wrap" class="results-table-wrap hidden">
@@ -108,7 +127,7 @@
             <thead>
               <tr>
                 <th>Rank</th>
-                <th>Support</th>
+                <th>Champion</th>
                 <th>Win Rate</th>
                 <th>Projected Win Rate</th>
                 <th>Synergy Score</th>
@@ -123,9 +142,10 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.6</span>
+      <span id="app-version">v0.7</span>
     </div>
 
+    <script src="/roles.js" defer></script>
     <script src="/result-ranking.js" defer></script>
     <script src="/suggestion-filters.js" defer></script>
     <script src="/app.js" defer></script>

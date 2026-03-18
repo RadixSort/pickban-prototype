@@ -1,8 +1,8 @@
 {
   "name": "pickban-prototype",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "Local PickBan prototype for live support recommendations",
+  "description": "Local PickBan prototype for live role recommendations",
   "scripts": {
     "start": "node server.js",
     "test": "node --test"
