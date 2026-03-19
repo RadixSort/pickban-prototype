@@ -72,9 +72,14 @@
     return rankFilterByValue.get(normalized)?.tierQueryValue ?? null;
   }
 
+  function getLolalyticsDataTierQueryValue(value) {
+    return normalizeRankFilter(value) || DEFAULT_RANK_FILTER;
+  }
+
   return {
     DEFAULT_RANK_FILTER,
     RANK_FILTER_OPTIONS,
+    getLolalyticsDataTierQueryValue,
     getLolalyticsTierQueryValue,
     getRankFilterLabel,
     getRankFilterOptions,

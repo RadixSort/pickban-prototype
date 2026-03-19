@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   DEFAULT_RANK_FILTER,
+  getLolalyticsDataTierQueryValue,
   getLolalyticsTierQueryValue,
   getRankFilterLabel,
   getRankFilterOptions,
@@ -25,6 +26,15 @@ test("getLolalyticsTierQueryValue omits the Emerald+ default tier parameter", ()
   assert.equal(getLolalyticsTierQueryValue("diamond_plus"), "diamond_plus");
   assert.equal(getLolalyticsTierQueryValue("d2_plus"), "d2_plus");
   assert.equal(getLolalyticsTierQueryValue("all"), "all");
+});
+
+test("getLolalyticsDataTierQueryValue keeps an explicit tier for data endpoints", () => {
+  assert.equal(DEFAULT_RANK_FILTER, "emerald_plus");
+  assert.equal(getLolalyticsDataTierQueryValue("emerald_plus"), "emerald_plus");
+  assert.equal(getLolalyticsDataTierQueryValue("platinum_plus"), "platinum_plus");
+  assert.equal(getLolalyticsDataTierQueryValue("diamond_plus"), "diamond_plus");
+  assert.equal(getLolalyticsDataTierQueryValue("d2_plus"), "d2_plus");
+  assert.equal(getLolalyticsDataTierQueryValue("all"), "all");
 });
 
 test("rank filter labels and options stay aligned with the supported dropdown choices", () => {

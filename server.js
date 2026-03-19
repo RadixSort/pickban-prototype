@@ -27,6 +27,7 @@ const {
 } = require(path.join(publicDir, "roles.js"));
 const {
   DEFAULT_RANK_FILTER,
+  getLolalyticsDataTierQueryValue,
   getLolalyticsTierQueryValue,
   normalizeRankFilter,
 } = require(path.join(publicDir, "rank-filters.js"));
@@ -324,6 +325,7 @@ async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankF
       region: REGION,
     },
     rankFilter,
+    { includeDefaultTier: true },
   );
   const payload = await fetchLolalyticsMegaJson(
     `?${searchParams.toString()}`,
@@ -366,6 +368,7 @@ async function fetchLolalyticsBuildData(slug, rankFilter) {
       patch: PATCH_WINDOW,
     },
     rankFilter,
+    { includeDefaultTier: true },
   );
   const payload = await fetchLolalyticsJson(
     `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?${searchParams.toString()}`,
@@ -414,9 +417,11 @@ function buildTierListUrl(targetRole, rankFilter) {
   return `${LOLALYTICS_BASE_URL}/lol/tierlist/?${searchParams.toString()}`;
 }
 
-function buildLolalyticsSearchParams(params, rankFilter) {
+function buildLolalyticsSearchParams(params, rankFilter, options = {}) {
   const searchParams = new URLSearchParams(params);
-  const tierQueryValue = getLolalyticsTierQueryValue(rankFilter);
+  const tierQueryValue = options.includeDefaultTier
+    ? getLolalyticsDataTierQueryValue(rankFilter)
+    : getLolalyticsTierQueryValue(rankFilter);
   if (tierQueryValue) {
     searchParams.set("tier", tierQueryValue);
   }
