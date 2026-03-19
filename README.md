@@ -83,7 +83,7 @@ Important behavior:
 - If you only enter allied champions, the counter portion is treated as `0`.
 - If you only enter enemy champions, the synergy portion is treated as `0`.
 - If you assign ally roles, the app tries role-specific synergy first and falls back to all-role data if needed.
-- The app shows every suggested result that is still draft-eligible. Results with live or projected win rates below `50%` are highlighted in red instead of being hidden.
+- The app shows every suggested result that is still draft-eligible. Results with `Projected Win Rate` at `50%` or lower are highlighted in red instead of being hidden.
 - If some live requests fail, the app can still show partial results and will list those failures above the results table.
 
 ## Troubleshooting

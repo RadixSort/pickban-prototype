@@ -638,7 +638,6 @@ function renderResults() {
     const isTopProjectedWinRate = topProjectedWinRateKeys.has(resultKey);
     const isTopProjectedAgency = topProjectedAgencyKeys.has(resultKey);
     const topOptionTone = getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate);
-    const hasLowLiveWinRate = isLowWinRate(liveWinRate);
     const hasLowProjectedWinRate = isLowWinRate(projectedWinRate);
     const rowClassNames = [];
 
@@ -646,13 +645,12 @@ function renderResults() {
       rowClassNames.push("top-option", `top-option--${topOptionTone}`);
     }
 
-    if (hasLowLiveWinRate || hasLowProjectedWinRate) {
+    if (hasLowProjectedWinRate) {
       rowClassNames.push("low-winrate-option");
     }
 
     const row = document.createElement("tr");
     row.className = rowClassNames.join(" ");
-    const winRateClassName = getMetricClassName([], hasLowLiveWinRate, "danger");
     const projectedWinRateClassName = getMetricClassName(
       [],
       hasLowProjectedWinRate || isTopProjectedWinRate,
@@ -675,7 +673,7 @@ function renderResults() {
           </span>
         </div>
       </td>
-      <td class="${winRateClassName}">${formatRate(liveWinRate)}</td>
+      <td>${formatRate(liveWinRate)}</td>
       <td class="${projectedWinRateClassName}">${formatRate(projectedWinRate)}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
@@ -732,7 +730,7 @@ function formatRate(value) {
 }
 
 function isLowWinRate(value) {
-  return Number.isFinite(Number(value)) && Number(value) < MIN_PROJECTED_WIN_RATE;
+  return Number.isFinite(Number(value)) && Number(value) <= MIN_PROJECTED_WIN_RATE;
 }
 
 function formatVersion(version) {
