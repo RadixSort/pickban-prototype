@@ -9,6 +9,7 @@
   const DEFAULT_RANK_FILTER = "emerald_plus";
   const RANK_FILTER_OPTIONS = [
     { value: "all", label: "All Ranks", tierQueryValue: "all" },
+    { value: "gold_plus", label: "Gold+", tierQueryValue: "gold_plus" },
     { value: "platinum_plus", label: "Platinum+", tierQueryValue: "platinum_plus" },
     { value: "emerald_plus", label: "Emerald+", tierQueryValue: null },
     { value: "diamond_plus", label: "Diamond+", tierQueryValue: "diamond_plus" },
@@ -20,6 +21,10 @@
     ["all", "all"],
     ["allranks", "all"],
     ["all_ranks", "all"],
+    ["gold", "gold_plus"],
+    ["gold+", "gold_plus"],
+    ["goldplus", "gold_plus"],
+    ["gold_plus", "gold_plus"],
     ["platinum", "platinum_plus"],
     ["platinum+", "platinum_plus"],
     ["platinumplus", "platinum_plus"],
