@@ -80,7 +80,7 @@ test("filterUnavailableResults still supports legacy supportKey rows", () => {
   assert.deepEqual(filteredResults, [{ support: "Lulu", supportKey: 117, finalScore: 7.4 }]);
 });
 
-test("filterLowProjectedWinRateResults removes sub-50 projected win rates when at least ten qualify", () => {
+test("filterLowProjectedWinRateResults keeps sub-50 projected win rates visible", () => {
   const filteredResults = filterLowProjectedWinRateResults([
     createResult(1, 55.4),
     createResult(2, 54.8),
@@ -98,11 +98,11 @@ test("filterLowProjectedWinRateResults removes sub-50 projected win rates when a
 
   assert.deepEqual(
     filteredResults.map((result) => result.candidateKey),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   );
 });
 
-test("getVisibleSuggestionResults shows every 50%+ result and pads to ten when needed", () => {
+test("getVisibleSuggestionResults keeps all available results including sub-50 projected win rates", () => {
   const visibleResults = getVisibleSuggestionResults([
     createResult(1, 49.2, 0.1),
     createResult(2, 60.8, 0.2),
@@ -120,6 +120,6 @@ test("getVisibleSuggestionResults shows every 50%+ result and pads to ten when n
 
   assert.deepEqual(
     visibleResults.map((result) => result.candidateKey),
-    [2, 3, 5, 6, 7, 8, 9, 11, 12, 4],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   );
 });

@@ -630,6 +630,19 @@ select {
   border-top-color: var(--highlight-overlap-border);
 }
 
+.results-table tbody tr.low-winrate-option {
+  background: linear-gradient(
+    90deg,
+    rgba(104, 31, 31, 0.34),
+    rgba(72, 20, 20, 0.22) 62%,
+    transparent
+  );
+}
+
+.results-table tbody tr.low-winrate-option td {
+  border-top-color: var(--danger-border);
+}
+
 .support-cell {
   display: inline-flex;
   align-items: center;
@@ -678,6 +691,10 @@ select {
 
 .metric-highlight--overlap {
   color: var(--highlight-overlap-text);
+}
+
+.metric-highlight--danger {
+  color: var(--danger-text);
 }
 
 .empty-state {
