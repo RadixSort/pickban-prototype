@@ -30,7 +30,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "1.0.0",
+  version: "1.1.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,
@@ -63,7 +63,6 @@ const targetRoleSelect = document.getElementById("target-role");
 const fetchButton = document.getElementById("fetch-button");
 const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
-const closeHelp = document.getElementById("close-help");
 const allyRolePanel = document.getElementById("ally-role-panel");
 const allyRoleList = document.getElementById("ally-role-list");
 const allyRoleTitle = document.getElementById("ally-role-title");
@@ -557,7 +556,7 @@ async function handleCloseApp() {
   }
 
   if (!state.canShutdown || !state.shutdownToken) {
-    setError("Close App is unavailable. Stop the server from the terminal with Ctrl+C.");
+    setError("The top-right close button is unavailable. Stop the server from the terminal with Ctrl+C.");
     return;
   }
 
@@ -728,9 +727,9 @@ function renderActionState() {
 
   resetButton.disabled = state.loading || state.shuttingDown;
   closeButton.hidden = !state.canShutdown;
-  closeHelp.classList.toggle("hidden", !state.canShutdown);
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;
-  closeButton.textContent = state.shuttingDown ? "Closing..." : "Close App";
+  closeButton.setAttribute("aria-label", state.shuttingDown ? "Stopping app" : "Stop app");
+  closeButton.setAttribute("title", state.shuttingDown ? "Stopping app" : "Stop app");
   sortSelect.disabled = state.loading || state.shuttingDown || state.lastResults.length === 0;
 }
 

@@ -7,14 +7,20 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <button
+      id="close-button"
+      class="close-button"
+      type="button"
+      hidden
+      aria-label="Stop app"
+      title="Stop app"
+    >
+      <span aria-hidden="true">&times;</span>
+    </button>
+
     <main class="app-shell">
       <header class="hero">
         <h1>Pick the dream draft. Fill the meta role.</h1>
-        <p class="subtitle">
-          Add allied and enemy champions, choose the rank filter and role you want to fill,
-          optionally assign the other allied roles, then fetch live Lolalytics data to rank
-          candidate picks.
-        </p>
         <p class="hero-credit">
           Powered by live data from
           <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>.
@@ -39,10 +45,6 @@
             </select>
           </label>
         </div>
-        <p class="target-role-copy">
-          The ally role dropdowns below update to the other four positions for the role you are
-          trying to fill, and the selected rank filter is used for every Lolalytics lookup.
-        </p>
       </section>
 
       <section class="draft-grid" aria-label="Champion draft inputs">
@@ -96,16 +98,14 @@
 
       <section class="actions">
         <div class="action-row">
-          <button id="fetch-button" class="primary-button" type="button">Fetch Suggestions</button>
-          <button id="reset-button" class="secondary-button" type="button">Reset Draft</button>
-          <button id="close-button" class="secondary-button close-button" type="button" hidden>
-            Close App
+          <button id="reset-button" class="secondary-button action-button action-button--reset" type="button">
+            <span class="button-icon" aria-hidden="true">&#x267B;</span>
+            <span>Reset Draft</span>
+          </button>
+          <button id="fetch-button" class="primary-button action-button action-button--fetch" type="button">
+            Fetch Suggestions
           </button>
         </div>
-        <p id="close-help" class="actions-help hidden">
-          Close App stops the local server so you can close this tab without going back to the
-          terminal.
-        </p>
         <p id="status-text" class="status-text" aria-live="polite"></p>
         <p id="error-text" class="error-text" aria-live="polite"></p>
       </section>
@@ -155,7 +155,7 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v1.0</span>
+      <span id="app-version">v1.1</span>
     </div>
 
     <script src="/roles.js" defer></script>

@@ -14,6 +14,16 @@
   --danger-border: rgba(184, 87, 87, 0.42);
   --danger-surface: rgba(72, 20, 20, 0.56);
   --danger-text: #efb0b0;
+  --action-blue-border: rgba(111, 149, 202, 0.38);
+  --action-blue-surface: rgba(34, 57, 89, 0.7);
+  --action-blue-surface-hover: rgba(42, 70, 108, 0.84);
+  --action-blue-text: #dce9ff;
+  --action-green-border: rgba(123, 176, 136, 0.42);
+  --action-green-surface-start: rgba(74, 121, 84, 0.95);
+  --action-green-surface-end: rgba(53, 90, 61, 0.96);
+  --action-green-surface-hover-start: rgba(86, 137, 97, 0.98);
+  --action-green-surface-hover-end: rgba(61, 103, 70, 0.98);
+  --action-green-text: #eefaf0;
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
   font-family:
     "Trebuchet MS",
@@ -43,13 +53,14 @@ select {
 }
 
 .app-shell {
-  width: min(1120px, calc(100% - 32px));
+  width: min(1080px, calc(100% - 28px));
   margin: 0 auto;
-  padding: 32px 0 48px;
+  padding: 24px 0 40px;
 }
 
 .hero {
-  margin-bottom: 28px;
+  margin-bottom: 18px;
+  padding-right: 64px;
 }
 
 .eyebrow,
@@ -66,7 +77,7 @@ select {
 .results-header h2,
 .role-panel-header h3 {
   margin: 0;
-  font-size: clamp(1.8rem, 3vw, 3.2rem);
+  font-size: clamp(1.7rem, 3vw, 2.8rem);
   line-height: 1.05;
 }
 
@@ -76,24 +87,16 @@ select {
   font-size: 1.3rem;
 }
 
-.subtitle {
-  max-width: 760px;
-  margin: 14px 0 0;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1.6;
-}
-
 .hero-credit {
   width: fit-content;
   max-width: 760px;
-  margin: 18px 0 0;
-  padding: 11px 14px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
   border: 1px solid rgba(211, 188, 124, 0.24);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(12, 18, 26, 0.78);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .hero-credit a {
@@ -107,15 +110,17 @@ select {
 }
 
 .target-role-panel {
-  display: flex;
+  display: inline-flex;
   align-items: end;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
-  padding: 18px 20px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
   border: 1px solid rgba(211, 188, 124, 0.2);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(12, 18, 26, 0.72);
 }
 
@@ -127,17 +132,17 @@ select {
 .target-role-controls {
   display: flex;
   align-items: end;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .target-role-control select {
   min-width: 180px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(10, 15, 22, 0.95);
   color: var(--text);
-  padding: 12px 14px;
+  padding: 10px 12px;
   outline: none;
 }
 
@@ -145,29 +150,22 @@ select {
   border-color: var(--accent);
 }
 
-.target-role-copy {
-  margin: 0;
-  max-width: 520px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
 .draft-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .picker-card,
 .results-panel {
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: 20px;
   background: linear-gradient(180deg, rgba(21, 27, 36, 0.95), rgba(13, 18, 26, 0.94));
   box-shadow: var(--shadow);
 }
 
 .picker-card {
-  padding: 22px;
+  padding: 18px;
 }
 
 .picker-card--ally {
@@ -189,7 +187,7 @@ select {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .picker-count,
@@ -222,7 +220,7 @@ select {
   background: rgba(10, 15, 22, 0.95);
   color: var(--text);
   font: inherit;
-  padding: 9px 14px;
+  padding: 8px 12px;
 }
 
 .sort-control select:disabled {
@@ -233,10 +231,10 @@ select {
 .search-field input {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(10, 15, 22, 0.95);
   color: var(--text);
-  padding: 14px 16px;
+  padding: 12px 14px;
   outline: none;
 }
 
@@ -250,19 +248,19 @@ select {
 }
 
 .suggestions {
-  margin-top: 10px;
+  margin-top: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .suggestion-item,
 .suggestion-empty {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--panel-alt);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 9px 11px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -290,18 +288,18 @@ select {
 }
 
 .selected-list {
-  margin-top: 16px;
-  min-height: 40px;
+  margin-top: 12px;
+  min-height: 36px;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .role-panel {
-  margin-top: 18px;
-  padding: 18px;
+  margin-top: 14px;
+  padding: 14px;
   border: 1px solid rgba(211, 188, 124, 0.2);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(9, 14, 20, 0.72);
 }
 
@@ -310,7 +308,7 @@ select {
   align-items: start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .role-panel-copy {
@@ -323,7 +321,7 @@ select {
 
 .role-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .role-row {
@@ -331,9 +329,9 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(17, 23, 34, 0.92);
 }
 
@@ -359,7 +357,7 @@ select {
   border-radius: 12px;
   background: rgba(7, 11, 17, 0.95);
   color: var(--text);
-  padding: 10px 12px;
+  padding: 9px 11px;
   outline: none;
 }
 
@@ -377,10 +375,10 @@ select {
   border-radius: 999px;
   background: rgba(7, 11, 17, 0.95);
   color: var(--text);
-  padding: 6px 12px 6px 6px;
+  padding: 5px 11px 5px 5px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -394,70 +392,123 @@ select {
 }
 
 .actions {
-  margin: 24px 0 18px;
+  margin: 18px 0 14px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.3fr) minmax(0, 0.7fr);
+  align-items: stretch;
+  gap: 10px;
+  width: min(640px, 100%);
 }
 
 .primary-button {
-  width: fit-content;
-  min-width: 220px;
-  border: 0;
+  border: 1px solid var(--action-green-border);
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #11161e;
+  background: linear-gradient(
+    135deg,
+    var(--action-green-surface-start),
+    var(--action-green-surface-end)
+  );
+  color: var(--action-green-text);
   font-weight: 700;
-  padding: 14px 22px;
+  padding: 15px 22px;
   cursor: pointer;
+  box-shadow: 0 10px 24px rgba(44, 82, 53, 0.28);
 }
 
 .secondary-button {
-  width: fit-content;
-  min-width: 180px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--action-blue-border);
   border-radius: 999px;
-  background: rgba(10, 15, 22, 0.95);
-  color: var(--text);
+  background: var(--action-blue-surface);
+  color: var(--action-blue-text);
   font-weight: 700;
-  padding: 14px 22px;
+  padding: 14px 20px;
   cursor: pointer;
 }
 
+.primary-button,
+.secondary-button,
+.close-button {
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.action-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.action-button--fetch {
+  min-height: 56px;
+  font-size: 1rem;
+}
+
+.button-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
 .primary-button:disabled,
-.secondary-button:disabled {
+.secondary-button:disabled,
+.close-button:disabled {
   opacity: 0.65;
   cursor: wait;
 }
 
+.primary-button:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    var(--action-green-surface-hover-start),
+    var(--action-green-surface-hover-end)
+  );
+  transform: translateY(-1px);
+}
+
 .secondary-button:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: rgba(142, 185, 242, 0.5);
+  background: var(--action-blue-surface-hover);
+  transform: translateY(-1px);
 }
 
 .close-button {
-  margin-left: auto;
-  min-width: 150px;
-  border-color: var(--danger-border);
-  background: var(--danger-surface);
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--danger-border);
+  border-radius: 999px;
+  background: rgba(72, 20, 20, 0.82);
   color: var(--danger-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
 }
 
 .close-button:hover:not(:disabled) {
   border-color: rgba(239, 176, 176, 0.72);
   background: rgba(86, 24, 24, 0.72);
-}
-
-.actions-help {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1.5;
+  transform: translateY(-1px);
 }
 
 .status-text,
@@ -474,7 +525,7 @@ select {
 }
 
 .results-panel {
-  padding: 22px;
+  padding: 20px;
 }
 
 .partial-failures {
@@ -535,7 +586,7 @@ select {
 .empty-state {
   border: 1px dashed var(--border);
   border-radius: 18px;
-  padding: 20px;
+  padding: 18px;
   background: rgba(10, 15, 22, 0.6);
 }
 
@@ -573,24 +624,21 @@ select {
 
 @media (max-width: 820px) {
   .app-shell {
-    width: min(100% - 24px, 1120px);
-    padding: 22px 0 40px;
+    width: min(100% - 20px, 1080px);
+    padding: 18px 0 36px;
   }
 
   .draft-grid {
     grid-template-columns: 1fr;
   }
 
-  .primary-button {
-    width: 100%;
+  .hero {
+    padding-right: 52px;
   }
 
-  .secondary-button {
+  .action-row {
+    grid-template-columns: 1fr;
     width: 100%;
-  }
-
-  .close-button {
-    margin-left: 0;
   }
 
   .results-toolbar {
@@ -620,6 +668,14 @@ select {
   .app-version-badge {
     right: 12px;
     bottom: 12px;
+  }
+
+  .close-button {
+    top: 12px;
+    right: 12px;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
   }
 
   .role-panel-header,

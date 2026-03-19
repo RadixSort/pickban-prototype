@@ -21,7 +21,7 @@ The project is a single-process local web app:
 3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
 4. The frontend collects user-selected champions, the target role, and optional ally role assignments.
 5. The frontend sends those selections to `POST /suggest`.
-6. The frontend can also load `GET /app-config` and request `POST /shutdown` when the user clicks `Close App`.
+6. The frontend can also load `GET /app-config` and request `POST /shutdown` when the user clicks the top-right close button.
 7. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
 8. The frontend renders the ranked results table.
 
@@ -251,7 +251,7 @@ The browser app:
 - Default port is `3000`
 - The port can be changed with the `PORT` environment variable
 - Static assets and the API are served from the same Express process
-- The browser `Close App` control sends a loopback-only shutdown request with a per-process token
+- The browser top-right close control sends a loopback-only shutdown request with a per-process token
 - `Ctrl+C` now performs graceful shutdown and force-closes lingering sockets if needed
 - No build step is required
 

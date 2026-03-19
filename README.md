@@ -42,7 +42,7 @@ http://localhost:3000
 
 5. Leave the terminal window open while you use the app.
 
-To stop the app later, click `Close App` in the browser.
+To stop the app later, click the red `X` in the top-right corner of the browser.
 
 If you prefer, you can still return to the terminal and press `Ctrl+C`.
 
@@ -89,11 +89,11 @@ Important behavior:
 
 ### I pulled new commits but the page still looks old
 
-1. Stop the current server with `Close App` or `Ctrl+C`.
+1. Stop the current server with the top-right `X` or `Ctrl+C`.
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.0`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.1`.
 
 ### The app does not start
 
@@ -112,7 +112,7 @@ If the version is below 18, install a newer version of Node.js.
 
 ### The app does not stop when I press `Ctrl+C`
 
-- Use the `Close App` button in the browser instead.
+- Use the top-right `X` in the browser instead.
 - If the browser page is already gone, return to the terminal and press `Ctrl+C` again.
 
 ### Port 3000 is already in use

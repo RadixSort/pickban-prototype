@@ -237,7 +237,7 @@ app.post("/shutdown", (request, response) => {
 
 server = app.listen(PORT, () => {
   console.log(`PickBan prototype running at http://localhost:${PORT}`);
-  console.log("Press Ctrl+C in this terminal or use the in-app Close App button to stop it.");
+  console.log("Press Ctrl+C in this terminal or use the in-app top-right close button to stop it.");
 });
 
 server.on("connection", (socket) => {
