@@ -1,4 +1,4 @@
-const { buildSelectedChampionKeys, filterUnavailableResults } = globalThis.suggestionFilters;
+const { buildSelectedChampionKeys, getVisibleSuggestionResults } = globalThis.suggestionFilters;
 const {
   DEFAULT_RANK_FILTER,
   getRankFilterLabel,
@@ -6,6 +6,7 @@ const {
   normalizeRankFilter,
 } = globalThis.rankFilters;
 const {
+  DEFAULT_TOP_RESULT_LIMIT,
   DEFAULT_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
   getProjectedAgency,
@@ -30,7 +31,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "1.1.0",
+  version: "1.2.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,
@@ -483,10 +484,11 @@ async function handleFetchSuggestions() {
       );
     }
 
-    state.lastResults = filterUnavailableResults(payload.results || [], getSelectedChampionKeys());
+    state.lastResults = payload.results || [];
     state.lastMeta = payload.meta || null;
+    const visibleResults = getVisibleResults(state.lastResults);
     setStatus(
-      `Fetched ${state.lastResults.length} ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+      `Fetched ${visibleResults.length} ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
     );
   } catch (error) {
     state.lastResults = [];
@@ -596,12 +598,17 @@ async function handleCloseApp() {
 }
 
 function renderResults() {
-  const visibleResults = sortResults(
-    filterUnavailableResults(state.lastResults, getSelectedChampionKeys()),
-    state.sortMode,
+  const visibleResults = sortResults(getVisibleResults(state.lastResults), state.sortMode);
+  const topProjectedWinRateKeys = getTopResultKeys(
+    visibleResults,
+    PROJECTED_WIN_RATE_SORT_MODE,
+    DEFAULT_TOP_RESULT_LIMIT,
   );
-  const topProjectedWinRateKeys = getTopResultKeys(visibleResults, PROJECTED_WIN_RATE_SORT_MODE, 2);
-  const topProjectedAgencyKeys = getTopResultKeys(visibleResults, DEFAULT_SORT_MODE, 2);
+  const topProjectedAgencyKeys = getTopResultKeys(
+    visibleResults,
+    DEFAULT_SORT_MODE,
+    DEFAULT_TOP_RESULT_LIMIT,
+  );
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
@@ -624,10 +631,19 @@ function renderResults() {
     const resultName = getResultName(result);
     const isTopProjectedWinRate = topProjectedWinRateKeys.has(resultKey);
     const isTopProjectedAgency = topProjectedAgencyKeys.has(resultKey);
+    const topOptionTone = getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate);
     const row = document.createElement("tr");
-    row.className = isTopProjectedWinRate || isTopProjectedAgency ? "top-option" : "";
-    const projectedWinRateClassName = isTopProjectedWinRate ? ' class="metric-highlight"' : "";
-    const projectedAgencyClassName = isTopProjectedAgency ? "final-score metric-highlight" : "final-score";
+    row.className = topOptionTone ? `top-option top-option--${topOptionTone}` : "";
+    const projectedWinRateClassName = getMetricClassName(
+      [],
+      isTopProjectedWinRate,
+      topOptionTone === "overlap" ? "overlap" : "winrate",
+    );
+    const projectedAgencyClassName = getMetricClassName(
+      ["final-score"],
+      isTopProjectedAgency,
+      topOptionTone === "overlap" ? "overlap" : "agency",
+    );
     row.innerHTML = `
       <td class="rank-cell">${index + 1}</td>
       <td>
@@ -637,7 +653,7 @@ function renderResults() {
         </div>
       </td>
       <td>${formatRate(result.winRate)}</td>
-      <td${projectedWinRateClassName}>${formatRate(getProjectedWinRate(result))}</td>
+      <td class="${projectedWinRateClassName}">${formatRate(getProjectedWinRate(result))}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
       <td class="${projectedAgencyClassName}">${formatScore(getProjectedAgency(result))}</td>
@@ -665,6 +681,16 @@ function formatScore(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function getMetricClassName(baseClasses = [], isHighlighted = false, tone = "") {
+  const classNames = [...baseClasses];
+
+  if (isHighlighted && tone) {
+    classNames.push("metric-highlight", `metric-highlight--${tone}`);
+  }
+
+  return classNames.join(" ");
+}
+
 function formatRate(value) {
   if (!Number.isFinite(Number(value))) {
     return "-";
@@ -680,6 +706,26 @@ function formatVersion(version) {
 
 function normalizeSortMode(value) {
   return value === PROJECTED_WIN_RATE_SORT_MODE ? PROJECTED_WIN_RATE_SORT_MODE : DEFAULT_SORT_MODE;
+}
+
+function getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate) {
+  if (isTopProjectedAgency && isTopProjectedWinRate) {
+    return "overlap";
+  }
+
+  if (isTopProjectedAgency) {
+    return "agency";
+  }
+
+  if (isTopProjectedWinRate) {
+    return "winrate";
+  }
+
+  return "";
+}
+
+function getVisibleResults(results = []) {
+  return getVisibleSuggestionResults(results, getSelectedChampionKeys());
 }
 
 function normalizeText(value) {

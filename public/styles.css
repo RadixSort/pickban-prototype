@@ -11,6 +11,15 @@
   --accent-strong: #f2d88d;
   --success: #90f1c3;
   --error: #ff9a9a;
+  --highlight-agency-bg: rgba(150, 196, 244, 0.14);
+  --highlight-agency-border: rgba(150, 196, 244, 0.2);
+  --highlight-agency-text: #b8daff;
+  --highlight-winrate-bg: rgba(153, 220, 176, 0.14);
+  --highlight-winrate-border: rgba(153, 220, 176, 0.2);
+  --highlight-winrate-text: #bbeccb;
+  --highlight-overlap-bg: rgba(141, 214, 207, 0.17);
+  --highlight-overlap-border: rgba(141, 214, 207, 0.24);
+  --highlight-overlap-text: #adf0e8;
   --danger-border: rgba(184, 87, 87, 0.42);
   --danger-surface: rgba(72, 20, 20, 0.56);
   --danger-text: #efb0b0;
@@ -566,8 +575,28 @@ select {
   font-weight: 600;
 }
 
-.results-table tbody tr.top-option {
-  background: rgba(74, 222, 128, 0.08);
+.results-table tbody tr.top-option--agency {
+  background: var(--highlight-agency-bg);
+}
+
+.results-table tbody tr.top-option--agency td {
+  border-top-color: var(--highlight-agency-border);
+}
+
+.results-table tbody tr.top-option--winrate {
+  background: var(--highlight-winrate-bg);
+}
+
+.results-table tbody tr.top-option--winrate td {
+  border-top-color: var(--highlight-winrate-border);
+}
+
+.results-table tbody tr.top-option--overlap {
+  background: var(--highlight-overlap-bg);
+}
+
+.results-table tbody tr.top-option--overlap td {
+  border-top-color: var(--highlight-overlap-border);
 }
 
 .support-cell {
@@ -582,8 +611,19 @@ select {
 }
 
 .metric-highlight {
-  color: #7ee2a8;
   font-weight: 700;
+}
+
+.metric-highlight--agency {
+  color: var(--highlight-agency-text);
+}
+
+.metric-highlight--winrate {
+  color: var(--highlight-winrate-text);
+}
+
+.metric-highlight--overlap {
+  color: var(--highlight-overlap-text);
 }
 
 .empty-state {

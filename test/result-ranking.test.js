@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   average,
+  DEFAULT_TOP_RESULT_LIMIT,
   getProjectedAgency,
   getProjectedWinRate,
   getTopResultKeys,
@@ -57,7 +58,7 @@ test("sortResults ranks projected win rate with projected agency as the first ti
   );
 });
 
-test("getTopResultKeys returns the top two ranked candidate keys for the selected sort mode", () => {
+test("getTopResultKeys returns the top three ranked candidate keys by default", () => {
   const topResultKeys = getTopResultKeys(
     [
       { candidate: "Soraka", candidateKey: 16, projectedAgency: 0.8, projectedWinRate: 55.2 },
@@ -66,8 +67,8 @@ test("getTopResultKeys returns the top two ranked candidate keys for the selecte
       { candidate: "Taric", candidateKey: 44, projectedAgency: 1.1, projectedWinRate: 53.0 },
     ],
     "projectedWinRate",
-    2,
   );
 
-  assert.deepEqual(Array.from(topResultKeys), ["16", "497"]);
+  assert.equal(DEFAULT_TOP_RESULT_LIMIT, 3);
+  assert.deepEqual(Array.from(topResultKeys), ["16", "497", "44"]);
 });

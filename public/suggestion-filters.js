@@ -1,11 +1,19 @@
 (function initializeSuggestionFilters(globalScope, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(require("./result-ranking.js"));
     return;
   }
 
-  globalScope.suggestionFilters = factory();
-})(typeof globalThis !== "undefined" ? globalThis : this, () => {
+  globalScope.suggestionFilters = factory(globalScope.resultRanking || {});
+})(typeof globalThis !== "undefined" ? globalThis : this, (resultRanking) => {
+  const {
+    getProjectedWinRate = () => 0,
+    PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate",
+    sortResults = (results = []) => [...results],
+  } = resultRanking;
+  const MIN_PROJECTED_WIN_RATE = 50;
+  const MINIMUM_VISIBLE_SUGGESTIONS = 10;
+
   function getChampionKeyFromSelection(selection) {
     if (!selection || typeof selection !== "object") {
       return null;
@@ -54,9 +62,35 @@
     });
   }
 
+  function filterLowProjectedWinRateResults(
+    results = [],
+    minimumProjectedWinRate = MIN_PROJECTED_WIN_RATE,
+    minimumVisibleSuggestions = MINIMUM_VISIBLE_SUGGESTIONS,
+  ) {
+    const eligibleResults = results.filter(
+      (result) => getProjectedWinRate(result) >= minimumProjectedWinRate,
+    );
+
+    if (eligibleResults.length >= minimumVisibleSuggestions) {
+      return eligibleResults;
+    }
+
+    return sortResults(results, PROJECTED_WIN_RATE_SORT_MODE).slice(0, minimumVisibleSuggestions);
+  }
+
+  function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {
+    return filterLowProjectedWinRateResults(
+      filterUnavailableResults(results, selectedChampionKeys),
+    );
+  }
+
   return {
+    MINIMUM_VISIBLE_SUGGESTIONS,
+    MIN_PROJECTED_WIN_RATE,
     buildSelectedChampionKeys,
+    filterLowProjectedWinRateResults,
     filterUnavailableResults,
     getChampionKeyFromSelection,
+    getVisibleSuggestionResults,
   };
 });

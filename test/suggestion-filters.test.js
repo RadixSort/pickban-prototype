@@ -3,8 +3,19 @@ const assert = require("node:assert/strict");
 
 const {
   buildSelectedChampionKeys,
+  filterLowProjectedWinRateResults,
   filterUnavailableResults,
+  getVisibleSuggestionResults,
 } = require("../public/suggestion-filters.js");
+
+function createResult(candidateKey, projectedWinRate, projectedAgency = 0) {
+  return {
+    candidate: `Champion ${candidateKey}`,
+    candidateKey,
+    projectedAgency,
+    projectedWinRate,
+  };
+}
 
 test("buildSelectedChampionKeys supports frontend and server selection shapes", () => {
   const selectedChampionKeys = buildSelectedChampionKeys(
@@ -67,4 +78,48 @@ test("filterUnavailableResults still supports legacy supportKey rows", () => {
   );
 
   assert.deepEqual(filteredResults, [{ support: "Lulu", supportKey: 117, finalScore: 7.4 }]);
+});
+
+test("filterLowProjectedWinRateResults removes sub-50 projected win rates when at least ten qualify", () => {
+  const filteredResults = filterLowProjectedWinRateResults([
+    createResult(1, 55.4),
+    createResult(2, 54.8),
+    createResult(3, 53.9),
+    createResult(4, 53.4),
+    createResult(5, 52.7),
+    createResult(6, 52.1),
+    createResult(7, 51.6),
+    createResult(8, 51.1),
+    createResult(9, 50.6),
+    createResult(10, 50.0),
+    createResult(11, 49.9),
+    createResult(12, 48.3),
+  ]);
+
+  assert.deepEqual(
+    filteredResults.map((result) => result.candidateKey),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  );
+});
+
+test("getVisibleSuggestionResults falls back to the top ten projected win rates when fewer than ten clear 50%", () => {
+  const visibleResults = getVisibleSuggestionResults([
+    createResult(1, 49.2, 0.1),
+    createResult(2, 60.8, 0.2),
+    createResult(3, 55.7, 0.3),
+    createResult(4, 49.9, 0.4),
+    createResult(5, 58.6, 0.5),
+    createResult(6, 57.4, 0.6),
+    createResult(7, 54.2, 0.7),
+    createResult(8, 56.3, 0.8),
+    createResult(9, 53.1, 0.9),
+    createResult(10, 48.6, 1.0),
+    createResult(11, 52.4, 1.1),
+    createResult(12, 51.5, 1.2),
+  ]);
+
+  assert.deepEqual(
+    visibleResults.map((result) => result.candidateKey),
+    [2, 5, 6, 8, 3, 7, 9, 11, 12, 4],
+  );
 });

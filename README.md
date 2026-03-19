@@ -83,6 +83,7 @@ Important behavior:
 - If you only enter allied champions, the counter portion is treated as `0`.
 - If you only enter enemy champions, the synergy portion is treated as `0`.
 - If you assign ally roles, the app tries role-specific synergy first and falls back to all-role data if needed.
+- Suggested results below `50%` projected win rate are hidden unless fewer than `10` picks clear that mark, in which case the app shows the top `10` projected win rate options instead.
 - If some live requests fail, the app can still show partial results and will list those failures above the results table.
 
 ## Troubleshooting
@@ -93,7 +94,7 @@ Important behavior:
 2. Start it again with `npm start`.
 3. Refresh the browser tab.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.1`.
+The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.2`.
 
 ### The app does not start
 

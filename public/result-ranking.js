@@ -8,6 +8,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const DEFAULT_SORT_MODE = "projectedAgency";
   const PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate";
+  const DEFAULT_TOP_RESULT_LIMIT = 3;
 
   function average(values = []) {
     let total = 0;
@@ -117,7 +118,11 @@
     return String(result.candidate || result.support || "");
   }
 
-  function getTopResultKeys(results = [], sortMode = DEFAULT_SORT_MODE, limit = 2) {
+  function getTopResultKeys(
+    results = [],
+    sortMode = DEFAULT_SORT_MODE,
+    limit = DEFAULT_TOP_RESULT_LIMIT,
+  ) {
     const topResultKeys = new Set();
 
     for (const result of sortResults(results, sortMode)) {
@@ -135,7 +140,11 @@
     return topResultKeys;
   }
 
-  function getTopSupportKeys(results = [], sortMode = DEFAULT_SORT_MODE, limit = 2) {
+  function getTopSupportKeys(
+    results = [],
+    sortMode = DEFAULT_SORT_MODE,
+    limit = DEFAULT_TOP_RESULT_LIMIT,
+  ) {
     return getTopResultKeys(results, sortMode, limit);
   }
 
@@ -165,6 +174,7 @@
   }
 
   return {
+    DEFAULT_TOP_RESULT_LIMIT,
     DEFAULT_SORT_MODE,
     PROJECTED_WIN_RATE_SORT_MODE,
     average,
