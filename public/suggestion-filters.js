@@ -6,13 +6,7 @@
 
   globalScope.suggestionFilters = factory(globalScope.resultRanking || {});
 })(typeof globalThis !== "undefined" ? globalThis : this, (resultRanking) => {
-  const {
-    getProjectedWinRate = () => 0,
-    PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate",
-    sortResults = (results = []) => [...results],
-  } = resultRanking;
   const MIN_PROJECTED_WIN_RATE = 50;
-  const MINIMUM_VISIBLE_SUGGESTIONS = 10;
 
   function getChampionKeyFromSelection(selection) {
     if (!selection || typeof selection !== "object") {
@@ -65,53 +59,18 @@
   function filterLowProjectedWinRateResults(
     results = [],
     minimumProjectedWinRate = MIN_PROJECTED_WIN_RATE,
-    minimumVisibleSuggestions = MINIMUM_VISIBLE_SUGGESTIONS,
   ) {
-    const eligibleResults = results.filter(
-      (result) => getProjectedWinRate(result) >= minimumProjectedWinRate,
-    );
+    void minimumProjectedWinRate;
 
-    if (eligibleResults.length >= minimumVisibleSuggestions) {
-      return eligibleResults;
-    }
-
-    const eligibleResultKeys = new Set(
-      eligibleResults
-        .map((result) => result?.candidateKey ?? result?.supportKey)
-        .filter((resultKey) => resultKey != null)
-        .map((resultKey) => String(resultKey)),
-    );
-    const eligibleResultSet = new Set(eligibleResults);
-    const additionalResults = [];
-
-    for (const result of sortResults(results, PROJECTED_WIN_RATE_SORT_MODE)) {
-      const resultKey = result?.candidateKey ?? result?.supportKey;
-      const normalizedResultKey = resultKey == null ? null : String(resultKey);
-
-      if (
-        eligibleResultSet.has(result) ||
-        (normalizedResultKey != null && eligibleResultKeys.has(normalizedResultKey))
-      ) {
-        continue;
-      }
-
-      additionalResults.push(result);
-      if (eligibleResults.length + additionalResults.length >= minimumVisibleSuggestions) {
-        break;
-      }
-    }
-
-    return [...eligibleResults, ...additionalResults];
+    // Retained for compatibility now that low projected win-rate results stay visible.
+    return [...results];
   }
 
   function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {
-    return filterLowProjectedWinRateResults(
-      filterUnavailableResults(results, selectedChampionKeys),
-    );
+    return filterUnavailableResults(results, selectedChampionKeys);
   }
 
   return {
-    MINIMUM_VISIBLE_SUGGESTIONS,
     MIN_PROJECTED_WIN_RATE,
     buildSelectedChampionKeys,
     filterLowProjectedWinRateResults,

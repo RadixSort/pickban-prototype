@@ -1,4 +1,8 @@
-const { buildSelectedChampionKeys, getVisibleSuggestionResults } = globalThis.suggestionFilters;
+const {
+  buildSelectedChampionKeys,
+  getVisibleSuggestionResults,
+  MIN_PROJECTED_WIN_RATE,
+} = globalThis.suggestionFilters;
 const {
   DEFAULT_RANK_FILTER,
   getRankFilterLabel,
@@ -629,15 +633,30 @@ function renderResults() {
   visibleResults.forEach((result, index) => {
     const resultKey = getResultKey(result) || "";
     const resultName = getResultName(result);
+    const liveWinRate = Number(result.winRate);
+    const projectedWinRate = getProjectedWinRate(result);
     const isTopProjectedWinRate = topProjectedWinRateKeys.has(resultKey);
     const isTopProjectedAgency = topProjectedAgencyKeys.has(resultKey);
     const topOptionTone = getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate);
+    const hasLowLiveWinRate = isLowWinRate(liveWinRate);
+    const hasLowProjectedWinRate = isLowWinRate(projectedWinRate);
+    const rowClassNames = [];
+
+    if (topOptionTone) {
+      rowClassNames.push("top-option", `top-option--${topOptionTone}`);
+    }
+
+    if (hasLowLiveWinRate || hasLowProjectedWinRate) {
+      rowClassNames.push("low-winrate-option");
+    }
+
     const row = document.createElement("tr");
-    row.className = topOptionTone ? `top-option top-option--${topOptionTone}` : "";
+    row.className = rowClassNames.join(" ");
+    const winRateClassName = getMetricClassName([], hasLowLiveWinRate, "danger");
     const projectedWinRateClassName = getMetricClassName(
       [],
-      isTopProjectedWinRate,
-      topOptionTone === "overlap" ? "overlap" : "winrate",
+      hasLowProjectedWinRate || isTopProjectedWinRate,
+      hasLowProjectedWinRate ? "danger" : topOptionTone === "overlap" ? "overlap" : "winrate",
     );
     const projectedAgencyClassName = getMetricClassName(
       ["final-score"],
@@ -656,8 +675,8 @@ function renderResults() {
           </span>
         </div>
       </td>
-      <td>${formatRate(result.winRate)}</td>
-      <td class="${projectedWinRateClassName}">${formatRate(getProjectedWinRate(result))}</td>
+      <td class="${winRateClassName}">${formatRate(liveWinRate)}</td>
+      <td class="${projectedWinRateClassName}">${formatRate(projectedWinRate)}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
       <td class="${projectedAgencyClassName}">${formatScore(getProjectedAgency(result))}</td>
@@ -710,6 +729,10 @@ function formatRate(value) {
   }
 
   return `${Number(value).toFixed(2)}%`;
+}
+
+function isLowWinRate(value) {
+  return Number.isFinite(Number(value)) && Number(value) < MIN_PROJECTED_WIN_RATE;
 }
 
 function formatVersion(version) {
