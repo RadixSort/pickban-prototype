@@ -1,4 +1,7 @@
 const {
+  buildSuggestionCacheKey,
+} = globalThis.suggestionCache;
+const {
   buildSelectedChampionKeys,
   getVisibleSuggestionResults,
   MIN_PROJECTED_WIN_RATE,
@@ -22,8 +25,9 @@ const {
 } = globalThis.resultRanking;
 const {
   DEFAULT_TARGET_ROLE,
-  getAssignableAllyRoleOptions,
   getRoleLabel,
+  getTargetRoleOptions,
+  getUnassignedTargetRoleOptions,
   normalizeRole,
 } = globalThis.roles;
 
@@ -36,11 +40,10 @@ const state = {
   canShutdown: false,
   shutdownToken: "",
   version: "1.3.0",
-  lastResults: [],
-  lastMeta: null,
+  resultsCache: {},
+  selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
-  targetRole: DEFAULT_TARGET_ROLE,
 };
 
 const limits = {
@@ -64,7 +67,6 @@ const pickers = {
 };
 
 const rankFilterSelect = document.getElementById("rank-filter");
-const targetRoleSelect = document.getElementById("target-role");
 const fetchButton = document.getElementById("fetch-button");
 const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
@@ -79,6 +81,7 @@ const resultsWrap = document.getElementById("results-table-wrap");
 const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const resultsTitle = document.getElementById("results-title");
+const resultsRoleSelect = document.getElementById("results-role");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
 const versionText = document.getElementById("app-version");
@@ -106,7 +109,7 @@ async function initialize() {
   wirePicker("enemies");
 
   rankFilterSelect.addEventListener("change", handleRankFilterChange);
-  targetRoleSelect.addEventListener("change", handleTargetRoleChange);
+  resultsRoleSelect.addEventListener("change", handleResultsRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
@@ -176,8 +179,45 @@ function getSelectedChampionKeys() {
   return buildSelectedChampionKeys(state.allies, state.enemies);
 }
 
-function getTargetRoleLabel() {
-  return getRoleLabel(state.targetRole);
+function getCurrentSuggestionCacheKey() {
+  return buildSuggestionCacheKey(state.rankFilter, state.allies, state.enemies);
+}
+
+function getCurrentResultsBundle() {
+  return state.resultsCache[getCurrentSuggestionCacheKey()] || null;
+}
+
+function getAvailableResultRoleOptions() {
+  return getUnassignedTargetRoleOptions(state.allies);
+}
+
+function getSelectedResultRole() {
+  const availableRoleValues = getAvailableResultRoleOptions().map((option) => option.value);
+  if (availableRoleValues.length === 0) {
+    return DEFAULT_TARGET_ROLE;
+  }
+
+  const currentBundle = getCurrentResultsBundle();
+  const candidates = [currentBundle?.selectedRole, state.selectedResultRole, DEFAULT_TARGET_ROLE];
+
+  for (const candidate of candidates) {
+    if (candidate && availableRoleValues.includes(candidate)) {
+      return candidate;
+    }
+  }
+
+  return availableRoleValues[0];
+}
+
+function syncSelectedResultRole() {
+  const selectedRole = getSelectedResultRole();
+  state.selectedResultRole = selectedRole;
+  const currentBundle = getCurrentResultsBundle();
+  if (currentBundle) {
+    currentBundle.selectedRole = selectedRole;
+  }
+
+  return selectedRole;
 }
 
 function getRankFilterDisplayLabel() {
@@ -190,24 +230,30 @@ function initializeRankFilterOptions() {
     .join("");
 }
 
-function renderTargetRole() {
-  const targetRoleLabel = getTargetRoleLabel();
+function renderControls() {
+  const selectedRole = syncSelectedResultRole();
   const rankFilterLabel = getRankFilterDisplayLabel();
-  const assignableRoleLabels = getAssignableAllyRoleOptions(state.targetRole).map(
-    (option) => option.label,
-  );
+  const availableRoleOptions = getAvailableResultRoleOptions();
+  const availableRoleLabels = availableRoleOptions.map((option) => option.label);
 
   rankFilterSelect.value = state.rankFilter;
   rankFilterSelect.disabled = isInteractionLocked();
-  targetRoleSelect.value = state.targetRole;
-  targetRoleSelect.disabled = isInteractionLocked();
-  allyRoleTitle.textContent = "Assign remaining roles";
-  allyRoleCopy.textContent = `Target role: ${targetRoleLabel}. Rank filter: ${rankFilterLabel}. Assign allies to ${assignableRoleLabels.join(", ")}, or leave them unassigned to use all-role synergy data.`;
-  resultsTitle.textContent = `${targetRoleLabel} recommendations`;
+  resultsRoleSelect.innerHTML = availableRoleOptions
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+  resultsRoleSelect.value = selectedRole;
+  resultsRoleSelect.disabled = isInteractionLocked() || availableRoleOptions.length === 0;
+
+  allyRoleTitle.textContent = "Assign known roles";
+  allyRoleCopy.textContent =
+    availableRoleLabels.length > 0
+      ? `Rank filter: ${rankFilterLabel}. Unassigned result roles: ${availableRoleLabels.join(", ")}. Assign allies to lock lanes, or leave them unassigned to fetch every remaining role.`
+      : `Rank filter: ${rankFilterLabel}.`;
+  resultsTitle.textContent = `${getRoleLabel(selectedRole)} recommendations`;
 }
 
 function renderAll() {
-  renderTargetRole();
+  renderControls();
   renderPicker("allies");
   renderPicker("enemies");
   renderAllyRoleAssignments();
@@ -368,7 +414,7 @@ function addChampion(side, championId) {
 
   state[side].push(createSelectedChampion(champion, side));
   pickers[side].input.value = "";
-  invalidateSuggestions();
+  clearStatus();
   renderAll();
 }
 
@@ -393,7 +439,7 @@ function removeChampion(side, championId) {
   }
 
   state[side] = state[side].filter((champion) => champion.id !== championId);
-  invalidateSuggestions();
+  clearStatus();
   renderAll();
 }
 
@@ -405,11 +451,12 @@ function buildRoleOptionsMarkup(championId) {
   );
 
   const options = ['<option value="">Unassigned</option>'];
-  for (const option of getAssignableAllyRoleOptions(state.targetRole)) {
-    const disabled = takenRoles.has(option.value) ? " disabled" : "";
-    options.push(
-      `<option value="${option.value}"${disabled}>${option.label}</option>`,
-    );
+  for (const option of getTargetRoleOptions()) {
+    if (takenRoles.has(option.value)) {
+      continue;
+    }
+
+    options.push(`<option value="${option.value}">${option.label}</option>`);
   }
 
   return options.join("");
@@ -436,7 +483,7 @@ function assignAllyRole(championId, role) {
       : ally,
   );
 
-  invalidateSuggestions();
+  clearStatus();
   renderAll();
 }
 
@@ -450,10 +497,14 @@ async function handleFetchSuggestions() {
     return;
   }
 
+  const cacheKey = getCurrentSuggestionCacheKey();
+  const availableRoleOptions = getAvailableResultRoleOptions();
+  const availableRoleValues = availableRoleOptions.map((option) => option.value);
+
   setLoading(true);
   clearStatus();
   setStatus(
-    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} data...`,
+    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} data for ${formatRoleLabels(availableRoleOptions)}...`,
   );
 
   try {
@@ -464,7 +515,6 @@ async function handleFetchSuggestions() {
       },
       body: JSON.stringify({
         rankFilter: state.rankFilter,
-        role: state.targetRole,
         allies: state.allies.map((champion) => {
           const selection = {
             champion: champion.name,
@@ -484,26 +534,33 @@ async function handleFetchSuggestions() {
     if (!response.ok) {
       throw new Error(
         payload.error ||
-          `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+          `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
       );
     }
 
-    state.lastResults = payload.results || [];
-    state.lastMeta = payload.meta || null;
-    const visibleResults = getVisibleResults(state.lastResults);
+    const selectedRole = syncSelectedResultRole();
+    state.resultsCache[cacheKey] = buildResultsBundle(payload, availableRoleValues, selectedRole);
+    const currentBundle = state.resultsCache[cacheKey];
+    const successfulRoleCount = availableRoleValues.filter(
+      (role) => !currentBundle.metaByRole[role]?.error,
+    ).length;
+    const failedRoleLabels = availableRoleValues
+      .filter((role) => currentBundle.metaByRole[role]?.error)
+      .map((role) => getRoleLabel(role));
+
     setStatus(
-      `Fetched ${visibleResults.length} ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+      successfulRoleCount === availableRoleValues.length
+        ? `Fetched ${successfulRoleCount} ${successfulRoleCount === 1 ? "role result set" : "role result sets"} for the current draft.`
+        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} role result sets. Unavailable: ${failedRoleLabels.join(", ")}.`,
     );
   } catch (error) {
-    state.lastResults = [];
-    state.lastMeta = null;
     setError(
       error.message ||
-        `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} ${getTargetRoleLabel().toLowerCase()} suggestions.`,
+        `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
     );
   } finally {
     setLoading(false);
-    renderResults();
+    renderAll();
   }
 }
 
@@ -514,9 +571,10 @@ function handleResetDraft() {
 
   state.allies = [];
   state.enemies = [];
+  state.selectedResultRole = DEFAULT_TARGET_ROLE;
   pickers.allies.input.value = "";
   pickers.enemies.input.value = "";
-  invalidateSuggestions();
+  clearStatus();
   renderAll();
 }
 
@@ -532,28 +590,25 @@ function handleRankFilterChange(event) {
   }
 
   state.rankFilter = normalizedRankFilter;
-  invalidateSuggestions();
+  clearStatus();
   renderAll();
 }
 
-function handleTargetRoleChange(event) {
+function handleResultsRoleChange(event) {
   const normalizedRole = normalizeRole(event.target.value) || DEFAULT_TARGET_ROLE;
-  if (normalizedRole === state.targetRole) {
+  if (normalizedRole === state.selectedResultRole) {
     return;
   }
 
-  state.targetRole = normalizedRole;
-  state.allies = state.allies.map((ally) =>
-    ally.role === normalizedRole
-      ? {
-          ...ally,
-          role: "",
-        }
-      : ally,
-  );
+  state.selectedResultRole = normalizedRole;
+  const currentBundle = getCurrentResultsBundle();
+  if (currentBundle) {
+    currentBundle.selectedRole = normalizedRole;
+  }
 
-  invalidateSuggestions();
-  renderAll();
+  renderControls();
+  renderResults();
+  renderActionState();
 }
 
 async function handleCloseApp() {
@@ -602,7 +657,11 @@ async function handleCloseApp() {
 }
 
 function renderResults() {
-  const visibleResults = sortResults(getVisibleResults(state.lastResults), state.sortMode);
+  const selectedRole = syncSelectedResultRole();
+  const currentBundle = getCurrentResultsBundle();
+  const currentMeta = currentBundle?.metaByRole?.[selectedRole] || null;
+  const currentResults = currentBundle?.resultsByRole?.[selectedRole] || [];
+  const visibleResults = sortResults(getVisibleResults(currentResults), state.sortMode);
   const topProjectedWinRateKeys = getTopResultKeys(
     visibleResults,
     PROJECTED_WIN_RATE_SORT_MODE,
@@ -617,18 +676,41 @@ function renderResults() {
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
   sortSelect.value = state.sortMode;
-  sortSelect.disabled = state.loading || state.shuttingDown || state.lastResults.length === 0;
+  sortSelect.disabled =
+    state.loading ||
+    state.shuttingDown ||
+    currentResults.length === 0 ||
+    Boolean(currentMeta?.error);
 
-  if (!visibleResults.length) {
+  if (!currentBundle) {
+    emptyState.textContent = getPendingResultsMessage();
     emptyState.classList.remove("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = "";
     return;
   }
 
+  if (currentMeta?.error) {
+    emptyState.textContent = currentMeta.error;
+    emptyState.classList.remove("hidden");
+    resultsWrap.classList.add("hidden");
+    resultsMeta.textContent = `${getRoleLabel(selectedRole)} unavailable`;
+    renderPartialFailures(currentMeta.partialFailures || []);
+    return;
+  }
+
+  if (!visibleResults.length) {
+    emptyState.textContent = `No ${getRoleLabel(selectedRole).toLowerCase()} recommendations are available for the current draft.`;
+    emptyState.classList.remove("hidden");
+    resultsWrap.classList.add("hidden");
+    resultsMeta.textContent = "";
+    renderPartialFailures(currentMeta?.partialFailures || []);
+    return;
+  }
+
   emptyState.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
-  resultsMeta.textContent = `${visibleResults.length} ranked ${getTargetRoleLabel().toLowerCase()} options`;
+  resultsMeta.textContent = `${visibleResults.length} ranked ${getRoleLabel(selectedRole).toLowerCase()} options`;
 
   visibleResults.forEach((result, index) => {
     const resultKey = getResultKey(result) || "";
@@ -682,20 +764,77 @@ function renderResults() {
     resultsBody.appendChild(row);
   });
 
-  const failures = state.lastMeta?.partialFailures || [];
-  if (failures.length > 0) {
-    const title = document.createElement("p");
-    title.className = "partial-failures-title";
-    title.textContent = "Partial scrape failures";
-    partialFailures.appendChild(title);
+  renderPartialFailures(currentMeta?.partialFailures || []);
+}
 
-    failures.forEach((message) => {
-      const item = document.createElement("p");
-      item.className = "partial-failure-item";
-      item.textContent = message;
-      partialFailures.appendChild(item);
-    });
+function renderPartialFailures(failures = []) {
+  if (failures.length === 0) {
+    return;
   }
+
+  const title = document.createElement("p");
+  title.className = "partial-failures-title";
+  title.textContent = "Partial scrape failures";
+  partialFailures.appendChild(title);
+
+  failures.forEach((message) => {
+    const item = document.createElement("p");
+    item.className = "partial-failure-item";
+    item.textContent = message;
+    partialFailures.appendChild(item);
+  });
+}
+
+function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT_TARGET_ROLE) {
+  const resultsByRole = {};
+  const metaByRole = {};
+  const payloadRole =
+    normalizeRole(payload?.meta?.role ?? null) ||
+    (Array.isArray(payload?.roles) && payload.roles.length === 1 ? normalizeRole(payload.roles[0]) : null);
+
+  requestedRoles.forEach((role) => {
+    resultsByRole[role] = Array.isArray(payload?.resultsByRole?.[role])
+      ? payload.resultsByRole[role]
+      : role === payloadRole && Array.isArray(payload?.results)
+        ? payload.results
+        : [];
+    metaByRole[role] =
+      payload?.metaByRole?.[role] ||
+      (role === payloadRole && payload?.meta ? payload.meta : { role, partialFailures: [] });
+  });
+
+  return {
+    roles: [...requestedRoles],
+    resultsByRole,
+    metaByRole,
+    selectedRole: requestedRoles.includes(selectedRole) ? selectedRole : requestedRoles[0] || DEFAULT_TARGET_ROLE,
+  };
+}
+
+function getPendingResultsMessage() {
+  if (state.allies.length === 0 && state.enemies.length === 0) {
+    return "Select some champions, optionally assign known ally roles, then fetch suggestions to load every remaining role.";
+  }
+
+  return `Fetch suggestions to load ${formatRoleLabels(getAvailableResultRoleOptions())} for the current draft.`;
+}
+
+function formatRoleLabels(roles = []) {
+  const labels = roles
+    .map((role) =>
+      typeof role === "string" ? getRoleLabel(role) : role?.label || getRoleLabel(role?.value),
+    )
+    .filter(Boolean);
+
+  if (labels.length <= 1) {
+    return labels[0] || "the available roles";
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
 function formatScore(value) {
@@ -768,7 +907,7 @@ function normalizeText(value) {
 
 function setLoading(loading) {
   state.loading = loading;
-  renderTargetRole();
+  renderControls();
   renderPicker("allies");
   renderPicker("enemies");
   renderAllyRoleAssignments();
@@ -793,15 +932,10 @@ function clearStatus() {
   statusText.textContent = "";
 }
 
-function invalidateSuggestions() {
-  state.lastResults = [];
-  state.lastMeta = null;
-  clearStatus();
-}
-
 function renderActionState() {
   rankFilterSelect.disabled = state.loading || state.shuttingDown;
-  targetRoleSelect.disabled = state.loading || state.shuttingDown;
+  resultsRoleSelect.disabled =
+    state.loading || state.shuttingDown || getAvailableResultRoleOptions().length === 0;
   fetchButton.disabled = state.loading || state.shuttingDown;
   fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
 
@@ -810,7 +944,11 @@ function renderActionState() {
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;
   closeButton.setAttribute("aria-label", state.shuttingDown ? "Stopping app" : "Stop app");
   closeButton.setAttribute("title", state.shuttingDown ? "Stopping app" : "Stop app");
-  sortSelect.disabled = state.loading || state.shuttingDown || state.lastResults.length === 0;
+  sortSelect.disabled =
+    state.loading ||
+    state.shuttingDown ||
+    (getCurrentResultsBundle()?.resultsByRole?.[getSelectedResultRole()] || []).length === 0 ||
+    Boolean(getCurrentResultsBundle()?.metaByRole?.[getSelectedResultRole()]?.error);
 }
 
 function isInteractionLocked() {

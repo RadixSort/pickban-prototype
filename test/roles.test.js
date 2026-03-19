@@ -5,6 +5,7 @@ const {
   DEFAULT_TARGET_ROLE,
   getAssignableAllyRoleOptions,
   getRoleLabel,
+  getUnassignedTargetRoleOptions,
   normalizeRole,
 } = require("../public/roles.js");
 
@@ -32,4 +33,15 @@ test("getRoleLabel falls back to the default target role label", () => {
   assert.equal(DEFAULT_TARGET_ROLE, "support");
   assert.equal(getRoleLabel("bottom"), "Bot");
   assert.equal(getRoleLabel("nonsense"), "Support");
+});
+
+test("getUnassignedTargetRoleOptions excludes ally-assigned roles", () => {
+  assert.deepEqual(
+    getUnassignedTargetRoleOptions([
+      { champion: "Ashe", role: "support" },
+      { champion: "Jarvan IV", lane: "jg" },
+      { champion: "Smolder", role: "" },
+    ]).map((option) => option.value),
+    ["top", "middle", "bottom"],
+  );
 });

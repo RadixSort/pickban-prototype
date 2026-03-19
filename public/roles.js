@@ -52,6 +52,21 @@
     return ROLE_OPTIONS.map((option) => ({ ...option }));
   }
 
+  function getUnassignedTargetRoleOptions(allies = []) {
+    const assignedRoles = new Set();
+
+    for (const ally of allies) {
+      const normalizedRole = normalizeRole(ally?.role ?? ally?.lane ?? null);
+      if (normalizedRole) {
+        assignedRoles.add(normalizedRole);
+      }
+    }
+
+    return ROLE_OPTIONS.filter((option) => !assignedRoles.has(option.value)).map((option) => ({
+      ...option,
+    }));
+  }
+
   function getAssignableAllyRoleOptions(targetRole = DEFAULT_TARGET_ROLE) {
     const normalizedTargetRole = normalizeRole(targetRole) || DEFAULT_TARGET_ROLE;
     return ROLE_OPTIONS.filter((option) => option.value !== normalizedTargetRole).map((option) => ({
@@ -65,6 +80,7 @@
     getAssignableAllyRoleOptions,
     getRoleLabel,
     getTargetRoleOptions,
+    getUnassignedTargetRoleOptions,
     normalizeRole,
   };
 });
