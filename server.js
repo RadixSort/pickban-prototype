@@ -1,3 +1,4 @@
+const { AsyncLocalStorage } = require("async_hooks");
 const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
@@ -51,6 +52,7 @@ const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 const requestCache = new Map();
 const resolvedQwikPayloadCache = new WeakMap();
 const lolalyticsBuildDataCache = new WeakMap();
+const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
 const shutdownToken = crypto.randomBytes(24).toString("hex");
 const openSockets = new Set();
 let server;
@@ -85,111 +87,119 @@ app.get("/app-config", (_request, response) => {
   });
 });
 
-app.post("/suggest", async (request, response) => {
-  try {
-    const rankFilter = normalizeRequestedRankFilter(
-      request.body?.rankFilter ?? request.body?.tier ?? null,
-      {
-        defaultRankFilter: DEFAULT_RANK_FILTER,
-        normalizeRankFilter,
+app.post("/suggest", async (request, response) =>
+  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
+    try {
+      const rankFilter = normalizeRequestedRankFilter(
+        request.body?.rankFilter ?? request.body?.tier ?? null,
+        {
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          createError: createHttpError,
+        },
+      );
+      const allies = normalizeAllySelections(request.body?.allies, {
+        championByName,
+        maxCount: 4,
+        label: "allies",
+        normalizeRole,
         createError: createHttpError,
-      },
-    );
-    const allies = normalizeAllySelections(request.body?.allies, {
-      championByName,
-      maxCount: 4,
-      label: "allies",
-      normalizeRole,
-      createError: createHttpError,
-    });
-    const enemies = normalizeChampionSelections(request.body?.enemies, {
-      championByName,
-      maxCount: 5,
-      label: "enemies",
-      createError: createHttpError,
-    });
-    validateAllyRoleAssignments(allies, createHttpError);
-    const targetRoles = resolveRequestedTargetRoles({
-      allies,
-      role: request.body?.role ?? null,
-      targetRole: request.body?.targetRole ?? null,
-      roles: request.body?.roles ?? null,
-    });
-    const selectedChampionKeys = buildSelectedChampionKeys(allies, enemies);
-
-    if (allies.length === 0 && enemies.length === 0) {
-      return response.status(400).json({
-        error: "Choose at least one allied or enemy champion before fetching suggestions.",
       });
-    }
+      const enemies = normalizeChampionSelections(request.body?.enemies, {
+        championByName,
+        maxCount: 5,
+        label: "enemies",
+        createError: createHttpError,
+      });
+      validateAllyRoleAssignments(allies, createHttpError);
+      const targetRoles = resolveRequestedTargetRoles({
+        allies,
+        role: request.body?.role ?? null,
+        targetRole: request.body?.targetRole ?? null,
+        roles: request.body?.roles ?? null,
+      });
+      const selectedChampionKeys = buildSelectedChampionKeys(allies, enemies);
 
-    const roleSuggestions = await Promise.allSettled(
-      targetRoles.map((targetRole) =>
-        buildSuggestionsForRole({
-          allies,
-          enemies,
-          rankFilter,
-          selectedChampionKeys,
-          targetRole,
-        }),
-      ),
-    );
-
-    const resultsByRole = {};
-    const metaByRole = {};
-    let successfulRoleCount = 0;
-    let firstFailure = null;
-
-    roleSuggestions.forEach((result, index) => {
-      const targetRole = targetRoles[index];
-
-      if (result.status === "fulfilled") {
-        resultsByRole[targetRole] = result.value.results;
-        metaByRole[targetRole] = result.value.meta;
-        successfulRoleCount += 1;
-        return;
+      if (allies.length === 0 && enemies.length === 0) {
+        return response.status(400).json({
+          error: "Choose at least one allied or enemy champion before fetching suggestions.",
+          requestStats: buildLolalyticsRequestStats(),
+        });
       }
 
-      if (!firstFailure) {
-        firstFailure = result.reason;
+      const roleSuggestions = await Promise.allSettled(
+        targetRoles.map((targetRole) =>
+          buildSuggestionsForRole({
+            allies,
+            enemies,
+            rankFilter,
+            selectedChampionKeys,
+            targetRole,
+          }),
+        ),
+      );
+
+      const resultsByRole = {};
+      const metaByRole = {};
+      let successfulRoleCount = 0;
+      let firstFailure = null;
+
+      roleSuggestions.forEach((result, index) => {
+        const targetRole = targetRoles[index];
+
+        if (result.status === "fulfilled") {
+          resultsByRole[targetRole] = result.value.results;
+          metaByRole[targetRole] = result.value.meta;
+          successfulRoleCount += 1;
+          return;
+        }
+
+        if (!firstFailure) {
+          firstFailure = result.reason;
+        }
+
+        resultsByRole[targetRole] = [];
+        metaByRole[targetRole] = {
+          ...buildSuggestionMeta(rankFilter, targetRole, allies, enemies),
+          ...(result.reason?.meta || {}),
+          error: result.reason?.message || "Unexpected server error.",
+        };
+      });
+
+      const requestStats = buildLolalyticsRequestStats();
+
+      if (successfulRoleCount === 0) {
+        return response.status(firstFailure?.statusCode || 502).json({
+          error: firstFailure?.message || "No role suggestions were available for the selected champions.",
+          roles: targetRoles,
+          resultsByRole,
+          metaByRole,
+          requestStats,
+        });
       }
 
-      resultsByRole[targetRole] = [];
-      metaByRole[targetRole] = {
-        ...buildSuggestionMeta(rankFilter, targetRole, allies, enemies),
-        ...(result.reason?.meta || {}),
-        error: result.reason?.message || "Unexpected server error.",
-      };
-    });
-
-    if (successfulRoleCount === 0) {
-      return response.status(firstFailure?.statusCode || 502).json({
-        error: firstFailure?.message || "No role suggestions were available for the selected champions.",
+      const payload = {
         roles: targetRoles,
         resultsByRole,
         metaByRole,
+        requestStats,
+      };
+
+      if (targetRoles.length === 1) {
+        payload.results = resultsByRole[targetRoles[0]];
+        payload.meta = metaByRole[targetRoles[0]];
+      }
+
+      response.json(payload);
+    } catch (error) {
+      const statusCode = error.statusCode || 500;
+      response.status(statusCode).json({
+        error: error.message || "Unexpected server error.",
+        requestStats: buildLolalyticsRequestStats(),
       });
     }
-
-    const payload = {
-      roles: targetRoles,
-      resultsByRole,
-      metaByRole,
-    };
-
-    if (targetRoles.length === 1) {
-      payload.results = resultsByRole[targetRoles[0]];
-      payload.meta = metaByRole[targetRoles[0]];
-    }
-
-    response.json(payload);
-  } catch (error) {
-    const statusCode = error.statusCode || 500;
-    response.status(statusCode).json({
-      error: error.message || "Unexpected server error.",
-    });
-  }
-});
+  }),
+);
 
 app.post("/shutdown", (request, response) => {
   if (!isAuthorizedShutdownRequest(request)) {
@@ -448,6 +458,7 @@ async function fetchLolalyticsResource(url, label, responseType) {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
+      recordLolalyticsLiveAccess();
       const res = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -495,6 +506,28 @@ async function fetchLolalyticsResource(url, label, responseType) {
   });
 
   return requestPromise;
+}
+
+function createLolalyticsRequestStats() {
+  return {
+    lolalyticsLiveAccessCount: 0,
+  };
+}
+
+function recordLolalyticsLiveAccess() {
+  const requestStats = lolalyticsRequestStatsStorage.getStore();
+  if (!requestStats) {
+    return;
+  }
+
+  requestStats.lolalyticsLiveAccessCount += 1;
+}
+
+function buildLolalyticsRequestStats() {
+  const requestStats = lolalyticsRequestStatsStorage.getStore();
+  return {
+    lolalyticsLiveAccessCount: Number(requestStats?.lolalyticsLiveAccessCount || 0),
+  };
 }
 
 function resolveQwikPayload(payload) {

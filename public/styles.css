@@ -577,6 +577,15 @@ select {
   margin-bottom: 14px;
 }
 
+.results-request-stat {
+  margin: -4px 0 14px;
+  color: rgba(150, 160, 180, 0.82);
+  font-size: 0.74rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1.45;
+}
+
 .partial-failures-title {
   margin: 0;
   font-size: 0.95rem;

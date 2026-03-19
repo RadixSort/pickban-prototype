@@ -82,6 +82,7 @@ const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const resultsTitle = document.getElementById("results-title");
 const resultsRoleSelect = document.getElementById("results-role");
+const resultsRequestStat = document.getElementById("results-request-stat");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
 const versionText = document.getElementById("app-version");
@@ -547,11 +548,13 @@ async function handleFetchSuggestions() {
     const failedRoleLabels = availableRoleValues
       .filter((role) => currentBundle.metaByRole[role]?.error)
       .map((role) => getRoleLabel(role));
+    const lolalyticsAccessCount = getLolalyticsLiveAccessCount(currentBundle);
+    const lolalyticsAccessStatus = formatLolalyticsAccessStatus(lolalyticsAccessCount);
 
     setStatus(
       successfulRoleCount === availableRoleValues.length
-        ? `Fetched ${successfulRoleCount} ${successfulRoleCount === 1 ? "role result set" : "role result sets"} for the current draft.`
-        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} role result sets. Unavailable: ${failedRoleLabels.join(", ")}.`,
+        ? `Fetched ${successfulRoleCount} ${successfulRoleCount === 1 ? "role result set" : "role result sets"} for the current draft. ${lolalyticsAccessStatus}`
+        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} role result sets. Unavailable: ${failedRoleLabels.join(", ")}. ${lolalyticsAccessStatus}`,
     );
   } catch (error) {
     setError(
@@ -675,6 +678,8 @@ function renderResults() {
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
+  resultsRequestStat.textContent = "";
+  resultsRequestStat.classList.add("hidden");
   sortSelect.value = state.sortMode;
   sortSelect.disabled =
     state.loading ||
@@ -689,6 +694,9 @@ function renderResults() {
     resultsMeta.textContent = "";
     return;
   }
+
+  resultsRequestStat.textContent = formatLolalyticsAccessStat(getLolalyticsLiveAccessCount(currentBundle));
+  resultsRequestStat.classList.remove("hidden");
 
   if (currentMeta?.error) {
     emptyState.textContent = currentMeta.error;
@@ -807,6 +815,9 @@ function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT
     roles: [...requestedRoles],
     resultsByRole,
     metaByRole,
+    requestStats: {
+      lolalyticsLiveAccessCount: Number(payload?.requestStats?.lolalyticsLiveAccessCount || 0),
+    },
     selectedRole: requestedRoles.includes(selectedRole) ? selectedRole : requestedRoles[0] || DEFAULT_TARGET_ROLE,
   };
 }
@@ -835,6 +846,26 @@ function formatRoleLabels(roles = []) {
   }
 
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function getLolalyticsLiveAccessCount(resultsBundle = null) {
+  return Number(resultsBundle?.requestStats?.lolalyticsLiveAccessCount || 0);
+}
+
+function formatLolalyticsAccessStatus(accessCount) {
+  if (accessCount === 0) {
+    return "No new live Lolalytics hits were needed.";
+  }
+
+  return `Lolalytics was contacted ${accessCount} ${accessCount === 1 ? "time" : "times"}.`;
+}
+
+function formatLolalyticsAccessStat(accessCount) {
+  if (accessCount === 0) {
+    return "Nerd stat: Lolalytics live hits for this draft: 0. Served from local cache, so no fresh outbound requests.";
+  }
+
+  return `Nerd stat: Lolalytics live hits for this draft: ${accessCount}. This only counts real outbound requests, not cached reuse.`;
 }
 
 function formatScore(value) {
