@@ -7,20 +7,24 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <button
-      id="close-button"
-      class="close-button"
-      type="button"
-      hidden
-      aria-label="Stop app"
-      title="Stop app"
-    >
-      <span aria-hidden="true">&times;</span>
-    </button>
-
     <main class="app-shell">
       <header class="hero">
-        <h1>Pick the dream draft. Fill the meta role.</h1>
+        <div class="hero-topbar">
+          <h1>Pick the dream draft. Fill the meta role.</h1>
+          <div class="hero-toolbar">
+            <select id="rank-filter" class="hero-rank-filter" aria-label="Rank filter"></select>
+            <button
+              id="close-button"
+              class="close-button"
+              type="button"
+              hidden
+              aria-label="Stop app"
+              title="Stop app"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+        </div>
         <p class="hero-credit">
           Powered by live data from
           <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>.
@@ -28,12 +32,8 @@
         </p>
       </header>
 
-      <section class="target-role-panel" aria-label="Rank filter and target role selection">
+      <section class="target-role-panel" aria-label="Target role selection">
         <div class="target-role-controls">
-          <label class="target-role-control" for="rank-filter">
-            <span class="picker-kicker">Rank Filter</span>
-            <select id="rank-filter"></select>
-          </label>
           <label class="target-role-control" for="target-role">
             <span class="picker-kicker">Target Role</span>
             <select id="target-role">
@@ -155,7 +155,7 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v1.2</span>
+      <span id="app-version">v1.3</span>
     </div>
 
     <script src="/roles.js" defer></script>

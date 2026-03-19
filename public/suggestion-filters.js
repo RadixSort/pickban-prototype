@@ -75,7 +75,33 @@
       return eligibleResults;
     }
 
-    return sortResults(results, PROJECTED_WIN_RATE_SORT_MODE).slice(0, minimumVisibleSuggestions);
+    const eligibleResultKeys = new Set(
+      eligibleResults
+        .map((result) => result?.candidateKey ?? result?.supportKey)
+        .filter((resultKey) => resultKey != null)
+        .map((resultKey) => String(resultKey)),
+    );
+    const eligibleResultSet = new Set(eligibleResults);
+    const additionalResults = [];
+
+    for (const result of sortResults(results, PROJECTED_WIN_RATE_SORT_MODE)) {
+      const resultKey = result?.candidateKey ?? result?.supportKey;
+      const normalizedResultKey = resultKey == null ? null : String(resultKey);
+
+      if (
+        eligibleResultSet.has(result) ||
+        (normalizedResultKey != null && eligibleResultKeys.has(normalizedResultKey))
+      ) {
+        continue;
+      }
+
+      additionalResults.push(result);
+      if (eligibleResults.length + additionalResults.length >= minimumVisibleSuggestions) {
+        break;
+      }
+    }
+
+    return [...eligibleResults, ...additionalResults];
   }
 
   function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {

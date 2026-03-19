@@ -31,7 +31,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "1.2.0",
+  version: "1.3.0",
   lastResults: [],
   lastMeta: null,
   sortMode: DEFAULT_SORT_MODE,
@@ -644,12 +644,16 @@ function renderResults() {
       isTopProjectedAgency,
       topOptionTone === "overlap" ? "overlap" : "agency",
     );
+    const overlapBadgeMarkup = getOverlapBadgeMarkup(topOptionTone);
     row.innerHTML = `
       <td class="rank-cell">${index + 1}</td>
       <td>
         <div class="support-cell">
           <img src="${result.icon}" alt="${resultName}" width="36" height="36" />
-          <span>${resultName}</span>
+          <span class="support-name">
+            <span>${resultName}</span>
+            ${overlapBadgeMarkup}
+          </span>
         </div>
       </td>
       <td>${formatRate(result.winRate)}</td>
@@ -689,6 +693,15 @@ function getMetricClassName(baseClasses = [], isHighlighted = false, tone = "") 
   }
 
   return classNames.join(" ");
+}
+
+function getOverlapBadgeMarkup(topOptionTone) {
+  if (topOptionTone !== "overlap") {
+    return "";
+  }
+
+  const tooltip = "Top 3 in both Projected Agency and Projected Win Rate.";
+  return `<span class="top-option-badge" title="${tooltip}" aria-label="${tooltip}">★</span>`;
 }
 
 function formatRate(value) {

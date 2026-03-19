@@ -102,7 +102,7 @@ test("filterLowProjectedWinRateResults removes sub-50 projected win rates when a
   );
 });
 
-test("getVisibleSuggestionResults falls back to the top ten projected win rates when fewer than ten clear 50%", () => {
+test("getVisibleSuggestionResults shows every 50%+ result and pads to ten when needed", () => {
   const visibleResults = getVisibleSuggestionResults([
     createResult(1, 49.2, 0.1),
     createResult(2, 60.8, 0.2),
@@ -120,6 +120,6 @@ test("getVisibleSuggestionResults falls back to the top ten projected win rates 
 
   assert.deepEqual(
     visibleResults.map((result) => result.candidateKey),
-    [2, 5, 6, 8, 3, 7, 9, 11, 12, 4],
+    [2, 3, 5, 6, 7, 8, 9, 11, 12, 4],
   );
 });
