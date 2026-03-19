@@ -6,6 +6,8 @@ const {
   DEFAULT_TOP_RESULT_LIMIT,
   getProjectedAgency,
   getProjectedWinRate,
+  getResultKey,
+  getResultName,
   getTopResultKeys,
   sortResults,
 } = require("../public/result-ranking.js");
@@ -71,4 +73,54 @@ test("getTopResultKeys returns the top three ranked candidate keys by default", 
 
   assert.equal(DEFAULT_TOP_RESULT_LIMIT, 3);
   assert.deepEqual(Array.from(topResultKeys), ["16", "497", "44"]);
+});
+
+test("sortResults uses counter score and then alphabetical order to break complete ties", () => {
+  const ranked = sortResults(
+    [
+      { candidate: "Zyra", candidateKey: 143, projectedAgency: 1.1, projectedWinRate: 53, counterScore: 0.4 },
+      { candidate: "Braum", candidateKey: 201, projectedAgency: 1.1, projectedWinRate: 53, counterScore: 0.8 },
+      { candidate: "Alistar", candidateKey: 12, projectedAgency: 1.1, projectedWinRate: 53, counterScore: 0.8 },
+    ],
+    "projectedAgency",
+  );
+
+  assert.deepEqual(
+    ranked.map((result) => result.candidate),
+    ["Alistar", "Braum", "Zyra"],
+  );
+});
+
+test("result helpers support legacy rows and unknown sort modes", () => {
+  assert.equal(getResultKey({ supportKey: 40 }), "40");
+  assert.equal(getResultKey({}), null);
+  assert.equal(getResultName({ support: "Janna" }), "Janna");
+  assert.equal(getResultName({}), "");
+
+  const topResultKeys = getTopResultKeys(
+    [
+      { support: "No key row", projectedAgency: 9.9, projectedWinRate: 40 },
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 2.2, projectedWinRate: 52 },
+      { candidate: "Nami", candidateKey: 267, projectedAgency: 3.1, projectedWinRate: 51 },
+    ],
+    "unknown-sort-mode",
+    5,
+  );
+
+  assert.deepEqual(Array.from(topResultKeys), ["267", "117"]);
+});
+
+test("getTopResultKeys keeps the best-scoring row for duplicate candidate keys", () => {
+  const topResultKeys = getTopResultKeys(
+    [
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 0.2, projectedWinRate: 49.5 },
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 1.6, projectedWinRate: 53.7 },
+      { candidate: "Nami", candidateKey: 267, projectedAgency: 1.4, projectedWinRate: 54.1 },
+      { candidate: "Soraka", candidateKey: 16, projectedAgency: 1.2, projectedWinRate: 55.5 },
+    ],
+    "projectedAgency",
+    2,
+  );
+
+  assert.deepEqual(Array.from(topResultKeys), ["117", "267"]);
 });

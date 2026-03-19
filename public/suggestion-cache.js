@@ -11,6 +11,10 @@
       ? roles.normalizeRole
       : (value) => (typeof value === "string" ? value.trim().toLowerCase() : null);
 
+  /**
+   * Cache frontend results by the full draft state that affects the payload:
+   * rank filter, ally picks, ally role assignments, and enemy picks.
+   */
   function buildSuggestionCacheKey(rankFilter = "", allies = [], enemies = []) {
     const normalizedRankFilter =
       typeof rankFilter === "string" && rankFilter.trim() ? rankFilter.trim().toLowerCase() : "";

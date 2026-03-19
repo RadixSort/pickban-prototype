@@ -202,3 +202,34 @@ test("buildEligibleTierStats filters rows with minimum lane and pick thresholds"
     },
   ]);
 });
+
+test("buildEligibleTierStats falls back to normalized champion names when slugs drift", () => {
+  const eligibleTierStats = buildEligibleTierStats(
+    [
+      {
+        slug: "legacy-belveth-slug",
+        name: "Bel'Veth",
+        lanePercent: 72.4,
+        winRate: 51.6,
+        pickRate: 2.8,
+      },
+    ],
+    new Map(),
+    new Map([["belveth", { key: "200", name: "Bel'Veth" }]]),
+    {
+      minLanePercent: 10,
+      minPickRate: 0.5,
+    },
+  );
+
+  assert.deepEqual(Array.from(eligibleTierStats.values()), [
+    {
+      candidateKey: "200",
+      candidateSlug: "legacy-belveth-slug",
+      candidate: "Bel'Veth",
+      lanePercent: 72.4,
+      winRate: 51.6,
+      pickRate: 2.8,
+    },
+  ]);
+});

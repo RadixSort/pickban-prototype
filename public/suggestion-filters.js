@@ -66,6 +66,10 @@
     return [...results];
   }
 
+  /**
+   * Keep all draft-eligible rows visible. The UI highlights low projected
+   * win-rate results instead of silently removing them.
+   */
   function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {
     return filterUnavailableResults(results, selectedChampionKeys);
   }

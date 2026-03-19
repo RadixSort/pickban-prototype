@@ -1,163 +1,136 @@
 # PickBan Prototype
 
-PickBan Prototype is a small local web app that helps rank League of Legends picks for the last open role during champion draft. You choose up to 4 allied champions and up to 5 enemy champions, select the role you want to fill, can optionally assign roles to the allied picks, and then fetch live Lolalytics data to build a ranked shortlist for that role.
-
-It is powered by live Lolalytics data, and this project is built independently with appreciation for their matchup and tier-list work.
-
-This project is meant to be run on your own computer. It is not packaged as a hosted product yet.
+PickBan Prototype is a local Node/Express web app that ranks League of Legends draft picks with live Lolalytics data. It is meant to run on one machine, without a build step, database, or hosted deployment.
 
 ## Start Here
 
-- If you are new to computers, terminals, or local apps, read [docs/NON_TECHNICAL_GUIDE.md](docs/NON_TECHNICAL_GUIDE.md).
-- If you want the implementation details, read [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md).
+- New to terminals or local apps: [docs/NON_TECHNICAL_GUIDE.md](docs/NON_TECHNICAL_GUIDE.md)
+- Want architecture and API details: [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)
 
-## What You Need
+## Requirements
 
 - Node.js 18 or newer
-- An internet connection while fetching suggestions
-- A modern web browser such as Chrome, Edge, Firefox, or Safari
+- Internet access while fetching suggestions
+- A modern browser
 
-Node.js 18+ is required because the server uses the built-in `fetch` API.
+Node 18+ is required because the server uses built-in `fetch` and the test suite uses `node:test`.
 
 ## Quick Start
 
-1. Open a terminal in this project folder.
-2. Install dependencies:
-
 ```bash
 npm install
-```
-
-3. Start the app:
-
-```bash
 npm start
 ```
 
-4. Open your browser and go to:
+Open `http://localhost:3000`.
 
-```text
-http://localhost:3000
+Run the test suite with:
+
+```bash
+npm test
 ```
 
-5. Leave the terminal window open while you use the app.
+## Daily Workflow
 
-To stop the app later, click the red `X` in the top-right corner of the browser.
+1. Start the server with `npm start`.
+2. Add up to 4 allied champions and up to 5 enemy champions.
+3. Optionally assign known ally roles.
+4. Click `Fetch Suggestions`.
+5. The app fetches every role that is still unassigned.
+6. Use the `Target role` selector in the results panel to switch between returned role bundles.
+7. Use `Rank by` to switch between `Projected Agency` and `Projected Win Rate`.
 
-If you prefer, you can still return to the terminal and press `Ctrl+C`.
+Rules enforced by the current code:
 
-## How To Use The App
-
-1. In the **Allied Champions** box, type the name of an ally champion and click a suggestion.
-2. Repeat until you have added the allied champions you want to consider.
-3. Choose the rank filter and target role you want the app to fill.
-4. If you want, use the **Assign remaining roles** section to label some or all allied champions.
-5. In the **Enemy Champions** box, add the enemy champions you are drafting against.
-6. Click **Fetch Suggestions**.
-7. Review the ranked results table.
-8. Click any selected champion chip if you want to remove it and try a different draft.
-
-Rules built into the app:
-
-- You can add up to 4 allied champions.
-- You can add up to 5 enemy champions.
-- Ally role assignment is optional.
-- The same champion cannot be selected on both sides.
+- The same champion cannot appear on both sides.
 - You must choose at least one champion before fetching suggestions.
-- Suggested champions must appear on the live tier list for the selected role with at least `10%` lane share and `0.5%` pick rate.
+- Ally role assignments are optional, but duplicate ally roles are rejected.
+- Returned champions must pass the live tier-list thresholds for the requested role: `lanePercent >= 10` and `pickRate >= 0.5`.
+- Results with `Projected Win Rate <= 50%` stay visible and are highlighted instead of being filtered out.
 
-## What The Scores Mean
+## Commands
 
-- `Synergy Score`: the average role-specific synergy value gathered from the allied champions you selected.
-- `Counter Score`: the average role-specific counter value gathered from the enemy champions you selected.
-- `Projected Agency`: `50% Synergy Score + 50% Counter Score`.
-- `Projected Win Rate`: the average matchup win rate gathered from every selected ally/enemy input, with enemy matchups flipped back to the suggested pick's perspective.
-- `Win Rate`: the champion's live win rate for the selected role from the matching Lolalytics tier list.
+- `npm start`: runs `node server.js`
+- `npm test`: runs `node --test`
+- `npm run bench:efficiency`: runs the synthetic performance benchmark in `bench/efficiency.js`
 
-You can rank the table by either `Projected Agency` or `Projected Win Rate`.
+There is no build, lint, or bundling step in this repository.
 
-Higher scores rank closer to the top.
+## Repo Map
 
-Important behavior:
+- `server.js`: Express entry point, API routes, Lolalytics fetch/parsing, scoring, and shutdown handling
+- `public/index.html`: static shell loaded by the browser
+- `public/app.js`: client-side state, draft UI, request submission, and results rendering
+- `public/*.js`: shared helper modules loaded in the browser and reused by Node via `require(...)`
+- `public/champions.json`: local champion metadata for search and icons
+- `lib/request-normalization.js`: request validation and champion/ally normalization
+- `lib/requested-target-roles.js`: target-role resolution for explicit or inferred role requests
+- `lib/role-suggestion-results.js`: role-level aggregation, filtering, sorting, and response metadata
+- `lib/candidate-score-accumulator.js`: running-total score accumulation used by role aggregation
+- `lib/lolalytics-tier-list.js`: tier-list HTML parsing and eligibility mapping
+- `lib/matchup-orientation.js`: enemy win-rate orientation helper
+- `test/*.test.js`: Node test suite for the shared helpers and parsers
+- `bench/efficiency.js`: synthetic benchmark for the role aggregation and top-N ranking helpers
+- `docs/`: user-facing and technical documentation
 
-- If you only enter allied champions, the counter portion is treated as `0`.
-- If you only enter enemy champions, the synergy portion is treated as `0`.
-- If you assign ally roles, the app tries role-specific synergy first and falls back to all-role data if needed.
-- The app shows every suggested result that is still draft-eligible. Results with `Projected Win Rate` at `50%` or lower are highlighted in red instead of being hidden.
-- If some live requests fail, the app can still show partial results and will list those failures above the results table.
+## Architecture At A Glance
+
+1. `server.js` serves the static frontend from `public/`.
+2. The browser loads `champions.json`, app config, and the shared frontend helpers.
+3. The current UI sends `rankFilter`, `allies`, and `enemies` to `POST /suggest`.
+4. The backend resolves which target roles to fetch:
+   - explicit `roles`, `role`, or `targetRole` fields if provided
+   - otherwise every role not already assigned to an allied champion
+5. For each target role, the backend fetches live Lolalytics synergy, counter, and tier-list data, then merges the results into one ranked list.
+6. The response is returned as `resultsByRole` and `metaByRole`. Single-role responses also include legacy `results` and `meta` fields for compatibility.
+
+Two implementation details matter when you change behavior:
+
+- The backend reuses several helpers from `public/` instead of duplicating logic in `lib/`.
+- Remote Lolalytics responses are cached in memory for 5 minutes per URL; frontend results are cached in memory per draft key for the current browser session.
+
+## Setup Notes
+
+- Default port: `3000`
+- Override the port on macOS/Linux: `PORT=3001 npm start`
+- Override the port on PowerShell: `$env:PORT=3001; npm start`
+- Frontend assets are served with `Cache-Control: no-store`, so a normal browser refresh picks up static file changes
+- Server-side code changes still require restarting `npm start`
 
 ## Troubleshooting
 
-### I pulled new commits but the page still looks old
+### `npm start` fails immediately
 
-1. Stop the current server with the top-right `X` or `Ctrl+C`.
-2. Start it again with `npm start`.
-3. Refresh the browser tab.
+Run `node -v`. If Node is missing or older than 18, install a newer version.
 
-The app now serves its local files with `no-store`, so a normal refresh should pick up the newest frontend code. The version badge in the bottom-right corner should show the current app version, starting at `v1.3`.
+### `http://localhost:3000` does not load
 
-### The app does not start
+- Confirm `npm start` is still running
+- Confirm you opened the same port the server logged
+- If port `3000` is busy, start the app on another port
 
-Check that Node.js is installed:
+### The UI does not show the role I expected
 
-```bash
-node -v
-```
+- The fetch request only returns roles that are still unassigned after ally role selection
+- If you assign `support` to an ally, support suggestions are intentionally removed from the available result roles
 
-If the version is below 18, install a newer version of Node.js.
+### I changed code but still see old behavior
 
-### The browser says the page cannot be reached
+- Refresh the page for frontend-only changes
+- Restart `npm start` after changing `server.js` or any server-imported helper
 
-- Make sure `npm start` is still running in the terminal.
-- Make sure you opened `http://localhost:3000`.
+### Suggestions fail or only some roles load
 
-### The app does not stop when I press `Ctrl+C`
+- The app depends on live Lolalytics responses
+- A timeout or parse failure in one source can still return partial results for other roles
+- Look at the `Partial scrape failures` block in the UI for the failing role-specific request
 
-- Use the top-right `X` in the browser instead.
-- If the browser page is already gone, return to the terminal and press `Ctrl+C` again.
+### The browser close button is unavailable
 
-### Port 3000 is already in use
-
-Start the app on a different port:
-
-On macOS or Linux:
-
-```bash
-PORT=3001 npm start
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:PORT=3001; npm start
-```
-
-Then open `http://localhost:3001`.
-
-### Fetching suggestions fails
-
-- Confirm you are connected to the internet.
-- Lolalytics may be temporarily slow or unavailable.
-- Wait a moment and try again.
-
-### I only see some results and an error message
-
-That usually means one or more live data requests failed, but other requests still succeeded. The app shows partial results whenever it can.
-
-## Project Layout
-
-- `server.js`: Express server, API endpoint, live Lolalytics requests, scoring, and caching
-- `public/index.html`: page structure
-- `public/app.js`: browser-side interactions and rendering
-- `public/roles.js`: shared role labels, aliases, and dropdown options
-- `public/styles.css`: styling
-- `public/champions.json`: local champion metadata used for search and icons
-- `docs/NON_TECHNICAL_GUIDE.md`: step-by-step guide for non-technical users
-- `docs/TECHNICAL_OVERVIEW.md`: architecture and API details
+Use `Ctrl+C` in the terminal. The top-right close button depends on a successful `/app-config` load and a local shutdown token.
 
 ## Current Limitations
 
-- The app depends on live Lolalytics responses and may break if their response format changes.
-- There is no user login, save system, or match history.
-- Results are based on the current hard-coded patch window and settings in `server.js`.
-- This is a prototype, so scoring and UX are intentionally simple.
+- The app depends on live Lolalytics response formats and may break if their markup or `q-data.json` payload changes
+- Runtime settings such as patch window, queue, region, and request thresholds are hard-coded in `server.js`
+- There is no persistence, authentication, or hosted deployment flow

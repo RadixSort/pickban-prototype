@@ -1,29 +1,28 @@
 # Non-Technical Guide
 
-This guide is for someone who wants to use the app but does not have a software background.
+This guide is for someone who wants to run the app locally without needing to understand the code.
 
 The app uses live Lolalytics data and is built independently with appreciation for their matchup and tier-list work.
 
-You do not need to know programming to use this project. You only need to install one tool, open a terminal window, and copy a few commands.
+## What The App Does
 
-## What This App Does
+The app helps you compare champion options for any role that is still open in your draft.
 
-The app helps you choose champions for the last open role during draft in League of Legends.
+You choose:
 
-You tell it:
+- allied champions
+- enemy champions
+- any ally roles you already know
 
-- which champions are on your team
-- which champions are on the enemy team
-
-It then fetches live data and shows a ranked list of options for the role you selected.
+Then the app fetches suggestions for every role that is still unassigned and lets you switch between those role results.
 
 ## Before You Start
 
 You need:
 
-- a computer with internet access
-- a web browser
 - this project folder on your computer
+- internet access
+- a web browser
 - Node.js installed
 
 ## Step 1: Install Node.js
@@ -31,7 +30,6 @@ You need:
 1. Go to [https://nodejs.org](https://nodejs.org).
 2. Download the **LTS** version.
 3. Run the installer.
-4. Keep the default options unless you have a reason to change them.
 
 You only need to do this once per computer.
 
@@ -39,8 +37,8 @@ You only need to do this once per computer.
 
 ### On macOS
 
-1. Open the **Terminal** app.
-2. Type `cd ` with a space after it.
+1. Open **Terminal**.
+2. Type `cd `.
 3. Drag the project folder into the Terminal window.
 4. Press `Enter`.
 
@@ -53,124 +51,105 @@ cd /Users/your-name/Downloads/pickban-prototype
 ### On Windows
 
 1. Open the project folder in **File Explorer**.
-2. Click the folder path bar at the top.
+2. Click the address bar.
 3. Type `powershell`.
 4. Press `Enter`.
 
-That opens a terminal already pointed at the correct folder.
+## Step 3: Install The App Once
 
-## Step 3: Install The App Dependencies
-
-In the terminal, run:
+Run:
 
 ```bash
 npm install
 ```
 
-What this does:
-
-- it downloads the parts the app needs before it can run
-
-You usually only need to do this the first time, or again later if the project dependencies change.
+You usually only need this the first time, or again after the project dependencies change.
 
 ## Step 4: Start The App
 
-In the same terminal, run:
+Run:
 
 ```bash
 npm start
 ```
 
-If everything is working, the app will start a local website on your computer.
-
-## Step 5: Open The App In Your Browser
-
-Open this address in your browser:
+Then open:
 
 ```text
 http://localhost:3000
 ```
 
-`localhost` means the app is running on your own computer, not on a public website.
+Leave that terminal window open while you use the app.
 
 ## How To Use The App
 
-1. Click the **Allied Champions** search box.
-2. Type a champion name.
-3. Click the correct champion from the suggestion list.
-4. Repeat for the other allied champions you want to include.
-5. Choose the rank filter and target role you want to fill.
-6. If you want, use the **Assign remaining roles** section to label the allied champions you already know.
-7. Add enemy champions in the **Enemy Champions** area.
-8. Click **Fetch Suggestions**.
-9. Read the ranked list in the results section.
+1. Add allied champions on the left.
+2. Add enemy champions on the right.
+3. If you know some ally roles already, assign them in the middle panel.
+4. Click **Fetch Suggestions**.
+5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
+6. Use **Rank by** if you want to sort by a different score.
 
-## What The Results Mean
+## What The Scores Mean
 
-- `Synergy Score`: how well a candidate works with your selected allies for the chosen role
-- `Counter Score`: how well a candidate performs into your selected enemies for the chosen role
-- `Projected Win Rate`: the average matchup win rate taken from all selected ally/enemy inputs, with enemy matchups flipped to your suggested pick's side of the matchup
-- `Projected Agency`: the combined rank used to sort the list
+- `Synergy Score`: how well a candidate fits your allied champions
+- `Counter Score`: how well a candidate performs into your enemy champions
+- `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
+- `Projected Agency`: the main blended score used for the default ranking
 
-You can sort the table by either `Projected Agency` or `Projected Win Rate`.
-
-In simple terms, the highest rows are the picks the app currently likes most for that draft and role.
-
-## What The Limits Are
+## Limits
 
 - Up to 4 allied champions
 - Up to 5 enemy champions
+- At least 1 champion must be selected before fetching
+- A champion can only appear once across both teams
 - Ally role assignment is optional
-- At least 1 champion must be selected before fetching suggestions
-- A champion can only appear once
 
 ## The Next Time You Use It
 
-After the first setup, you normally only need these steps:
-
-1. Open a terminal in the project folder.
-2. Run:
+After the first setup, you usually only need:
 
 ```bash
 npm start
 ```
 
-3. Open `http://localhost:3000`.
+Then open `http://localhost:3000`.
 
 ## How To Stop The App
 
-When you are done:
+Preferred method:
 
-1. In the browser, click the top-right red `X`.
+1. Click the red `X` in the top-right corner of the app.
 2. Close the browser tab if you want.
 
-That stops the local server.
+Fallback:
 
-If the top-right red `X` is not available for some reason:
-
-1. Go back to the terminal window.
+1. Return to the terminal.
 2. Press `Ctrl+C`.
 
 ## Common Problems
 
 ### `npm` is not recognized
 
-Node.js is usually missing or was not installed correctly. Reinstall Node.js from [https://nodejs.org](https://nodejs.org), then close and reopen the terminal.
+Node.js is probably missing or was not installed correctly. Reinstall it from [https://nodejs.org](https://nodejs.org), then reopen the terminal.
 
 ### The browser page does not open
 
-- Make sure you ran `npm start`
-- Make sure the terminal is still open
-- Make sure you typed `http://localhost:3000` correctly
+- Make sure `npm start` is still running
+- Make sure you opened `http://localhost:3000`
 
-### The app starts, but suggestions fail
+### The app loads, but suggestions fail
 
-The app needs internet access to fetch live data. Check your connection and try again.
+The app needs internet access and working Lolalytics responses. Wait a moment and try again.
 
-### A message says port 3000 is already in use
+### I expected one role, but the app shows others
 
-Another app is already using that local address. If someone technical is helping you, ask them to start this app on a different port.
+The app fetches every role that is still unassigned. If you want fewer result roles, assign more ally roles before fetching.
+
+### Port 3000 is already in use
+
+Another app is already using that port. Ask someone technical to start this app on a different port.
 
 ## If You Want More Detail
 
-For a more technical explanation of how the app works, read [TECHNICAL_OVERVIEW.md](TECHNICAL_OVERVIEW.md).
+For the developer view of how the app works, read [TECHNICAL_OVERVIEW.md](TECHNICAL_OVERVIEW.md).

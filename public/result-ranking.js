@@ -123,18 +123,36 @@
     sortMode = DEFAULT_SORT_MODE,
     limit = DEFAULT_TOP_RESULT_LIMIT,
   ) {
-    const topResultKeys = new Set();
+    const normalizedLimit = Number(limit);
+    if (!Number.isFinite(normalizedLimit) || normalizedLimit <= 0) {
+      return new Set();
+    }
 
-    for (const result of sortResults(results, sortMode)) {
+    const comparator = getSortComparator(sortMode);
+    const bestResultByKey = new Map();
+
+    for (const result of results) {
       const resultKey = getResultKey(result);
       if (resultKey == null) {
         continue;
       }
 
-      topResultKeys.add(resultKey);
-      if (topResultKeys.size >= limit) {
-        break;
+      const existingResult = bestResultByKey.get(resultKey);
+      if (!existingResult || comparator(result, existingResult) < 0) {
+        bestResultByKey.set(resultKey, result);
       }
+    }
+
+    const topResults = [];
+
+    for (const result of bestResultByKey.values()) {
+      insertTopResult(topResults, result, comparator, normalizedLimit);
+    }
+
+    const topResultKeys = new Set();
+
+    for (const result of topResults) {
+      topResultKeys.add(getResultKey(result));
     }
 
     return topResultKeys;
@@ -154,6 +172,29 @@
     }
 
     return compareByProjectedAgency;
+  }
+
+  function insertTopResult(results, candidate, comparator, limit) {
+    let insertIndex = results.length;
+
+    for (let index = 0; index < results.length; index += 1) {
+      if (comparator(candidate, results[index]) < 0) {
+        insertIndex = index;
+        break;
+      }
+    }
+
+    if (insertIndex >= limit) {
+      if (results.length < limit) {
+        results.push(candidate);
+      }
+      return;
+    }
+
+    results.splice(insertIndex, 0, candidate);
+    if (results.length > limit) {
+      results.pop();
+    }
   }
 
   function compareSupportNames(left, right) {

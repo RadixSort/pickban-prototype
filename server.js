@@ -6,14 +6,20 @@ const {
   buildEligibleTierStats,
   extractTierListRows,
 } = require("./lib/lolalytics-tier-list.js");
-const { orientEnemyMatchupWinRate } = require("./lib/matchup-orientation.js");
+const {
+  normalizeAllySelections,
+  normalizeChampionName,
+  normalizeChampionSelections,
+  normalizeRequestedRankFilter,
+  validateAllyRoleAssignments,
+} = require("./lib/request-normalization.js");
+const {
+  buildRoleSuggestionResults,
+  buildSuggestionMeta,
+} = require("./lib/role-suggestion-results.js");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
-const {
-  average,
-  compareByProjectedAgency,
-} = require(path.join(publicDir, "result-ranking.js"));
 const champions = require(path.join(publicDir, "champions.json"));
 const {
   getRoleLabel,
@@ -27,17 +33,14 @@ const {
 const {
   resolveRequestedTargetRoles,
 } = require("./lib/requested-target-roles.js");
-const {
-  buildSelectedChampionKeys,
-  filterUnavailableResults,
-} = require(path.join(publicDir, "suggestion-filters.js"));
+const { buildSelectedChampionKeys } = require(path.join(publicDir, "suggestion-filters.js"));
 
 const PORT = process.env.PORT || 3000;
 const PATCH_WINDOW = "7";
 const QUEUE = "ranked";
 const REGION = "all";
-const MIN_SUPPORT_TIER_LIST_PICK_RATE = 0.5;
-const MIN_SUPPORT_TIER_LIST_LANE_PERCENT = 10;
+const MIN_ROLE_TIER_LIST_PICK_RATE = 0.5;
+const MIN_ROLE_TIER_LIST_LANE_PERCENT = 10;
 const LOLALYTICS_BASE_URL = "https://lolalytics.com";
 const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
 const REQUEST_TIMEOUT_MS = 15000;
@@ -45,6 +48,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
+const resolvedQwikPayloadCache = new WeakMap();
+const lolalyticsBuildDataCache = new WeakMap();
 const shutdownToken = crypto.randomBytes(24).toString("hex");
 const openSockets = new Set();
 let server;
@@ -81,10 +86,28 @@ app.get("/app-config", (_request, response) => {
 
 app.post("/suggest", async (request, response) => {
   try {
-    const rankFilter = normalizeRequestedRankFilter(request.body?.rankFilter ?? request.body?.tier ?? null);
-    const allies = normalizeAllySelections(request.body?.allies, 4, "allies");
-    const enemies = normalizeSelections(request.body?.enemies, 5, "enemies");
-    validateAllyRoleAssignments(allies);
+    const rankFilter = normalizeRequestedRankFilter(
+      request.body?.rankFilter ?? request.body?.tier ?? null,
+      {
+        defaultRankFilter: DEFAULT_RANK_FILTER,
+        normalizeRankFilter,
+        createError: createHttpError,
+      },
+    );
+    const allies = normalizeAllySelections(request.body?.allies, {
+      championByName,
+      maxCount: 4,
+      label: "allies",
+      normalizeRole,
+      createError: createHttpError,
+    });
+    const enemies = normalizeChampionSelections(request.body?.enemies, {
+      championByName,
+      maxCount: 5,
+      label: "enemies",
+      createError: createHttpError,
+    });
+    validateAllyRoleAssignments(allies, createHttpError);
     const targetRoles = resolveRequestedTargetRoles({
       allies,
       role: request.body?.role ?? null,
@@ -213,154 +236,6 @@ process.on("SIGTERM", () => {
   beginShutdown("SIGTERM");
 });
 
-function normalizeSelections(value, maxCount, label) {
-  if (value == null) {
-    return [];
-  }
-
-  if (!Array.isArray(value)) {
-    throw createHttpError(400, `Request field "${label}" must be an array.`);
-  }
-
-  const seen = new Set();
-  const normalized = [];
-
-  for (const entry of value) {
-    if (typeof entry !== "string" || entry.trim() === "") {
-      throw createHttpError(400, `Request field "${label}" contains an invalid champion name.`);
-    }
-
-    const champion = championByName.get(normalizeChampionName(entry));
-    if (!champion) {
-      throw createHttpError(400, `Unknown champion "${entry}".`);
-    }
-
-    if (seen.has(champion.key)) {
-      continue;
-    }
-
-    seen.add(champion.key);
-    normalized.push(champion);
-  }
-
-  if (normalized.length > maxCount) {
-    throw createHttpError(
-      400,
-      `Request field "${label}" can contain at most ${maxCount} unique champions.`,
-    );
-  }
-
-  return normalized;
-}
-
-function normalizeAllySelections(value, maxCount, label) {
-  if (value == null) {
-    return [];
-  }
-
-  if (!Array.isArray(value)) {
-    throw createHttpError(400, `Request field "${label}" must be an array.`);
-  }
-
-  const seen = new Set();
-  const normalized = [];
-
-  for (const entry of value) {
-    let championName = entry;
-    let role = null;
-
-    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-      championName = entry.champion ?? entry.name;
-      role = normalizeAllyRole(entry.role ?? entry.lane ?? null, label);
-    }
-
-    if (typeof championName !== "string" || championName.trim() === "") {
-      throw createHttpError(400, `Request field "${label}" contains an invalid champion name.`);
-    }
-
-    const champion = championByName.get(normalizeChampionName(championName));
-    if (!champion) {
-      throw createHttpError(400, `Unknown champion "${championName}".`);
-    }
-
-    if (seen.has(champion.key)) {
-      continue;
-    }
-
-    seen.add(champion.key);
-    normalized.push({
-      champion,
-      role,
-    });
-  }
-
-  if (normalized.length > maxCount) {
-    throw createHttpError(
-      400,
-      `Request field "${label}" can contain at most ${maxCount} unique champions.`,
-    );
-  }
-
-  return normalized;
-}
-
-function normalizeChampionName(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function normalizeRequestedRankFilter(value) {
-  if (value == null || value === "") {
-    return DEFAULT_RANK_FILTER;
-  }
-
-  if (typeof value !== "string") {
-    throw createHttpError(400, 'Request field "rankFilter" contains an invalid rank filter.');
-  }
-
-  const normalized = normalizeRankFilter(value);
-  if (!normalized) {
-    throw createHttpError(400, 'Request field "rankFilter" contains an invalid rank filter.');
-  }
-
-  return normalized;
-}
-
-function normalizeAllyRole(value, label) {
-  if (value == null || value === "") {
-    return null;
-  }
-
-  if (typeof value !== "string") {
-    throw createHttpError(400, `Request field "${label}" contains an invalid ally role.`);
-  }
-
-  const normalized = normalizeRole(value);
-  if (!normalized) {
-    throw createHttpError(400, `Request field "${label}" contains an invalid ally role.`);
-  }
-
-  return normalized;
-}
-
-function validateAllyRoleAssignments(allies) {
-  const seenRoles = new Set();
-
-  for (const ally of allies) {
-    if (!ally.role) {
-      continue;
-    }
-
-    if (seenRoles.has(ally.role)) {
-      throw createHttpError(
-        400,
-        'Request field "allies" cannot assign the same role to multiple allied champions.',
-      );
-    }
-
-    seenRoles.add(ally.role);
-  }
-}
-
 async function buildSuggestionsForRole({
   allies,
   enemies,
@@ -368,7 +243,6 @@ async function buildSuggestionsForRole({
   selectedChampionKeys,
   targetRole,
 }) {
-  const partialFailures = [];
   const eligibleRoleTierStatsPromise = fetchEligibleTierStats(targetRole, rankFilter);
 
   const allyResults = await Promise.allSettled(
@@ -387,74 +261,17 @@ async function buildSuggestionsForRole({
   );
 
   const eligibleRoleTierStats = await eligibleRoleTierStatsPromise;
-  const candidateScores = new Map();
-
-  for (const result of allyResults) {
-    if (result.status === "fulfilled") {
-      const rows = result.value.rows;
-      for (const [candidateKey, row] of rows) {
-        const record = getCandidateRecord(candidateScores, candidateKey);
-        record.synergyValues.push(row.value);
-        if (Number.isFinite(row.winRate)) {
-          record.projectedWinRateValues.push(row.winRate);
-        }
-      }
-    } else {
-      partialFailures.push(result.reason.message);
-    }
-  }
-
-  for (const result of enemyResults) {
-    if (result.status === "fulfilled") {
-      const rows = result.value.rows;
-      for (const [candidateKey, row] of rows) {
-        const record = getCandidateRecord(candidateScores, candidateKey);
-        // Lolalytics counter rows are oriented from the enemy pick's perspective.
-        record.counterValues.push(-row.value);
-        const projectedWinRateValue = orientEnemyMatchupWinRate(row.winRate);
-        if (Number.isFinite(projectedWinRateValue)) {
-          record.projectedWinRateValues.push(projectedWinRateValue);
-        }
-      }
-    } else {
-      partialFailures.push(result.reason.message);
-    }
-  }
-
-  const results = filterUnavailableResults(
-    Array.from(candidateScores.values())
-      .map((candidate) => {
-        const roleTierStats = eligibleRoleTierStats.get(String(candidate.key));
-        if (!roleTierStats) {
-          return null;
-        }
-
-        const synergyScore = average(candidate.synergyValues);
-        const counterScore = average(candidate.counterValues);
-        const projectedWinRate = average(candidate.projectedWinRateValues);
-        const projectedAgency = 0.5 * synergyScore + 0.5 * counterScore;
-
-        return {
-          candidate: candidate.name,
-          candidateKey: candidate.key,
-          support: candidate.name,
-          supportKey: candidate.key,
-          icon: candidate.icon,
-          role: targetRole,
-          synergyScore,
-          counterScore,
-          projectedWinRate,
-          projectedAgency,
-          finalScore: projectedAgency,
-          lanePercent: roleTierStats.lanePercent,
-          pickRate: roleTierStats.pickRate,
-          winRate: roleTierStats.winRate,
-        };
-      })
-      .filter(Boolean)
-      .sort(compareByProjectedAgency),
+  const {
+    partialFailures,
+    results,
+  } = buildRoleSuggestionResults({
+    allyResults,
+    enemyResults,
+    eligibleTierStats: eligibleRoleTierStats,
     selectedChampionKeys,
-  );
+    targetRole,
+    championByKey,
+  });
 
   const meta = buildSuggestionMeta(rankFilter, targetRole, allies, enemies, partialFailures);
 
@@ -470,17 +287,6 @@ async function buildSuggestionsForRole({
   return {
     results,
     meta,
-  };
-}
-
-function buildSuggestionMeta(rankFilter, targetRole, allies, enemies, partialFailures = []) {
-  return {
-    rankFilter,
-    role: targetRole,
-    allyCount: allies.length,
-    enemyCount: enemies.length,
-    assignedRoleCount: allies.filter((ally) => ally.role).length,
-    partialFailures,
   };
 }
 
@@ -542,8 +348,8 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     championBySlug,
     championByName,
     {
-      minLanePercent: MIN_SUPPORT_TIER_LIST_LANE_PERCENT,
-      minPickRate: MIN_SUPPORT_TIER_LIST_PICK_RATE,
+      minLanePercent: MIN_ROLE_TIER_LIST_LANE_PERCENT,
+      minPickRate: MIN_ROLE_TIER_LIST_PICK_RATE,
     },
   );
 
@@ -565,6 +371,11 @@ async function fetchLolalyticsBuildData(slug, rankFilter) {
     `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?${searchParams.toString()}`,
     `${slug} build q-data`,
   );
+  const cachedBuildData = lolalyticsBuildDataCache.get(payload);
+  if (cachedBuildData) {
+    return cachedBuildData;
+  }
+
   const root = resolveQwikPayload(payload);
   const loaders = Object.values(root.loaders || {});
   const buildData = loaders.find(
@@ -575,6 +386,7 @@ async function fetchLolalyticsBuildData(slug, rankFilter) {
     throw createHttpError(502, `Lolalytics build data for ${slug} was missing matchup rows.`);
   }
 
+  lolalyticsBuildDataCache.set(payload, buildData);
   return buildData;
 }
 
@@ -685,8 +497,15 @@ function resolveQwikPayload(payload) {
     throw createHttpError(502, "Lolalytics returned an unexpected q-data payload.");
   }
 
+  const cachedResolvedPayload = resolvedQwikPayloadCache.get(payload);
+  if (cachedResolvedPayload) {
+    return cachedResolvedPayload;
+  }
+
   const objects = payload._objs;
-  return resolveQwikValue(payload._entry, objects);
+  const resolvedPayload = resolveQwikValue(payload._entry, objects);
+  resolvedQwikPayloadCache.set(payload, resolvedPayload);
+  return resolvedPayload;
 }
 
 function resolveQwikValue(value, objects) {
@@ -772,30 +591,6 @@ function extractRoleValues(rows, valueIndex) {
   }
 
   return roleValues;
-}
-
-function getCandidateRecord(candidateScores, candidateKey) {
-  const existing = candidateScores.get(candidateKey);
-  if (existing) {
-    return existing;
-  }
-
-  const champion = championByKey.get(candidateKey);
-  if (!champion) {
-    throw createHttpError(500, `Missing local metadata for candidate champion ${candidateKey}.`);
-  }
-
-  const created = {
-    key: champion.key,
-    name: champion.name,
-    icon: champion.icon,
-    synergyValues: [],
-    counterValues: [],
-    projectedWinRateValues: [],
-  };
-
-  candidateScores.set(candidateKey, created);
-  return created;
 }
 
 function createHttpError(statusCode, message) {

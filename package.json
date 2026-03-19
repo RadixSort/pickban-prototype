@@ -5,7 +5,8 @@
   "description": "Local PickBan prototype for live role recommendations",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "bench:efficiency": "node bench/efficiency.js"
   },
   "dependencies": {
     "express": "^5.1.0"

@@ -1,113 +1,125 @@
 # Technical Overview
 
-This document explains how the PickBan Prototype is structured, where its data comes from, and how the role-specific ranking is computed.
+This document is the developer-facing map of the codebase: entry points, shared modules, request flow, API shape, and the assumptions baked into the current scoring pipeline.
 
-The app is powered by live Lolalytics data, and this project is built independently with appreciation for their matchup and tier-list work.
+The app uses live Lolalytics data and is built independently with appreciation for their matchup and tier-list work.
 
 ## Stack
 
-- Node.js
+- Node.js 18+
 - Express 5
-- Plain HTML, CSS, and browser-side JavaScript
-- No database
-- No authentication layer
+- Plain HTML, CSS, and browser JavaScript
+- Node's built-in `fetch`
+- Node's built-in `node:test`
 
-## High-Level Architecture
+There is no bundler, database, auth layer, or server-side rendering.
 
-The project is a single-process local web app:
+## Entry Points And Commands
 
-1. `server.js` starts an Express server.
-2. The server exposes static files from `public/`.
-3. The browser loads `index.html`, `styles.css`, `app.js`, and `champions.json`.
-4. The frontend collects user-selected champions, the target role, and optional ally role assignments.
-5. The frontend sends those selections to `POST /suggest`.
-6. The frontend can also load `GET /app-config` and request `POST /shutdown` when the user clicks the top-right close button.
-7. The backend fetches live data from Lolalytics, calculates scores, sorts the results, and returns JSON.
-8. The frontend renders the ranked results table.
+- `npm start` -> `node server.js`
+- `npm test` -> `node --test`
+- `npm run bench:efficiency` -> `node bench/efficiency.js`
+- Browser entry point -> `public/index.html`
+- Frontend controller -> `public/app.js`
 
-## File Responsibilities
+Only one runtime dependency is installed from npm: `express`.
+
+## Repository Layout
 
 - `server.js`
-  - static file hosting
-  - local app config and shutdown endpoints
+  - Express bootstrapping
+  - `GET /app-config`, `POST /suggest`, `POST /shutdown`
   - request validation
-  - live Lolalytics fetches
-  - q-data payload parsing
-  - in-memory caching
-  - result aggregation and ranking
-  - graceful shutdown for `Ctrl+C`, `SIGTERM`, and browser-triggered app close
+  - live Lolalytics fetch/parsing
+  - in-memory remote cache
+  - score aggregation and response shaping
+  - graceful shutdown
 
-- `public/champions.json`
-  - local champion metadata
-  - search source for the pickers
-  - champion names, numeric keys, and icons
+- `lib/requested-target-roles.js`
+  - normalizes explicit target-role requests
+  - defaults to every unassigned ally role when no target role is provided
+
+- `lib/request-normalization.js`
+  - normalizes rank filters, ally selections, and enemy selections
+  - validates duplicate ally role assignments before role resolution
+
+- `lib/candidate-score-accumulator.js`
+  - stores running totals for synergy, counter, and projected win rate
+  - finalizes scores without building intermediate per-candidate arrays
+
+- `lib/lolalytics-tier-list.js`
+  - parses Lolalytics tier-list HTML
+  - supports both list and grid markup
+  - maps parsed rows back to local champion metadata
+
+- `lib/role-suggestion-results.js`
+  - aggregates ally and enemy matchup rows by candidate champion
+  - computes projected scores, partial failures, and response metadata
+
+- `lib/matchup-orientation.js`
+  - flips enemy-facing win rates back to the candidate pick's perspective
 
 - `public/app.js`
-  - selection state
-  - target role selection
-  - optional ally role assignments
-  - search suggestion logic
-  - request submission
-  - loading, error, and result rendering
+  - draft state, champion search, ally role assignment UI, and results rendering
+  - frontend-only results cache keyed by the current draft state
 
 - `public/roles.js`
-  - shared role labels
-  - alias normalization
-  - target-role and ally-role dropdown options
+- `public/rank-filters.js`
+- `public/result-ranking.js`
+- `public/suggestion-filters.js`
+- `public/suggestion-cache.js`
+  - shared helper modules
+  - loaded directly in the browser and reused by Node tests or the server with `require(...)`
 
-- `public/index.html`
-  - page structure
-  - two draft pickers
-  - actions and results areas
+- `public/champions.json`
+  - local champion names, slugs, numeric keys, and icon URLs
 
-- `public/styles.css`
-  - visual styling
-  - responsive layout behavior
+- `test/*.test.js`
+  - regression coverage for request normalization, score aggregation, shared helpers, and Lolalytics parsers
 
-## Data Sources
+- `bench/efficiency.js`
+  - synthetic benchmark for role aggregation and top-N result-key selection
 
-The project combines:
+## Runtime Architecture
 
-- local champion metadata from `public/champions.json`
-- live Lolalytics responses for synergy and counter data
-- live Lolalytics tier-list rows for role eligibility and win rates
+The app is a single Express process serving both the UI and the API:
 
-### Local Metadata
+1. `server.js` serves `public/` as static files with `Cache-Control: no-store`.
+2. The browser loads `index.html`, `styles.css`, the shared helper modules, `app.js`, and `champions.json`.
+3. `app.js` collects the current draft:
+   - allied champions
+   - enemy champions
+   - optional ally role assignments
+   - selected rank filter
+4. The frontend submits the draft to `POST /suggest`.
+5. The backend resolves the target roles to fetch.
+6. For each target role, the backend fetches:
+   - tier-list HTML for role eligibility and live win rate
+   - ally synergy data
+   - enemy counter data
+7. The backend combines, filters, sorts, and returns the results.
+8. The frontend renders one role at a time and lets the user switch between returned role bundles.
 
-`public/champions.json` contains champion:
+## Current Frontend Workflow
 
-- `id`
-- `key`
-- `name`
-- `icon`
+The current UI does not ask the user to choose one target role before submitting.
 
-The server builds lookup maps by champion key and normalized name. The frontend uses the same file to power the type-ahead search.
+Instead:
 
-### Remote Data
+1. the user assigns any ally roles they already know
+2. the frontend sends the draft without a target-role field
+3. the backend fetches every role that is still unassigned
+4. the user switches between those roles in the results panel
 
-Two remote Lolalytics sources are used:
+That behavior is intentional and implemented in `resolveRequestedTargetRoles(...)`.
 
-- synergy data from the Lolalytics mega endpoint
-- counter data from the Lolalytics champion build `q-data.json` endpoint
-- tier-list data from the Lolalytics role-specific tier-list page
+## Request Validation
 
-The implementation depends on those live Lolalytics responses and is intended to treat them as the authoritative external data source for this local tool.
-
-The server uses these lookup settings:
-
-- patch window: `7`
-- tier: selected from `all`, `platinum_plus`, default Emerald+ (no tier query), `diamond_plus`, or `d2_plus`
-- queue: `ranked`
-- region: `all`
-
-## Request And Validation Flow
-
-The frontend sends a `POST /suggest` request with this shape:
+`POST /suggest` accepts:
 
 ```json
 {
   "rankFilter": "emerald_plus",
-  "role": "support",
   "allies": [
     { "champion": "Ahri", "role": "middle" },
     { "champion": "Jarvan IV" }
@@ -116,107 +128,95 @@ The frontend sends a `POST /suggest` request with this shape:
 }
 ```
 
-Validation rules:
-
-- `allies` must be an array if provided
-- `enemies` must be an array if provided
-- `role` defaults to `support` when omitted
-- each enemy entry must be a non-empty string
-- each ally entry must be either a non-empty champion string or an object with a champion name and optional role
-- champion names must exist in the local metadata file
-- target role and ally role values are normalized to `top`, `jungle`, `middle`, `bottom`, or `support`
-- ally role assignments cannot reuse the target role or duplicate each other
-- duplicate champions are ignored within the same request
-- maximum 4 unique allied champions
-- maximum 5 unique enemy champions
-- at least one total champion must be provided
-
-Champion names are normalized by lowercasing and stripping non-alphanumeric characters, so minor punctuation differences are tolerated.
-
-## Scoring Model
-
-For each selected allied champion:
-
-- the server fetches target-role synergy rows
-- if an ally role is assigned, the server tries that role first and falls back to `all`
-- each returned candidate gets a synergy value appended to its candidate record
-
-For each selected enemy champion:
-
-- the server fetches target-role counter rows
-- each returned candidate gets a counter value appended to its candidate record
-- enemy matchup win rates are flipped back to the candidate's perspective before they contribute to projected win rate
-
-The final output for each candidate is:
-
-- `synergyScore = average(synergyValues)`
-- `counterScore = average(rawCounterValues with the sign flipped)`
-- `projectedWinRate = average(all synergy matchup win rates plus enemy matchup win rates after perspective-flipping them with 100 - rawWinRate)`
-- `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
-
-Before a candidate is returned, it must also appear on the live tier list for the requested role with:
-
-- `lanePercent >= 10`
-- `pickRate >= 0.5`
-
-The returned row also includes the live role `winRate` from that tier list.
-
-Default backend sorting rules:
-
-1. higher `projectedAgency`
-2. higher `projectedWinRate`
-3. higher `counterScore`
-4. alphabetical candidate name
-
-The frontend can also re-rank the same results by `projectedWinRate`.
-
-Behavioral implications:
-
-- if a candidate only has synergy data, `counterScore` becomes `0`
-- if a candidate only has counter data, `synergyScore` becomes `0`
-- this means one-sided inputs intentionally lower the missing half of the score instead of excluding it from the formula
-
-## Partial Failures
-
-Synergy and counter fetches are executed with `Promise.allSettled`, not `Promise.all`.
-
-That means:
-
-- one failed source does not automatically discard successful sources
-- the API can still return ranked results if at least some remote data was usable
-- failure messages are collected in `meta.partialFailures`
-
-If no usable rows are produced at all, the API returns a `502` error.
-
-## Response Shape
-
-Successful responses look like this:
+The server also supports explicit target-role requests for callers other than the current UI:
 
 ```json
 {
-  "results": [
-    {
-      "candidate": "Thresh",
-      "candidateKey": "412",
-      "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
-      "role": "support",
-      "winRate": 51.88,
-      "projectedWinRate": 52.43,
-      "synergyScore": 52.31,
-      "counterScore": -50.94,
-      "projectedAgency": 0.685
+  "rankFilter": "diamond_plus",
+  "roles": ["top", "bottom"],
+  "allies": [{ "champion": "Nami", "role": "support" }],
+  "enemies": ["Blitzcrank"]
+}
+```
+
+Supported target-role inputs:
+
+- `roles`: array of role aliases
+- `role`: single role alias
+- `targetRole`: single role alias
+
+Validation rules enforced by the current code:
+
+- `allies` and `enemies` must be arrays when present
+- ally entries can be champion strings or objects with `champion`/`name` and optional `role`/`lane`
+- enemy entries must be non-empty champion strings
+- champion names must exist in `public/champions.json`
+- role aliases normalize to `top`, `jungle`, `middle`, `bottom`, or `support`
+- duplicate champions in the same request are ignored
+- maximum 4 unique allies
+- maximum 5 unique enemies
+- at least one champion must be present overall
+- duplicate ally role assignments are rejected
+- explicitly requested target roles cannot overlap with already-assigned ally roles
+
+If no explicit target-role field is provided, the server defaults to all unassigned roles.
+
+Champion names are normalized by lowercasing and stripping non-alphanumeric characters before lookup.
+
+## API Responses
+
+The primary response shape is multi-role:
+
+```json
+{
+  "roles": ["top", "middle", "bottom"],
+  "resultsByRole": {
+    "top": [],
+    "middle": [],
+    "bottom": [
+      {
+        "candidate": "Thresh",
+        "candidateKey": "412",
+        "icon": "https://cdn5.lolalytics.com/champ140/thresh.webp",
+        "role": "bottom",
+        "winRate": 51.88,
+        "projectedWinRate": 52.43,
+        "synergyScore": 52.31,
+        "counterScore": -50.94,
+        "projectedAgency": 0.685
+      }
+    ]
+  },
+  "metaByRole": {
+    "top": {
+      "role": "top",
+      "allyCount": 2,
+      "enemyCount": 2,
+      "assignedRoleCount": 1,
+      "partialFailures": [],
+      "error": "No top data was returned from Lolalytics for the selected champions."
+    },
+    "middle": {
+      "role": "middle",
+      "allyCount": 2,
+      "enemyCount": 2,
+      "assignedRoleCount": 1,
+      "partialFailures": []
+    },
+    "bottom": {
+      "role": "bottom",
+      "allyCount": 2,
+      "enemyCount": 2,
+      "assignedRoleCount": 1,
+      "partialFailures": []
     }
-  ],
-  "meta": {
-    "role": "support",
-    "allyCount": 2,
-    "enemyCount": 2,
-    "partialFailures": []
   }
 }
 ```
 
-Error responses use:
+When exactly one role is requested, the server also includes legacy `results` and `meta` fields for compatibility.
+
+Errors use:
 
 ```json
 {
@@ -224,49 +224,88 @@ Error responses use:
 }
 ```
 
-The frontend also requests `GET /app-config` to obtain the local shutdown token used by `POST /shutdown`.
+Related endpoints:
 
-## Caching And Timeouts
+- `GET /app-config`: returns the app version, close-button availability, and shutdown token
+- `POST /shutdown`: loopback-only local shutdown, protected by the per-process token from `/app-config`
 
-The backend keeps a simple in-memory cache keyed by request URL.
+## Scoring And Ranking
 
-- cache duration: 5 minutes
+For each requested target role:
+
+1. Fetch the live tier list for that role.
+2. Fetch ally synergy rows for every selected ally.
+3. Fetch enemy counter rows for every selected enemy.
+4. Aggregate all rows by candidate champion key.
+5. Drop candidates that are already present in the draft.
+6. Drop candidates that fail the live tier-list thresholds.
+7. Sort the remaining rows.
+
+Scoring formulas:
+
+- `synergyScore = average(synergyValues)`
+- `counterScore = average(enemyCounterValues * -1)`
+- `projectedWinRate = average(allyMatchupWinRates + (100 - enemyMatchupWinRates))`
+- `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
+
+Tier-list eligibility thresholds:
+
+- `lanePercent >= 10`
+- `pickRate >= 0.5`
+
+Sorting in the backend defaults to:
+
+1. higher `projectedAgency`
+2. higher `projectedWinRate`
+3. higher `counterScore`
+4. alphabetical candidate name
+
+The frontend can re-rank the same result set by `projectedWinRate`.
+
+Behavioral consequences worth knowing:
+
+- ally-only drafts produce `counterScore = 0`
+- enemy-only drafts produce `synergyScore = 0`
+- assigned ally roles prefer role-specific synergy rows, then fall back to the `all` lane
+- low projected win-rate rows are kept and highlighted instead of being hidden
+
+## Caching And Failure Handling
+
+Backend cache behavior:
+
+- cache key: full Lolalytics request URL
+- success TTL: 5 minutes
 - request timeout: 15 seconds
+- scope: in-memory only, cleared on process restart
 
-This reduces duplicate requests during repeated local testing, but the cache is lost whenever the server restarts.
+Frontend cache behavior:
 
-## Frontend Interaction Notes
+- cache key: rank filter + ally champion keys + ally role assignments + enemy champion keys
+- scope: in-memory only for the current browser session
 
-The browser app:
+Failure behavior:
 
-- preloads all champions from `champions.json`
-- adds a normalized `searchText` field in memory
-- filters out champions already selected on either side
-- shows up to 8 search suggestions per input
-- uses the top match when the user presses `Enter`
-- disables inputs when the side-specific max is reached or while loading
+- synergy and counter fetches use `Promise.allSettled(...)`
+- one failed remote request does not automatically discard successful rows from the same role
+- role-specific failures are surfaced in `metaByRole[role].partialFailures`
+- if a role returns zero usable candidates after parsing and filtering, that role gets an error payload
+- if every requested role fails, the request returns an HTTP error
+
+## External Assumptions
+
+The current implementation assumes:
+
+- Lolalytics tier-list pages keep exposing champion rows in either the current list or grid HTML structures
+- `q-data.json` keeps the current Qwik `_objs` reference structure
+- the relevant payload sections remain under `enemy`, `team`, and `header`
+
+These are the most likely breakpoints when the app suddenly stops producing suggestions without a local code change.
 
 ## Operational Notes
 
-- Default port is `3000`
-- The port can be changed with the `PORT` environment variable
-- Static assets and the API are served from the same Express process
-- The browser top-right close control sends a loopback-only shutdown request with a per-process token
-- `Ctrl+C` now performs graceful shutdown and force-closes lingering sockets if needed
+- Default port: `3000`
+- Override with `PORT`
+- Static assets and API routes are served by the same process
+- The top-right close button is only enabled after `/app-config` succeeds
+- `Ctrl+C` and `SIGTERM` use the graceful shutdown path
 - No build step is required
-
-## Known Risks And Limitations
-
-- The implementation depends on external Lolalytics response formats, including their q-data structure.
-- If Lolalytics changes field names or array indexes, the prototype may stop returning results.
-- Cache is process-local and not suitable for multi-instance deployment.
-- There is no persistence, analytics, auth, or rate-limit protection.
-- The current scoring model gives equal weight to synergy and counter values without any calibration layer.
-
-## Suggested Next Improvements
-
-- move hard-coded patch, tier, queue, and region values into configuration
-- add automated tests for request validation and score aggregation
-- add a health check endpoint
-- add better user-facing explanations for partial failure cases
-- add a packaged deployment option for non-technical users
