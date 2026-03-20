@@ -255,12 +255,12 @@ Tier-list eligibility thresholds:
 
 Sorting in the backend defaults to:
 
-1. higher `projectedAgency`
-2. higher `projectedWinRate`
+1. higher `projectedWinRate`
+2. higher `projectedAgency`
 3. higher `counterScore`
 4. alphabetical candidate name
 
-The frontend can re-rank the same result set by `projectedWinRate`.
+The frontend can re-rank the same result set by `projectedAgency`.
 
 Behavioral consequences worth knowing:
 

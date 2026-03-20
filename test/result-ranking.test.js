@@ -3,7 +3,10 @@ const assert = require("node:assert/strict");
 
 const {
   average,
+  DEFAULT_SORT_MODE,
   DEFAULT_TOP_RESULT_LIMIT,
+  PROJECTED_AGENCY_SORT_MODE,
+  PROJECTED_WIN_RATE_SORT_MODE,
   getProjectedAgency,
   getProjectedWinRate,
   getResultKey,
@@ -26,6 +29,21 @@ test("projected agency falls back to legacy finalScore", () => {
 test("projected win rate defaults to 0 when missing", () => {
   assert.equal(getProjectedWinRate({ projectedWinRate: 53.14 }), 53.14);
   assert.equal(getProjectedWinRate({}), 0);
+});
+
+test("sortResults defaults to projected win rate ordering", () => {
+  const ranked = sortResults([
+    { candidate: "Thresh", candidateKey: 412, projectedAgency: 4.2, projectedWinRate: 51.4 },
+    { candidate: "Nautilus", candidateKey: 111, projectedAgency: 1.3, projectedWinRate: 53.1 },
+    { candidate: "Leona", candidateKey: 89, projectedAgency: 2.8, projectedWinRate: 52.2 },
+  ]);
+
+  assert.equal(DEFAULT_SORT_MODE, PROJECTED_WIN_RATE_SORT_MODE);
+  assert.notEqual(DEFAULT_SORT_MODE, PROJECTED_AGENCY_SORT_MODE);
+  assert.deepEqual(
+    ranked.map((result) => result.candidate),
+    ["Nautilus", "Leona", "Thresh"],
+  );
 });
 
 test("sortResults ranks projected agency with projected win rate as the first tie-breaker", () => {
@@ -107,7 +125,7 @@ test("result helpers support legacy rows and unknown sort modes", () => {
     5,
   );
 
-  assert.deepEqual(Array.from(topResultKeys), ["267", "117"]);
+  assert.deepEqual(Array.from(topResultKeys), ["117", "267"]);
 });
 
 test("getTopResultKeys keeps the best-scoring row for duplicate candidate keys", () => {

@@ -1,7 +1,8 @@
 {
   "name": "pickban-prototype",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
+  "license": "MIT",
   "description": "Local PickBan prototype for live role recommendations",
   "scripts": {
     "start": "node server.js",

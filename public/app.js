@@ -15,6 +15,7 @@ const {
 const {
   DEFAULT_TOP_RESULT_LIMIT,
   DEFAULT_SORT_MODE,
+  PROJECTED_AGENCY_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
   getProjectedAgency,
   getProjectedWinRate,
@@ -39,7 +40,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "2.1.0",
+  version: "2.2.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -73,8 +74,6 @@ const closeButton = document.getElementById("close-button");
 const allyRolePanel = document.getElementById("ally-role-panel");
 const allyRoleList = document.getElementById("ally-role-list");
 const allyRoleTitle = document.getElementById("ally-role-title");
-const allyRoleCopy = document.getElementById("ally-role-copy");
-const statusText = document.getElementById("status-text");
 const errorText = document.getElementById("error-text");
 const emptyState = document.getElementById("empty-state");
 const resultsWrap = document.getElementById("results-table-wrap");
@@ -233,9 +232,7 @@ function initializeRankFilterOptions() {
 
 function renderControls() {
   const selectedRole = syncSelectedResultRole();
-  const rankFilterLabel = getRankFilterDisplayLabel();
   const availableRoleOptions = getAvailableResultRoleOptions();
-  const availableRoleLabels = availableRoleOptions.map((option) => option.label);
 
   rankFilterSelect.value = state.rankFilter;
   rankFilterSelect.disabled = isInteractionLocked();
@@ -246,10 +243,6 @@ function renderControls() {
   resultsRoleSelect.disabled = isInteractionLocked() || availableRoleOptions.length === 0;
 
   allyRoleTitle.textContent = "Assign known roles";
-  allyRoleCopy.textContent =
-    availableRoleLabels.length > 0
-      ? `Rank filter: ${rankFilterLabel}. Unassigned result roles: ${availableRoleLabels.join(", ")}. Assign allies to lock lanes, or leave them unassigned to fetch every remaining role.`
-      : `Rank filter: ${rankFilterLabel}.`;
   resultsTitle.textContent = `${getRoleLabel(selectedRole)} recommendations`;
 }
 
@@ -672,7 +665,7 @@ function renderResults() {
   );
   const topProjectedAgencyKeys = getTopResultKeys(
     visibleResults,
-    DEFAULT_SORT_MODE,
+    PROJECTED_AGENCY_SORT_MODE,
     DEFAULT_TOP_RESULT_LIMIT,
   );
 
@@ -695,11 +688,13 @@ function renderResults() {
     return;
   }
 
-  resultsRequestStat.textContent = formatLolalyticsAccessStat(getLolalyticsLiveAccessCount(currentBundle));
+  resultsRequestStat.textContent = formatDisplayMessage(
+    formatLolalyticsAccessStat(getLolalyticsLiveAccessCount(currentBundle)),
+  );
   resultsRequestStat.classList.remove("hidden");
 
   if (currentMeta?.error) {
-    emptyState.textContent = currentMeta.error;
+    emptyState.textContent = formatDisplayMessage(currentMeta.error);
     emptyState.classList.remove("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = `${getRoleLabel(selectedRole)} unavailable`;
@@ -788,7 +783,7 @@ function renderPartialFailures(failures = []) {
   failures.forEach((message) => {
     const item = document.createElement("p");
     item.className = "partial-failure-item";
-    item.textContent = message;
+    item.textContent = formatDisplayMessage(message);
     partialFailures.appendChild(item);
   });
 }
@@ -861,11 +856,7 @@ function formatLolalyticsAccessStatus(accessCount) {
 }
 
 function formatLolalyticsAccessStat(accessCount) {
-  if (accessCount === 0) {
-    return "Nerd stat: Lolalytics live hits for this draft: 0. Served from local cache, so no fresh outbound requests.";
-  }
-
-  return `Nerd stat: Lolalytics live hits for this draft: ${accessCount}. This only counts real outbound requests, not cached reuse.`;
+  return `Lolalytics live hits for this draft: ${Math.max(0, accessCount)}.`;
 }
 
 function formatScore(value) {
@@ -908,8 +899,44 @@ function formatVersion(version) {
   return `v${normalizedVersion.replace(/\.0$/, "")}`;
 }
 
+function formatDisplayMessage(message) {
+  const normalizedMessage = typeof message === "string" ? message.trim() : "";
+
+  if (normalizedMessage.length < 2) {
+    return normalizedMessage;
+  }
+
+  const quotePairs = [
+    ['"', '"'],
+    ["'", "'"],
+    ["“", "”"],
+    ["‘", "’"],
+  ];
+
+  for (const [openingQuote, closingQuote] of quotePairs) {
+    if (
+      normalizedMessage.startsWith(openingQuote) &&
+      normalizedMessage.endsWith(closingQuote)
+    ) {
+      const unwrappedMessage = normalizedMessage
+        .slice(openingQuote.length, normalizedMessage.length - closingQuote.length)
+        .trim();
+
+      if (unwrappedMessage && /[\s.,:;!?-]/.test(unwrappedMessage)) {
+        return unwrappedMessage;
+      }
+    }
+  }
+
+  return normalizedMessage;
+}
+
 function normalizeSortMode(value) {
-  return value === PROJECTED_WIN_RATE_SORT_MODE ? PROJECTED_WIN_RATE_SORT_MODE : DEFAULT_SORT_MODE;
+  if (value === PROJECTED_AGENCY_SORT_MODE || value === PROJECTED_WIN_RATE_SORT_MODE) {
+    return value;
+  }
+
+  return DEFAULT_SORT_MODE;
 }
 
 function getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate) {
@@ -950,17 +977,15 @@ function renderVersion() {
 }
 
 function setStatus(message) {
-  statusText.textContent = message;
+  void message;
 }
 
 function setError(message) {
-  errorText.textContent = message;
-  statusText.textContent = "";
+  errorText.textContent = formatDisplayMessage(message);
 }
 
 function clearStatus() {
   errorText.textContent = "";
-  statusText.textContent = "";
 }
 
 function renderActionState() {

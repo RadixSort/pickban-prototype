@@ -6,8 +6,9 @@
 
   globalScope.resultRanking = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
-  const DEFAULT_SORT_MODE = "projectedAgency";
+  const PROJECTED_AGENCY_SORT_MODE = "projectedAgency";
   const PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate";
+  const DEFAULT_SORT_MODE = PROJECTED_WIN_RATE_SORT_MODE;
   const DEFAULT_TOP_RESULT_LIMIT = 3;
 
   function average(values = []) {
@@ -167,11 +168,11 @@
   }
 
   function getSortComparator(sortMode) {
-    if (sortMode === PROJECTED_WIN_RATE_SORT_MODE) {
-      return compareByProjectedWinRate;
+    if (sortMode === PROJECTED_AGENCY_SORT_MODE) {
+      return compareByProjectedAgency;
     }
 
-    return compareByProjectedAgency;
+    return compareByProjectedWinRate;
   }
 
   function insertTopResult(results, candidate, comparator, limit) {
@@ -217,6 +218,7 @@
   return {
     DEFAULT_TOP_RESULT_LIMIT,
     DEFAULT_SORT_MODE,
+    PROJECTED_AGENCY_SORT_MODE,
     PROJECTED_WIN_RATE_SORT_MODE,
     average,
     compareByProjectedAgency,

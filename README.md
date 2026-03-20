@@ -38,7 +38,7 @@ npm test
 4. Click `Fetch Suggestions`.
 5. The app fetches every role that is still unassigned.
 6. Use the `Target role` selector in the results panel to switch between returned role bundles.
-7. Use `Rank by` to switch between `Projected Agency` and `Projected Win Rate`.
+7. Suggestions default to `Projected Win Rate`. Use `Rank by` to switch to `Projected Agency`.
 
 Rules enforced by the current code:
 
@@ -134,3 +134,11 @@ Use `Ctrl+C` in the terminal. The top-right close button depends on a successful
 - The app depends on live Lolalytics response formats and may break if their markup or `q-data.json` payload changes
 - Runtime settings such as patch window, queue, region, and request thresholds are hard-coded in `server.js`
 - There is no persistence, authentication, or hosted deployment flow
+
+## License
+
+This repository is open source under the [MIT License](LICENSE).
+
+The MIT license applies only to the original code in this repository. It does not grant any rights to third-party names, trademarks, data, or media, including Riot Games and League of Legends marks or any Lolalytics data, site content, or icon URLs referenced by the app.
+
+This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.

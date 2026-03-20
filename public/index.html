@@ -29,6 +29,7 @@
           Powered by live data from
           <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>.
           Built independently with appreciation for their matchup and tier-list work.
+          <span id="results-request-stat" class="results-request-stat hidden"></span>
         </p>
       </header>
 
@@ -53,11 +54,8 @@
             <div class="role-panel-header">
               <div>
                 <p class="picker-kicker">Optional</p>
-                <h3 id="ally-role-title">Assign roles</h3>
+                <h3 id="ally-role-title">Assign known roles</h3>
               </div>
-              <p id="ally-role-copy" class="role-panel-copy">
-                Leave any ally unassigned to use all-role synergy data.
-              </p>
             </div>
             <div id="ally-role-list" class="role-list" aria-live="polite"></div>
           </section>
@@ -91,7 +89,6 @@
             Fetch Suggestions
           </button>
         </div>
-        <p id="status-text" class="status-text" aria-live="polite"></p>
         <p id="error-text" class="error-text" aria-live="polite"></p>
       </section>
 
@@ -109,15 +106,13 @@
             <label class="sort-control" for="results-sort">
               <span>Rank by</span>
               <select id="results-sort">
-                <option value="projectedAgency">Projected Agency</option>
                 <option value="projectedWinRate">Projected Win Rate</option>
+                <option value="projectedAgency">Projected Agency</option>
               </select>
             </label>
             <span id="results-meta" class="results-meta"></span>
           </div>
         </div>
-
-        <p id="results-request-stat" class="results-request-stat hidden"></p>
         <div id="partial-failures" class="partial-failures"></div>
 
         <div id="empty-state" class="empty-state">
@@ -145,7 +140,7 @@
     </main>
 
     <div class="app-version-badge">
-      <span id="app-version">v2.1</span>
+      <span id="app-version">v2.2</span>
     </div>
 
     <script src="/roles.js" defer></script>

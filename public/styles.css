@@ -153,6 +153,11 @@ select {
   text-decoration: underline;
 }
 
+.hero-credit .results-request-stat {
+  display: block;
+  margin-top: 6px;
+}
+
 .target-role-panel {
   display: inline-flex;
   align-items: end;
@@ -355,12 +360,8 @@ select {
   margin-bottom: 12px;
 }
 
-.role-panel-copy {
-  margin: 0;
-  max-width: 280px;
-  color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
+#ally-role-title {
+  white-space: nowrap;
 }
 
 .role-list {
@@ -554,7 +555,6 @@ select {
   transform: translateY(-1px);
 }
 
-.status-text,
 .error-text,
 .partial-failure-item,
 .empty-state {
@@ -578,9 +578,8 @@ select {
 }
 
 .results-request-stat {
-  margin: -4px 0 14px;
   color: rgba(150, 160, 180, 0.82);
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 400;
   letter-spacing: 0.03em;
   line-height: 1.45;
@@ -820,11 +819,13 @@ select {
     align-items: stretch;
   }
 
-  .role-panel-copy {
-    max-width: none;
-  }
-
   .lane-select {
     width: 100%;
+  }
+}
+
+@media (max-height: 720px) {
+  #ally-role-title {
+    white-space: normal;
   }
 }

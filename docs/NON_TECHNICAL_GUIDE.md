@@ -88,14 +88,14 @@ Leave that terminal window open while you use the app.
 3. If you know some ally roles already, assign them in the middle panel.
 4. Click **Fetch Suggestions**.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
-6. Use **Rank by** if you want to sort by a different score.
+6. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
 
 ## What The Scores Mean
 
 - `Synergy Score`: how well a candidate fits your allied champions
 - `Counter Score`: how well a candidate performs into your enemy champions
 - `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
-- `Projected Agency`: the main blended score used for the default ranking
+- `Projected Agency`: the blended score you can switch to in the **Rank by** dropdown
 
 ## Limits
 
