@@ -1,21 +1,21 @@
 # PickBan Prototype
 
-PickBan Prototype is a local Node/Express web app that ranks League of Legends draft picks with live Lolalytics data. It is meant to run on one machine, without a build step, database, or hosted deployment.
+PickBan Prototype is a local Node/Express web app for two live Lolalytics-backed workflows:
 
-## Start Here
+- draft pick recommendations for every unassigned allied role
+- matchup-specific rune and boots suggestions for an assigned ally role
 
-- New to terminals or local apps: [docs/NON_TECHNICAL_GUIDE.md](docs/NON_TECHNICAL_GUIDE.md)
-- Want architecture and API details: [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)
-
-## Requirements
-
-- Node.js 18 or newer
-- Internet access while fetching suggestions
-- A modern browser
-
-Node 18+ is required because the server uses built-in `fetch` and the test suite uses `node:test`.
+It runs as one local process, serves plain browser JavaScript from `public/`, and has no build step, database, auth, or hosted deployment flow.
 
 ## Quick Start
+
+Requirements:
+
+- Node.js 18 or newer
+- internet access while fetching live data
+- a modern browser
+
+Install and run:
 
 ```bash
 npm install
@@ -24,121 +24,187 @@ npm start
 
 Open `http://localhost:3000`.
 
-Run the test suite with:
+Run the test suite:
 
 ```bash
 npm test
 ```
 
-## Daily Workflow
+Useful variants:
+
+```bash
+PORT=3001 npm start
+npm run bench:efficiency
+```
+
+Advanced runtime overrides:
+
+- `LOLALYTICS_BASE_URL`: override the main Lolalytics origin
+- `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
+
+There is no build, lint, or bundling command in this repo.
+
+## Local Workflow
 
 1. Start the server with `npm start`.
-2. Add up to 4 allied champions and up to 5 enemy champions.
-3. Optionally assign known ally roles.
-4. Click `Fetch Suggestions`.
-5. The app fetches every role that is still unassigned.
-6. Use the `Target role` selector in the results panel to switch between returned role bundles.
-7. Suggestions default to `Projected Win Rate`. Use `Rank by` to switch to `Projected Agency`.
+2. Open the app in a browser and build a draft with allied and enemy champions. The same champion cannot appear on both sides.
+3. Optionally assign known ally roles. The app will fetch every remaining role.
+4. Use `Fetch Suggestions` for role recommendations.
+5. Use `Runes & Boots` on an ally row after that ally has a role and at least one enemy is selected.
 
-Rules enforced by the current code:
+Change feedback loops:
 
-- The same champion cannot appear on both sides.
-- You must choose at least one champion before fetching suggestions.
-- Ally role assignments are optional, but duplicate ally roles are rejected.
-- Returned champions must pass the live tier-list thresholds for the requested role: `lanePercent >= 10` and `pickRate >= 0.5`.
-- Results with `Projected Win Rate <= 50%` stay visible and are highlighted instead of being filtered out.
-
-## Commands
-
-- `npm start`: runs `node server.js`
-- `npm test`: runs `node --test`
-- `npm run bench:efficiency`: runs the synthetic performance benchmark in `bench/efficiency.js`
-
-There is no build, lint, or bundling step in this repository.
+- frontend changes in `public/` usually need a browser refresh
+- `server.js` and `lib/` changes require restarting `npm start`
+- static assets are served with `Cache-Control: no-store`, so a normal refresh is usually enough after frontend edits
 
 ## Repo Map
 
-- `server.js`: Express entry point, API routes, Lolalytics fetch/parsing, scoring, and shutdown handling
-- `public/index.html`: static shell loaded by the browser
-- `public/app.js`: client-side state, draft UI, request submission, and results rendering
-- `public/*.js`: shared helper modules loaded in the browser and reused by Node via `require(...)`
-- `public/champions.json`: local champion metadata for search and icons
-- `lib/request-normalization.js`: request validation and champion/ally normalization
-- `lib/requested-target-roles.js`: target-role resolution for explicit or inferred role requests
-- `lib/role-suggestion-results.js`: role-level aggregation, filtering, sorting, and response metadata
-- `lib/candidate-score-accumulator.js`: running-total score accumulation used by role aggregation
-- `lib/lolalytics-tier-list.js`: tier-list HTML parsing and eligibility mapping
-- `lib/matchup-orientation.js`: enemy win-rate orientation helper
-- `test/*.test.js`: Node test suite for the shared helpers and parsers
-- `bench/efficiency.js`: synthetic benchmark for the role aggregation and top-N ranking helpers
-- `docs/`: user-facing and technical documentation
+Entry points:
 
-## Architecture At A Glance
+- `server.js`: Express startup, `GET /app-config`, `POST /suggest`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
+- `public/index.html`: browser entry point
+- `public/app.js`: frontend controller, draft state, fetch flows, modal state, and rendering
 
-1. `server.js` serves the static frontend from `public/`.
-2. The browser loads `champions.json`, app config, and the shared frontend helpers.
-3. The current UI sends `rankFilter`, `allies`, and `enemies` to `POST /suggest`.
-4. The backend resolves which target roles to fetch:
-   - explicit `roles`, `role`, or `targetRole` fields if provided
-   - otherwise every role not already assigned to an allied champion
-5. For each target role, the backend fetches live Lolalytics synergy, counter, and tier-list data, then merges the results into one ranked list.
-6. The response is returned as `resultsByRole` and `metaByRole`. Single-role responses also include legacy `results` and `meta` fields for compatibility.
+Core module groups:
 
-Two implementation details matter when you change behavior:
+- `public/*.js`: browser-loaded helper modules that are also reusable from Node via `require(...)`
+- `lib/*.js`: Node-only request normalization, parsing, aggregation, and scoring helpers
+- `test/*.test.js`: Node test suite for shared helpers, parsers, rendering helpers, and server HTTP/startup coverage
+- `bench/efficiency.js`: synthetic benchmark for aggregation and top-result selection
 
-- The backend reuses several helpers from `public/` instead of duplicating logic in `lib/`.
-- Remote Lolalytics responses are cached in memory for 5 minutes per URL; frontend results are cached in memory per draft key for the current browser session.
+High-value files when you are new to the codebase:
 
-## Setup Notes
+- `lib/request-normalization.js`: validates and normalizes `/suggest` and `/build-suggestions` payloads
+- `lib/requested-target-roles.js`: resolves explicit roles or infers unassigned roles from ally assignments
+- `lib/server-route-helpers.js`: shared request normalization and response shaping for the Express routes
+- `lib/lolalytics-tier-list.js`: parses tier-list HTML into role eligibility data
+- `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
+- `lib/lolalytics-build-parser.js`: normalizes Lolalytics matchup `q-data.json` payloads into rune/boots data
+- `lib/build-suggestion-results.js`: aggregates matchup build data across enemies into one summary payload
+- `public/result-ranking.js`: shared ranking and top-N helpers
+- `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
+- `public/build-suggestion-view.js`: HTML rendering for the runes/boots modal
 
-- Default port: `3000`
-- Override the port on macOS/Linux: `PORT=3001 npm start`
-- Override the port on PowerShell: `$env:PORT=3001; npm start`
-- Frontend assets are served with `Cache-Control: no-store`, so a normal browser refresh picks up static file changes
-- Server-side code changes still require restarting `npm start`
+## Architecture Overview
+
+The app has three code layers:
+
+1. `server.js` is the only HTTP entry point. It serves the static UI and exposes the local API routes.
+2. `public/` contains the browser shell plus small shared modules that both the browser and Node can import.
+3. `lib/` contains the Node-only logic for normalization, parsing, and result aggregation.
+
+The two main request flows are:
+
+### Role Suggestions
+
+1. `public/app.js` collects `rankFilter`, `allies`, and `enemies`.
+2. `POST /suggest` uses `lib/server-route-helpers.js` to normalize the request and resolve target roles.
+3. For each requested role, the server fetches:
+   - role tier-list HTML
+   - ally synergy data
+   - enemy counter data
+4. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
+5. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
+
+### Matchup Runes & Boots
+
+1. The UI enables `Runes & Boots` only when an ally role is assigned and at least one enemy exists.
+2. `POST /build-suggestions` validates the ally-role request.
+3. The server fetches Lolalytics matchup build payloads for each enemy.
+4. `lib/lolalytics-build-parser.js` normalizes those payloads.
+5. `lib/build-suggestion-results.js` merges the matchup data into one rune-and-boots summary.
+
+Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
+
+## Practical API Checks
+
+Sanity-check role suggestions:
+
+```bash
+curl -s http://localhost:3000/suggest \
+  -H 'content-type: application/json' \
+  -d '{
+    "rankFilter": "emerald_plus",
+    "allies": [
+      { "champion": "Ahri", "role": "middle" },
+      { "champion": "Jarvan IV" }
+    ],
+    "enemies": ["Jinx", "Nautilus"]
+  }'
+```
+
+Sanity-check matchup runes and boots:
+
+```bash
+curl -s http://localhost:3000/build-suggestions \
+  -H 'content-type: application/json' \
+  -d '{
+    "rankFilter": "emerald_plus",
+    "ally": { "champion": "Ahri", "role": "middle" },
+    "enemies": ["Zed", "Sejuani"]
+  }'
+```
 
 ## Troubleshooting
 
 ### `npm start` fails immediately
 
-Run `node -v`. If Node is missing or older than 18, install a newer version.
+Run `node -v`. This repo expects Node 18+ because it uses built-in `fetch` and `node:test`.
 
 ### `http://localhost:3000` does not load
 
-- Confirm `npm start` is still running
-- Confirm you opened the same port the server logged
-- If port `3000` is busy, start the app on another port
+- confirm `npm start` is still running
+- confirm the port matches the one you started with
+- if port `3000` is busy, start with `PORT=3001 npm start`
 
-### The UI does not show the role I expected
+### Frontend changes are not showing up
 
-- The fetch request only returns roles that are still unassigned after ally role selection
-- If you assign `support` to an ally, support suggestions are intentionally removed from the available result roles
+- refresh the browser after editing files in `public/`
+- restart the server after editing `server.js` or files imported by the server
 
-### I changed code but still see old behavior
+### Role results are missing or only some roles load
 
-- Refresh the page for frontend-only changes
-- Restart `npm start` after changing `server.js` or any server-imported helper
+- the backend uses live Lolalytics responses, so timeouts and upstream parse changes can fail by role
+- partial role failures are surfaced in the UI and in `metaByRole[role].partialFailures`
+- if every requested role fails, `/suggest` returns an HTTP error
 
-### Suggestions fail or only some roles load
+### The `Runes & Boots` button is disabled
 
-- The app depends on live Lolalytics responses
-- A timeout or parse failure in one source can still return partial results for other roles
-- Look at the `Partial scrape failures` block in the UI for the failing role-specific request
+The current UI only enables that flow when:
 
-### The browser close button is unavailable
+- the ally has an assigned role
+- at least one enemy champion is selected
+- the app is not already loading role suggestions or shutting down
 
-Use `Ctrl+C` in the terminal. The top-right close button depends on a successful `/app-config` load and a local shutdown token.
+### Requests fail immediately before any live fetches
+
+The server rejects invalid local input first. Common causes are:
+
+- the same champion was selected on both allied and enemy sides
+- a role alias could not be normalized
+- the request exceeded the ally or enemy limits
+
+### The top-right close button is missing
+
+The button is only shown after `GET /app-config` succeeds and the browser receives the per-process shutdown token. `Ctrl+C` in the terminal always remains the fallback.
+
+## Related Docs
+
+- developer architecture: [`docs/TECHNICAL_OVERVIEW.md`](docs/TECHNICAL_OVERVIEW.md)
+- non-technical setup and usage: [`docs/NON_TECHNICAL_GUIDE.md`](docs/NON_TECHNICAL_GUIDE.md)
 
 ## Current Limitations
 
-- The app depends on live Lolalytics response formats and may break if their markup or `q-data.json` payload changes
-- Runtime settings such as patch window, queue, region, and request thresholds are hard-coded in `server.js`
-- There is no persistence, authentication, or hosted deployment flow
+- live behavior depends on Lolalytics HTML and `q-data.json` staying structurally compatible
+- runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`
+- the only supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, and `LOLALYTICS_MEGA_URL`
+- there is no persistence, auth, or deployment story in this repository
 
 ## License
 
 This repository is open source under the [MIT License](LICENSE).
 
-The MIT license applies only to the original code in this repository. It does not grant any rights to third-party names, trademarks, data, or media, including Riot Games and League of Legends marks or any Lolalytics data, site content, or icon URLs referenced by the app.
+The MIT license applies only to the original code in this repository. It does not grant rights to third-party names, trademarks, data, or media, including Riot Games and League of Legends marks or any Lolalytics data, site content, or icon URLs referenced by the app.
 
 This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.

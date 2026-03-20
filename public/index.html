@@ -139,8 +139,57 @@
       </section>
     </main>
 
+    <section
+      id="build-suggestion-modal"
+      class="build-modal hidden"
+      aria-hidden="true"
+      aria-label="Rune and boots suggestions"
+    >
+      <div id="build-suggestion-backdrop" class="build-modal-backdrop"></div>
+      <div
+        id="build-suggestion-dialog"
+        class="build-modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="build-suggestion-title"
+      >
+        <header class="build-modal-header">
+          <div class="build-modal-heading">
+            <div class="build-modal-title-row">
+              <img
+                id="build-suggestion-champion-icon"
+                class="build-modal-icon hidden"
+                src=""
+                alt=""
+                width="48"
+                height="48"
+              />
+              <div>
+                <p class="picker-kicker">Runes &amp; Boots</p>
+                <h2 id="build-suggestion-title">Rune and boots suggestions</h2>
+              </div>
+            </div>
+            <p id="build-suggestion-meta" class="build-modal-meta"></p>
+          </div>
+          <button
+            id="build-suggestion-close"
+            class="build-modal-close"
+            type="button"
+            aria-label="Back to draft"
+            title="Back"
+          >
+            <span class="build-modal-close-icon" aria-hidden="true">&#8592;</span>
+          </button>
+        </header>
+
+        <div id="build-suggestion-tabs" class="build-modal-tabs" role="tablist" aria-label="Build suggestion views"></div>
+        <div id="build-suggestion-errors" class="partial-failures build-modal-messages"></div>
+        <div id="build-suggestion-body" class="build-modal-body"></div>
+      </div>
+    </section>
+
     <div class="app-version-badge">
-      <span id="app-version">v2.2</span>
+      <span id="app-version">v3.1</span>
     </div>
 
     <script src="/roles.js" defer></script>
@@ -148,6 +197,9 @@
     <script src="/result-ranking.js" defer></script>
     <script src="/suggestion-filters.js" defer></script>
     <script src="/suggestion-cache.js" defer></script>
+    <script src="/build-suggestion-cache.js" defer></script>
+    <script src="/rune-metadata.js" defer></script>
+    <script src="/build-suggestion-view.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>
