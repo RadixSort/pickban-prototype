@@ -157,7 +157,7 @@
   function hydrateRuneSelections(selections, side, slotGroupMap) {
     return getOrderedSelections(selections).map((selection) => ({
       ...selection,
-      matchedWinRate: lookupSelectionWinRate(side, selection, slotGroupMap),
+      ...lookupSelectionRates(side, selection, slotGroupMap),
     }));
   }
 
@@ -195,10 +195,13 @@
     return map;
   }
 
-  function lookupSelectionWinRate(side, selection, slotGroupMap) {
+  function lookupSelectionRates(side, selection, slotGroupMap) {
     const slotIndex = Number(selection?.slotIndex);
     if (!Number.isInteger(slotIndex)) {
-      return null;
+      return {
+        matchedWinRate: null,
+        matchedPickRate: null,
+      };
     }
 
     const groupKey = `${side}-slot-${slotIndex}`;
@@ -207,7 +210,10 @@
       ? group.options.find((candidate) => candidate?.id === selection?.id) || null
       : null;
 
-    return option?.winRate ?? null;
+    return {
+      matchedWinRate: option?.winRate ?? null,
+      matchedPickRate: option?.pickRate ?? null,
+    };
   }
 
   function renderRuneSection(label, selections) {
@@ -231,14 +237,25 @@
         <img
           src="${escapeAttribute(selection?.icon || "")}"
           alt="${escapeAttribute(selection?.name || "Rune")}"
-          width="34"
-          height="34"
+          width="40"
+          height="40"
         />
         <div class="build-rune-card-copy">
           <strong>${escapeHtml(selection?.name || "Unknown")}</strong>
-          <span>${escapeHtml(formatPercent(selection?.matchedWinRate))}</span>
+          <div class="build-rune-card-stats">
+            ${renderRuneCardStat(selection?.matchedWinRate, "win")}
+            ${renderRuneCardStat(selection?.matchedPickRate, "pick")}
+          </div>
         </div>
       </article>
+    `;
+  }
+
+  function renderRuneCardStat(value, tone) {
+    return `
+      <span class="build-rune-card-stat build-rune-card-stat--${escapeAttribute(tone)}">
+        ${escapeHtml(formatPercent(value))} ${escapeHtml(tone)}
+      </span>
     `;
   }
 

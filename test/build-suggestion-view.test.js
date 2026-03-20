@@ -233,7 +233,7 @@ test("build suggestion tabs expose only the summary layout", () => {
   assert.equal(DEFAULT_BUILD_SUGGESTION_TAB, "summary");
 });
 
-test("renderBuildSuggestionBody renders named, ordered runes with win rates", () => {
+test("renderBuildSuggestionBody renders named, ordered runes with win and pick rates", () => {
   const html = renderBuildSuggestionBody(createPayload());
 
   assert.match(html, /Highest Win/);
@@ -248,6 +248,8 @@ test("renderBuildSuggestionBody renders named, ordered runes with win rates", ()
   assert.match(html, /Adaptive Force/);
   assert.match(html, /50\.1%/);
   assert.match(html, /47\.2%/);
+  assert.match(html, /Lethal Tempo[\s\S]*50\.1% win[\s\S]*73\.5% pick/);
+  assert.match(html, /Gathering Storm[\s\S]*47\.2% win[\s\S]*8\.7% pick/);
   assert.match(html, /Lethal Tempo[\s\S]*Triumph[\s\S]*Legend: Bloodline[\s\S]*Coup de Grace/);
   assert.match(html, /Nimbus Cloak[\s\S]*Gathering Storm/);
   assert.doesNotMatch(html, /Primary Tree/);
