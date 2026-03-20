@@ -6,12 +6,8 @@
 
   globalScope.buildSuggestionView = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
-  const DEFAULT_BUILD_SUGGESTION_TAB = "highestWinPage";
-  const BUILD_SUGGESTION_TABS = [
-    { value: "highestWinPage", label: "Highest Win" },
-    { value: "mostPickedPage", label: "Most Picked" },
-    { value: "boots", label: "Boots" },
-  ];
+  const DEFAULT_BUILD_SUGGESTION_TAB = "summary";
+  const BUILD_SUGGESTION_TABS = [{ value: "summary", label: "Summary" }];
   const validTabs = new Set(BUILD_SUGGESTION_TABS.map((tab) => tab.value));
 
   function normalizeBuildSuggestionTab(value) {
@@ -19,99 +15,230 @@
   }
 
   function renderBuildSuggestionBody(payload, activeTab = DEFAULT_BUILD_SUGGESTION_TAB) {
-    const normalizedTab = normalizeBuildSuggestionTab(activeTab);
+    void activeTab;
 
     if (!payload || typeof payload !== "object") {
       return renderEmptyState("Select an ally with a role, then load rune and boots suggestions.");
     }
 
-    if (normalizedTab === "highestWinPage") {
-      return renderPagePanel({
-        title: "Highest Win Page",
-        tone: "highest-win",
-        page: payload?.runes?.highestWinPage || null,
-        notes: payload?.runes?.highlighting?.notes || [],
-        emptyMessage: "No locked page crossed the current highest-win sample threshold.",
-      });
-    }
+    const notes = Array.isArray(payload?.runes?.highlighting?.notes)
+      ? payload.runes.highlighting.notes
+      : [];
+    const slotGroups = Array.isArray(payload?.runes?.overview?.slotGroups)
+      ? payload.runes.overview.slotGroups
+      : [];
+    const highestWinPage = payload?.runes?.highestWinPage || null;
+    const mostPickedPage = payload?.runes?.mostPickedPage || null;
+    const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
 
-    if (normalizedTab === "mostPickedPage") {
-      return renderPagePanel({
-        title: "Most Picked Page",
-        tone: "most-picked",
-        page: payload?.runes?.mostPickedPage || null,
-        notes: [],
-        emptyMessage: "No locked most-picked page was available.",
-      });
-    }
-
-    if (normalizedTab === "boots") {
-      return renderBootsPanel(payload?.boots?.options || []);
-    }
-
-    return renderEmptyState("No build suggestion data is available.");
+    return renderSummaryPanel({
+      highestWinPage,
+      mostPickedPage,
+      boots,
+      notes,
+      slotGroupMap: buildSlotGroupMap(slotGroups),
+    });
   }
 
-  function renderPagePanel({ title, tone, page, notes, emptyMessage }) {
-    if (!page) {
+  function renderSummaryPanel({ highestWinPage, mostPickedPage, boots, notes, slotGroupMap }) {
+    const hasAnyContent = highestWinPage || mostPickedPage || boots.length > 0;
+
+    if (!hasAnyContent) {
       return `
-        <div class="build-view">
+        <div class="build-view build-view--summary">
           ${renderInlineNotes(notes)}
-          ${renderEmptyState(emptyMessage)}
+          ${renderEmptyState("No build suggestion data is available.")}
         </div>
       `;
     }
 
     return `
-      <div class="build-view build-view--page">
+      <div class="build-view build-view--summary">
         ${renderInlineNotes(notes)}
-        <section class="build-focus-card build-focus-card--${escapeAttribute(tone)}">
-          <header class="build-focus-header">
-            <div class="build-focus-heading">
-              <span class="build-focus-kicker">${escapeHtml(title)}</span>
-              <h3>${escapeHtml(getPageTitle(page))}</h3>
-            </div>
-            <div class="build-focus-summary">
-              ${renderSummaryMetric("Win Rate", formatPercent(page.winRate), "win")}
-              ${renderSummaryMetric("Pick Rate", formatPercent(page.pickRate), "pick")}
-              ${renderSummaryMetric("Games", formatCount(page.games), "games")}
-            </div>
-          </header>
-          <div class="build-focus-rows">
-            ${renderSelectionRow("Primary Tree", [page.primaryStyle])}
-            ${renderSelectionRow("Primary Runes", page?.selections?.primary || [])}
-            ${renderSelectionRow("Secondary Tree", [page.secondaryStyle])}
-            ${renderSelectionRow("Secondary Runes", page?.selections?.secondary || [])}
-            ${renderSelectionRow("Stat Mods", page?.selections?.modifiers || [])}
-          </div>
+        <section class="build-summary-board" aria-label="Rune and boots summary">
+          ${renderSummaryPageColumn({
+            title: "Highest Win",
+            tone: "highest-win",
+            page: highestWinPage,
+            slotGroupMap,
+            emptyMessage: "No locked page crossed the current highest-win sample threshold.",
+          })}
+          ${renderSummaryPageColumn({
+            title: "Most Picked",
+            tone: "most-picked",
+            page: mostPickedPage,
+            slotGroupMap,
+            emptyMessage: "No locked most-picked page was available.",
+          })}
+          ${renderSummaryBootsColumn(boots)}
         </section>
       </div>
     `;
   }
 
-  function renderBootsPanel(boots) {
+  function renderSummaryPageColumn({ title, tone, page, slotGroupMap, emptyMessage }) {
+    if (!page) {
+      return `
+        <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
+          <header class="build-summary-column-header">
+            <div class="build-summary-column-heading">
+              <span class="build-summary-kicker">${escapeHtml(title)}</span>
+              <h3>${escapeHtml(title)}</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">${escapeHtml(emptyMessage)}</div>
+        </section>
+      `;
+    }
+
+    const primaryRunes = hydrateRuneSelections(page?.selections?.primary, "primary", slotGroupMap);
+    const secondaryRunes = hydrateRuneSelections(
+      page?.selections?.secondary,
+      "secondary",
+      slotGroupMap,
+    );
+    const modifiers = Array.isArray(page?.selections?.modifiers) ? page.selections.modifiers : [];
+
+    return `
+      <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
+        <header class="build-summary-column-header">
+          <div class="build-summary-column-heading">
+            <span class="build-summary-kicker">${escapeHtml(title)}</span>
+            <h3>${escapeHtml(getPageTitle(page))}</h3>
+          </div>
+          <div class="build-summary-metric-grid">
+            ${renderSummaryMetric("Win", formatPercent(page.winRate), "win")}
+            ${renderSummaryMetric("Pick", formatPercent(page.pickRate), "pick")}
+            ${renderSummaryMetric("Games", formatCount(page.games), "games")}
+          </div>
+        </header>
+        <div class="build-summary-section-list">
+          ${renderRuneSection("Primary Runes", primaryRunes)}
+          ${renderRuneSection("Secondary Runes", secondaryRunes)}
+          ${renderCompactSection("Mods", modifiers)}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSummaryBootsColumn(boots) {
     if (!Array.isArray(boots) || boots.length === 0) {
-      return renderEmptyState("No completed boots data was available.");
+      return `
+        <section class="build-summary-column build-summary-column--boots">
+          <header class="build-summary-column-header">
+            <div class="build-summary-column-heading">
+              <span class="build-summary-kicker">Boots</span>
+              <h3>Boots</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">No completed boots data was available.</div>
+        </section>
+      `;
     }
 
     return `
-      <div class="build-view build-view--boots">
-        <section class="build-focus-card build-focus-card--boots">
-          <header class="build-focus-header build-focus-header--boots">
-            <div class="build-focus-heading">
-              <span class="build-focus-kicker">Boots</span>
-              <h3>Completed boots options</h3>
-            </div>
-          </header>
-          <div class="build-boots-grid">
-            ${boots.map((boot) => renderBootCard(boot)).join("")}
+      <section class="build-summary-column build-summary-column--boots">
+        <header class="build-summary-column-header">
+          <div class="build-summary-column-heading">
+            <span class="build-summary-kicker">Boots</span>
           </div>
-        </section>
-      </div>
+        </header>
+        <div class="build-summary-boot-list">
+          ${boots.map((boot) => renderCompactBootCard(boot)).join("")}
+        </div>
+      </section>
     `;
   }
 
-  function renderSelectionRow(label, selections) {
+  function hydrateRuneSelections(selections, side, slotGroupMap) {
+    return getOrderedSelections(selections).map((selection) => ({
+      ...selection,
+      matchedWinRate: lookupSelectionWinRate(side, selection, slotGroupMap),
+    }));
+  }
+
+  function getOrderedSelections(selections) {
+    if (!Array.isArray(selections)) {
+      return [];
+    }
+
+    return selections
+      .filter((selection) => selection && (selection.icon || selection.name))
+      .map((selection, index) => ({ ...selection, displayIndex: index }))
+      .sort((left, right) => {
+        const leftSlot = Number.isInteger(left?.slotIndex) ? left.slotIndex : Number.MAX_SAFE_INTEGER;
+        const rightSlot = Number.isInteger(right?.slotIndex) ? right.slotIndex : Number.MAX_SAFE_INTEGER;
+
+        if (leftSlot !== rightSlot) {
+          return leftSlot - rightSlot;
+        }
+
+        return left.displayIndex - right.displayIndex;
+      });
+  }
+
+  function buildSlotGroupMap(slotGroups) {
+    const map = new Map();
+
+    slotGroups.forEach((group) => {
+      if (!group?.key) {
+        return;
+      }
+
+      map.set(group.key, group);
+    });
+
+    return map;
+  }
+
+  function lookupSelectionWinRate(side, selection, slotGroupMap) {
+    const slotIndex = Number(selection?.slotIndex);
+    if (!Number.isInteger(slotIndex)) {
+      return null;
+    }
+
+    const groupKey = `${side}-slot-${slotIndex}`;
+    const group = slotGroupMap.get(groupKey);
+    const option = Array.isArray(group?.options)
+      ? group.options.find((candidate) => candidate?.id === selection?.id) || null
+      : null;
+
+    return option?.winRate ?? null;
+  }
+
+  function renderRuneSection(label, selections) {
+    if (!Array.isArray(selections) || selections.length === 0) {
+      return "";
+    }
+
+    return `
+      <section class="build-summary-section">
+        <span class="build-summary-section-label">${escapeHtml(label)}</span>
+        <div class="build-rune-card-grid">
+          ${selections.map((selection) => renderRuneCard(selection)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderRuneCard(selection) {
+    return `
+      <article class="build-rune-card" title="${escapeAttribute(selection?.name || "Rune")}">
+        <img
+          src="${escapeAttribute(selection?.icon || "")}"
+          alt="${escapeAttribute(selection?.name || "Rune")}"
+          width="34"
+          height="34"
+        />
+        <div class="build-rune-card-copy">
+          <strong>${escapeHtml(selection?.name || "Unknown")}</strong>
+          <span>${escapeHtml(formatPercent(selection?.matchedWinRate))}</span>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderCompactSection(label, selections) {
     const normalizedSelections = Array.isArray(selections)
       ? selections.filter((selection) => selection && (selection.icon || selection.name))
       : [];
@@ -121,47 +248,45 @@
     }
 
     return `
-      <section class="build-selection-row">
-        <div class="build-selection-row-label">
-          <span>${escapeHtml(label)}</span>
-        </div>
-        <div class="build-selection-row-options">
-          ${normalizedSelections.map((selection) => renderSelectionTile(selection)).join("")}
+      <section class="build-summary-section">
+        <span class="build-summary-section-label">${escapeHtml(label)}</span>
+        <div class="build-summary-chip-row">
+          ${normalizedSelections.map((selection) => renderCompactChip(selection)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderSelectionTile(selection) {
+  function renderCompactChip(selection) {
     return `
-      <article class="build-selection-tile" title="${escapeAttribute(selection?.name || "Selection")}">
+      <article class="build-summary-chip" title="${escapeAttribute(selection?.name || "Selection")}">
         <img
           src="${escapeAttribute(selection?.icon || "")}"
           alt="${escapeAttribute(selection?.name || "Selection")}"
-          width="36"
-          height="36"
+          width="28"
+          height="28"
         />
-        <span>${escapeHtml(selection?.name || "Unknown")}</span>
+        <span class="sr-only">${escapeHtml(selection?.name || "Unknown")}</span>
       </article>
     `;
   }
 
-  function renderBootCard(boot) {
+  function renderCompactBootCard(boot) {
     return `
-      <article class="build-boot-card ${getBootCardClassName(boot)}">
-        <div class="build-boot-card-top">
+      <article class="build-compact-boot-card ${getOptionHighlightClassName("build-compact-boot-card", boot)}">
+        <div class="build-compact-boot-card-top">
           <img
             src="${escapeAttribute(boot?.icon || "")}"
             alt="${escapeAttribute(boot?.name || "Boots")}"
-            width="40"
-            height="40"
+            width="38"
+            height="38"
           />
-          <div class="build-boot-card-copy">
+          <div class="build-compact-boot-card-copy">
             <h4>${escapeHtml(boot?.name || "Unknown")}</h4>
             ${renderHighlightLegend(boot)}
           </div>
         </div>
-        <div class="build-boot-stats">
+        <div class="build-summary-metric-grid">
           ${renderSummaryMetric("Win", formatPercent(boot?.winRate), "win")}
           ${renderSummaryMetric("Pick", formatPercent(boot?.pickRate), "pick")}
           ${renderSummaryMetric("Games", formatCount(boot?.games), "games")}
@@ -205,17 +330,17 @@
     return "";
   }
 
-  function getBootCardClassName(option) {
+  function getOptionHighlightClassName(baseClassName, option) {
     if (option?.isHighestWin && option?.isMostPicked) {
-      return "build-boot-card--both";
+      return `${baseClassName}--both`;
     }
 
     if (option?.isHighestWin) {
-      return "build-boot-card--highest-win";
+      return `${baseClassName}--highest-win`;
     }
 
     if (option?.isMostPicked) {
-      return "build-boot-card--most-picked";
+      return `${baseClassName}--most-picked`;
     }
 
     return "";

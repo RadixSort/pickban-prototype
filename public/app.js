@@ -49,7 +49,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "3.0.0",
+  version: "3.1.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -344,25 +344,27 @@ function renderAllyRoleAssignments() {
     select.value = ally.role || "";
     select.addEventListener("change", (event) => assignAllyRole(ally.id, event.target.value));
 
+    const helperText = getBuildSuggestionHelperText(ally);
+
     const controls = document.createElement("div");
     controls.className = "role-row-controls";
-    controls.appendChild(select);
+    controls.title = helperText;
 
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "role-build-action";
     buildButton.textContent = "Runes & Boots";
-    buildButton.disabled = !canOpenBuildSuggestionsForAlly(ally);
+    buildButton.disabled = Boolean(helperText);
+    buildButton.title = helperText || `Open matchup runes and boots for ${ally.name}`;
+    buildButton.setAttribute(
+      "aria-label",
+      helperText
+        ? `Runes and boots for ${ally.name}. ${helperText}`
+        : `Open matchup runes and boots for ${ally.name}`,
+    );
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
     controls.appendChild(buildButton);
-
-    const helperText = getBuildSuggestionHelperText(ally);
-    if (helperText) {
-      const helper = document.createElement("p");
-      helper.className = "role-build-helper";
-      helper.textContent = helperText;
-      controls.appendChild(helper);
-    }
+    controls.appendChild(select);
 
     row.appendChild(main);
     row.appendChild(controls);
@@ -857,27 +859,33 @@ function renderBuildSuggestionModal() {
     ? `${ally.name} ${ally.role ? getRoleLabel(ally.role) : ""} runes & boots`
     : "Rune and boots suggestions";
   buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(ally, payload);
-  buildSuggestionTabs.innerHTML = BUILD_SUGGESTION_TABS.map((tab) => {
-    const isSelected = normalizeBuildSuggestionTab(modalState.activeTab) === tab.value;
-    return `
-      <button
-        type="button"
-        class="build-modal-tab"
-        data-tab="${tab.value}"
-        role="tab"
-        aria-selected="${isSelected ? "true" : "false"}"
-      >
-        ${tab.label}
-      </button>
-    `;
-  }).join("");
-  buildSuggestionTabs.querySelectorAll("[data-tab]").forEach((button) => {
-    button.disabled = modalState.loading;
-    button.addEventListener("click", () => {
-      state.buildSuggestionModal.activeTab = normalizeBuildSuggestionTab(button.dataset.tab);
-      renderBuildSuggestionModal();
+  const shouldShowBuildSuggestionTabs = BUILD_SUGGESTION_TABS.length > 1;
+  buildSuggestionTabs.classList.toggle("hidden", !shouldShowBuildSuggestionTabs);
+  buildSuggestionTabs.innerHTML = shouldShowBuildSuggestionTabs
+    ? BUILD_SUGGESTION_TABS.map((tab) => {
+        const isSelected = normalizeBuildSuggestionTab(modalState.activeTab) === tab.value;
+        return `
+          <button
+            type="button"
+            class="build-modal-tab"
+            data-tab="${tab.value}"
+            role="tab"
+            aria-selected="${isSelected ? "true" : "false"}"
+          >
+            ${tab.label}
+          </button>
+        `;
+      }).join("")
+    : "";
+  if (shouldShowBuildSuggestionTabs) {
+    buildSuggestionTabs.querySelectorAll("[data-tab]").forEach((button) => {
+      button.disabled = modalState.loading;
+      button.addEventListener("click", () => {
+        state.buildSuggestionModal.activeTab = normalizeBuildSuggestionTab(button.dataset.tab);
+        renderBuildSuggestionModal();
+      });
     });
-  });
+  }
   buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
   buildSuggestionBody.innerHTML = modalState.loading
     ? '<div class="build-empty-state">Fetching matchup build data from Lolalytics...</div>'
