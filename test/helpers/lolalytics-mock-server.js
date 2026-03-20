@@ -1,0 +1,260 @@
+const http = require("node:http");
+const { once } = require("node:events");
+
+async function startMockLolalyticsServer(responder) {
+  const requests = [];
+  const openSockets = new Set();
+  const server = http.createServer(async (request, response) => {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    requests.push({
+      method: request.method,
+      pathname: url.pathname,
+      search: url.search,
+      url: url.toString(),
+    });
+
+    try {
+      const result = await responder({ request, url, requests });
+      const status = result?.status ?? 200;
+      const headers = { ...(result?.headers || {}) };
+
+      if (typeof result?.body === "string") {
+        headers["content-type"] ||= "text/plain; charset=utf-8";
+        response.writeHead(status, headers);
+        response.end(result.body);
+        return;
+      }
+
+      headers["content-type"] ||= "application/json; charset=utf-8";
+      response.writeHead(status, headers);
+      response.end(JSON.stringify(result?.body ?? {}));
+    } catch (error) {
+      response.writeHead(500, {
+        "content-type": "application/json; charset=utf-8",
+      });
+      response.end(
+        JSON.stringify({
+          error: error.message || "Unexpected mock-server failure.",
+        }),
+      );
+    }
+  });
+
+  server.on("connection", (socket) => {
+    openSockets.add(socket);
+    socket.unref();
+    socket.on("close", () => {
+      openSockets.delete(socket);
+    });
+  });
+
+  server.listen(0, "127.0.0.1");
+  server.unref();
+  await once(server, "listening");
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : null;
+  if (!Number.isInteger(port)) {
+    throw new Error("Failed to start the mock Lolalytics server.");
+  }
+
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    megaUrl: `http://127.0.0.1:${port}/mega/`,
+    requests,
+    close: async () => {
+      server.close();
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
+      for (const socket of openSockets) {
+        socket.destroy();
+      }
+      await Promise.race([
+        once(server, "close"),
+        waitForCloseTimeout(),
+      ]);
+    },
+    countRequests(matcher = () => true) {
+      const predicate =
+        typeof matcher === "function"
+          ? matcher
+          : (entry) => entry.pathname === matcher;
+
+      return requests.filter(predicate).length;
+    },
+  };
+}
+
+function jsonResponse(body, status = 200, headers = {}) {
+  return {
+    status,
+    headers,
+    body,
+  };
+}
+
+function textResponse(body, status = 200, headers = {}) {
+  return {
+    status,
+    headers,
+    body,
+  };
+}
+
+function createQwikPayload(loaders) {
+  return {
+    _objs: [{ loaders }],
+    _entry: "0",
+  };
+}
+
+function createRoleBuildQData(enemyRowsByRole) {
+  return createQwikPayload({
+    build: {
+      header: {
+        lane: "support",
+      },
+      enemy: enemyRowsByRole,
+    },
+  });
+}
+
+function createMatchupBuildQData({
+  allyChampionKey = "103",
+  enemyChampionKey = "89",
+  role = "middle",
+  enemyRole = "support",
+  totalGames = 60,
+  winRate = 55,
+  bootItemId = 3006,
+  bootName = "Berserker's Greaves",
+} = {}) {
+  return createQwikPayload({
+    build: {
+      header: {
+        cid: Number(allyChampionKey),
+        vs: Number(enemyChampionKey),
+        lane: role,
+        vsLane: enemyRole,
+        n: totalGames,
+      },
+      runes: {
+        stats: {
+          8008: [[totalGames, winRate, totalGames]],
+          9111: [[totalGames, winRate, totalGames]],
+          9103: [[totalGames, winRate, totalGames]],
+          8014: [[totalGames, winRate, totalGames]],
+          8304: [
+            [0, 0, 0],
+            [totalGames, winRate, totalGames],
+          ],
+          8347: [
+            [0, 0, 0],
+            [totalGames, winRate, totalGames],
+          ],
+          5005: [[totalGames, winRate, totalGames]],
+          5008: [[totalGames, winRate, totalGames]],
+          5011: [[totalGames, winRate, totalGames]],
+        },
+      },
+      summary: {
+        pick: {
+          runes: {
+            wr: winRate,
+            n: totalGames,
+            set: {
+              pri: [8008, 9111, 9103, 8014],
+              sec: [8304, 8347],
+              mod: [5005, 5008, 5011],
+            },
+          },
+        },
+        win: {
+          runes: {
+            wr: winRate,
+            n: totalGames,
+            set: {
+              pri: [8008, 9111, 9103, 8014],
+              sec: [8304, 8347],
+              mod: [5005, 5008, 5011],
+            },
+          },
+        },
+      },
+      boots: [[bootItemId, winRate, totalGames, totalGames, 0]],
+    },
+    metadata: {
+      champions: {},
+      items: {
+        [bootItemId]: bootName,
+      },
+      runes: {
+        5005: "Attack Speed",
+        5008: "Adaptive Force",
+        5011: "Health",
+        8008: "Lethal Tempo",
+        8014: "Coup de Grace",
+        8304: "Magical Footwear",
+        8347: "Cosmic Insight",
+        9103: "Legend: Bloodline",
+        9111: "Triumph",
+      },
+    },
+  });
+}
+
+function buildTierListHtml(rows) {
+  return rows.map(buildTierListRowHtml).join("\n");
+}
+
+function buildTierListRowHtml({
+  slug,
+  name,
+  lanePercent,
+  winRate,
+  pickRate,
+}) {
+  return `
+    <div class="flex h-[52px]  justify-between text-[13px] text-[#cccccc] odd:bg-[#181818] even:bg-[#101010]" q:id="${slug}">
+      <div style="width:50px" class="my-auto justify-center flex" q:key="1">
+        <a href="/lol/${slug}/build/?patch=7" q:key="Hl_2">
+          <img src="https://cdn5.lolalytics.com/champx46/${slug}.webp" width="50" height="50" alt="${name}" />
+        </a>
+      </div>
+      <div style="width:110px" class="my-auto justify-center flex" q:key="2">
+        <a href="/lol/${slug}/build/?patch=7" q:key="Hl_0">${name}</a>
+      </div>
+      <div style="width:40px" class="my-auto justify-center flex" q:key="3">S</div>
+      <div style="width:40px" class="my-auto justify-center flex" q:key="4">
+        <div class="w-[33px] text-center" q:key="Hl_4">
+          <img src="https://cdn5.lolalytics.com/lane27/support.webp" alt="support lane" />
+          ${lanePercent}
+        </div>
+      </div>
+      <div style="width:48px" class="my-auto justify-center flex" q:key="5">
+        <div class="text-center" q:key="Hl_8">
+          <span style="color:#67bb5b" q:key="wW_0">${winRate}</span>
+          <br />
+          <span class="mt-[2px] text-[11px] text-[#aaaaaa]">+0.00</span>
+        </div>
+      </div>
+      <div style="width:48px" class="my-auto justify-center flex" q:key="6">${pickRate}</div>
+    </div>
+  `;
+}
+
+function waitForCloseTimeout(timeoutMs = 100) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    timer.unref?.();
+  });
+}
+
+module.exports = {
+  buildTierListHtml,
+  createMatchupBuildQData,
+  createRoleBuildQData,
+  jsonResponse,
+  startMockLolalyticsServer,
+  textResponse,
+};

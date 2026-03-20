@@ -14,6 +14,10 @@
     return validTabs.has(value) ? value : DEFAULT_BUILD_SUGGESTION_TAB;
   }
 
+  /**
+   * Render the cached `/build-suggestions` payload into the summary-only modal
+   * layout used by the current browser UI.
+   */
   function renderBuildSuggestionBody(payload, activeTab = DEFAULT_BUILD_SUGGESTION_TAB) {
     void activeTab;
 

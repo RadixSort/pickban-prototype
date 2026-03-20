@@ -7,6 +7,7 @@ const {
   normalizeChampionSelections,
   normalizeRequestedRankFilter,
   validateAllyRoleAssignments,
+  validateNoOpposingChampionSelections,
 } = require("../lib/request-normalization.js");
 const {
   DEFAULT_RANK_FILTER,
@@ -95,6 +96,17 @@ test("validateAllyRoleAssignments rejects duplicate normalized roles", () => {
   );
 });
 
+test("validateNoOpposingChampionSelections rejects champions selected on both sides", () => {
+  assert.throws(
+    () =>
+      validateNoOpposingChampionSelections(
+        [{ champion: championByName.get("ahri"), role: "middle" }],
+        [championByName.get("ahri")],
+      ),
+    /cannot appear on both allied and enemy sides/i,
+  );
+});
+
 test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank filter", () => {
   const request = normalizeBuildSuggestionRequest(
     {
@@ -161,5 +173,25 @@ test("normalizeBuildSuggestionRequest rejects missing ally role and empty enemie
         },
       ),
     /at least one champion/i,
+  );
+
+  assert.throws(
+    () =>
+      normalizeBuildSuggestionRequest(
+        {
+          ally: {
+            champion: "Ahri",
+            role: "mid",
+          },
+          enemies: ["Ahri"],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /cannot appear on both allied and enemy sides/i,
   );
 });

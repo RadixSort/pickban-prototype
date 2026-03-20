@@ -5,6 +5,7 @@ const { performance } = require("node:perf_hooks");
 const {
   buildRoleSuggestionResults,
 } = require("../lib/role-suggestion-results.js");
+const { resolveQwikPayload } = require("../lib/qwik-payload.js");
 const {
   average,
   compareByProjectedAgency,
@@ -17,6 +18,7 @@ const TARGET_ROLE = "support";
 function main() {
   const dataset = buildSyntheticRoleDataset();
   const rankingDataset = buildSyntheticRankingDataset();
+  const qwikPayload = buildSyntheticQwikPayload();
 
   const aggregationBaseline = benchmark(() => {
     baselineBuildRoleSuggestionResults(dataset);
@@ -31,6 +33,19 @@ function main() {
   const topKeysOptimized = benchmark(() => {
     getTopResultKeys(rankingDataset, "projectedWinRate", 3);
   });
+
+  const qwikBaseline = benchmark(
+    () => {
+      baselineResolveQwikPayload(qwikPayload);
+    },
+    { iterations: 150, warmupIterations: 20 },
+  );
+  const qwikOptimized = benchmark(
+    () => {
+      resolveQwikPayload(qwikPayload);
+    },
+    { iterations: 150, warmupIterations: 20 },
+  );
 
   console.log("Aggregation benchmark");
   console.log(
@@ -64,6 +79,25 @@ function main() {
   );
   console.log(
     `speedup: ${formatRatio(topKeysBaseline.averageMs / topKeysOptimized.averageMs)}x`,
+  );
+  console.log("");
+  console.log("Qwik payload benchmark");
+  console.log(
+    formatResult(
+      "old ref resolver",
+      qwikBaseline.averageMs,
+      qwikBaseline.iterations,
+    ),
+  );
+  console.log(
+    formatResult(
+      "new memoized ref resolver",
+      qwikOptimized.averageMs,
+      qwikOptimized.iterations,
+    ),
+  );
+  console.log(
+    `speedup: ${formatRatio(qwikBaseline.averageMs / qwikOptimized.averageMs)}x`,
   );
 }
 
@@ -122,6 +156,74 @@ function buildSyntheticRankingDataset() {
     projectedWinRate: 48 + ((index * 11) % 70) / 10,
     counterScore: -55 + ((index * 13) % 20),
   }));
+}
+
+function buildSyntheticQwikPayload() {
+  const objects = [];
+
+  objects[0] = {
+    loaders: "1",
+    mirroredLoaders: ["1", "1", "1"],
+  };
+
+  objects[1] = buildRepeatedRefObject("bundle", "2", 8);
+  objects[2] = buildRepeatedRefObject("section", "3", 6);
+  objects[3] = buildRepeatedRefObject("cluster", "4", 4);
+  objects[4] = buildSyntheticQwikLeaf();
+
+  return {
+    _entry: "0",
+    _objs: objects,
+  };
+}
+
+function buildRepeatedRefObject(prefix, ref, count) {
+  const result = {};
+
+  for (let index = 0; index < count; index += 1) {
+    result[`${prefix}${index}`] = ref;
+  }
+
+  return result;
+}
+
+function buildSyntheticQwikLeaf() {
+  return {
+    header: {
+      cid: 51,
+      vs: 222,
+      lane: "support",
+    },
+    enemy: {
+      support: Array.from({ length: 40 }, (_, index) => [
+        index + 1,
+        48 + (index % 10),
+        60 - (index % 7),
+      ]),
+    },
+    summary: {
+      pick: {
+        runes: {
+          wr: 54.8,
+          n: 180,
+          set: {
+            pri: [8008, 9111, 9103, 8014],
+            sec: [8304, 8347],
+            mod: [5005, 5008, 5011],
+          },
+        },
+      },
+    },
+    boots: Array.from({ length: 6 }, (_, index) => [3000 + index, 50 + index, 10 + index, 40 + index]),
+    runes: {
+      stats: Object.fromEntries(
+        Array.from({ length: 12 }, (_, index) => [
+          String(8000 + index),
+          [[30 + index, 50 + (index % 5), 30 + index]],
+        ]),
+      ),
+    },
+  };
 }
 
 function baselineBuildRoleSuggestionResults({
@@ -243,6 +345,66 @@ function baselineGetTopResultKeys(results = [], sortMode = "projectedAgency", li
   }
 
   return topResultKeys;
+}
+
+function baselineResolveQwikPayload(payload) {
+  if (!payload || !Array.isArray(payload._objs)) {
+    throw new Error("Qwik payload must include an _objs array.");
+  }
+
+  return baselineResolveQwikValue(payload._entry, payload._objs);
+}
+
+function baselineResolveQwikValue(value, objects) {
+  if (typeof value === "string") {
+    const index = baselineParseQwikRef(value, objects.length);
+    if (index == null) {
+      return value;
+    }
+
+    const raw = objects[index];
+
+    if (Array.isArray(raw)) {
+      return raw.map((entry) => baselineResolveQwikValue(entry, objects));
+    }
+
+    if (raw && typeof raw === "object") {
+      const resolved = {};
+      for (const [key, entry] of Object.entries(raw)) {
+        resolved[key] = baselineResolveQwikValue(entry, objects);
+      }
+      return resolved;
+    }
+
+    return raw;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => baselineResolveQwikValue(entry, objects));
+  }
+
+  if (value && typeof value === "object") {
+    const resolved = {};
+    for (const [key, entry] of Object.entries(value)) {
+      resolved[key] = baselineResolveQwikValue(entry, objects);
+    }
+    return resolved;
+  }
+
+  return value;
+}
+
+function baselineParseQwikRef(value, objectCount) {
+  if (!/^[0-9a-z]+$/i.test(value)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 36);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed >= objectCount) {
+    return null;
+  }
+
+  return parsed;
 }
 
 function benchmark(fn, { iterations = 3000, warmupIterations = 200 } = {}) {

@@ -256,3 +256,30 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win pa
     false,
   );
 });
+
+test("buildBuildSuggestionResults sorts boot options by descending win rate", () => {
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 1000,
+        fetchedAt: "2026-03-19T20:15:00.000Z",
+        primaryStyleOptions: [{ id: 8000, icon: "", name: "Precision", games: 1000, wins: 500 }],
+        secondaryStyleOptions: [{ id: 8300, icon: "", name: "Inspiration", games: 1000, wins: 500 }],
+        primarySlotOptions: [[], [], [], []],
+        secondarySlotOptions: [[], [], [], []],
+        statOptions: [],
+        pageCandidates: [],
+        boots: [
+          { itemId: 3158, icon: "3158.webp", name: "Ionian Boots of Lucidity", games: 15, wins: 12 },
+          { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 9, wins: 9 },
+          { itemId: 3047, icon: "3047.webp", name: "Plated Steelcaps", games: 976, wins: 400 },
+        ],
+      }),
+    ],
+  });
+
+  assert.deepEqual(
+    aggregated.boots.options.map((option) => option.itemId),
+    [3006, 3158, 3047],
+  );
+});

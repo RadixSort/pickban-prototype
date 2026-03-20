@@ -8,6 +8,8 @@ The app uses live Lolalytics data and is built independently with appreciation f
 
 The app helps you compare champion options for any role that is still open in your draft.
 
+It also has a smaller matchup-specific workflow for rune and boots suggestions after you assign a role to one allied champion.
+
 You choose:
 
 - allied champions
@@ -89,6 +91,7 @@ Leave that terminal window open while you use the app.
 4. Click **Fetch Suggestions**.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
 6. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
+7. If one ally already has a role and you have picked at least one enemy, click **Runes & Boots** on that ally row to open matchup build suggestions.
 
 ## What The Scores Mean
 
@@ -141,6 +144,13 @@ Node.js is probably missing or was not installed correctly. Reinstall it from [h
 ### The app loads, but suggestions fail
 
 The app needs internet access and working Lolalytics responses. Wait a moment and try again.
+
+### The `Runes & Boots` button is disabled
+
+That button only works after:
+
+- at least one enemy champion is selected
+- the ally has an assigned role
 
 ### I expected one role, but the app shows others
 

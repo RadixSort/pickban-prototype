@@ -8,12 +8,8 @@ const {
   extractTierListRows,
 } = require("./lib/lolalytics-tier-list.js");
 const {
-  normalizeAllySelections,
   normalizeBuildSuggestionRequest,
   normalizeChampionName,
-  normalizeChampionSelections,
-  normalizeRequestedRankFilter,
-  validateAllyRoleAssignments,
 } = require("./lib/request-normalization.js");
 const {
   buildBuildSuggestionResults,
@@ -22,9 +18,19 @@ const {
   parseLolalyticsMatchupBuildData,
 } = require("./lib/lolalytics-build-parser.js");
 const {
+  resolveQwikPayload: resolveRawQwikPayload,
+} = require("./lib/qwik-payload.js");
+const {
   buildRoleSuggestionResults,
   buildSuggestionMeta,
 } = require("./lib/role-suggestion-results.js");
+const {
+  buildBuildSuggestionsPayload,
+  buildRoleSuggestionResponse,
+  collectSuccessfulMatchupBuilds,
+  hasUsableBuildSuggestions,
+  normalizeSuggestRequest,
+} = require("./lib/server-route-helpers.js");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -54,16 +60,25 @@ const QUEUE = "ranked";
 const REGION = "all";
 const MIN_ROLE_TIER_LIST_PICK_RATE = 0.5;
 const MIN_ROLE_TIER_LIST_LANE_PERCENT = 10;
-const LOLALYTICS_BASE_URL = "https://lolalytics.com";
-const LOLALYTICS_MEGA_URL = "https://a1.lolalytics.com/mega/";
+const LOLALYTICS_BASE_URL = normalizeBaseUrl(
+  process.env.LOLALYTICS_BASE_URL,
+  "https://lolalytics.com",
+);
+const LOLALYTICS_MEGA_URL = normalizeBaseUrl(
+  process.env.LOLALYTICS_MEGA_URL,
+  "https://a1.lolalytics.com/mega/",
+  { requireTrailingSlash: true },
+);
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
+const eligibleTierStatsCache = new Map();
 const normalizedMatchupBuildCache = new Map();
 const buildSuggestionQueryCache = new Map();
 const resolvedQwikPayloadCache = new WeakMap();
+const extractedRoleValuesCache = new WeakMap();
 const lolalyticsBuildDataCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
 const shutdownToken = crypto.randomBytes(24).toString("hex");
@@ -103,35 +118,21 @@ app.get("/app-config", (_request, response) => {
 app.post("/suggest", async (request, response) =>
   lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
     try {
-      const rankFilter = normalizeRequestedRankFilter(
-        request.body?.rankFilter ?? request.body?.tier ?? null,
-        {
-          defaultRankFilter: DEFAULT_RANK_FILTER,
-          normalizeRankFilter,
-          createError: createHttpError,
-        },
-      );
-      const allies = normalizeAllySelections(request.body?.allies, {
+      const {
+        rankFilter,
+        allies,
+        enemies,
+        targetRoles,
+        selectedChampionKeys,
+      } = normalizeSuggestRequest(request.body, {
         championByName,
-        maxCount: 4,
-        label: "allies",
+        defaultRankFilter: DEFAULT_RANK_FILTER,
+        normalizeRankFilter,
         normalizeRole,
         createError: createHttpError,
+        resolveRequestedTargetRoles,
+        buildSelectedChampionKeys,
       });
-      const enemies = normalizeChampionSelections(request.body?.enemies, {
-        championByName,
-        maxCount: 5,
-        label: "enemies",
-        createError: createHttpError,
-      });
-      validateAllyRoleAssignments(allies, createHttpError);
-      const targetRoles = resolveRequestedTargetRoles({
-        allies,
-        role: request.body?.role ?? null,
-        targetRole: request.body?.targetRole ?? null,
-        roles: request.body?.roles ?? null,
-      });
-      const selectedChampionKeys = buildSelectedChampionKeys(allies, enemies);
 
       if (allies.length === 0 && enemies.length === 0) {
         return response.status(400).json({
@@ -152,58 +153,17 @@ app.post("/suggest", async (request, response) =>
         ),
       );
 
-      const resultsByRole = {};
-      const metaByRole = {};
-      let successfulRoleCount = 0;
-      let firstFailure = null;
-
-      roleSuggestions.forEach((result, index) => {
-        const targetRole = targetRoles[index];
-
-        if (result.status === "fulfilled") {
-          resultsByRole[targetRole] = result.value.results;
-          metaByRole[targetRole] = result.value.meta;
-          successfulRoleCount += 1;
-          return;
-        }
-
-        if (!firstFailure) {
-          firstFailure = result.reason;
-        }
-
-        resultsByRole[targetRole] = [];
-        metaByRole[targetRole] = {
-          ...buildSuggestionMeta(rankFilter, targetRole, allies, enemies),
-          ...(result.reason?.meta || {}),
-          error: result.reason?.message || "Unexpected server error.",
-        };
+      const { statusCode, payload } = buildRoleSuggestionResponse({
+        targetRoles,
+        roleSuggestions,
+        rankFilter,
+        allies,
+        enemies,
+        requestStats: buildLolalyticsRequestStats(),
+        buildSuggestionMeta,
       });
 
-      const requestStats = buildLolalyticsRequestStats();
-
-      if (successfulRoleCount === 0) {
-        return response.status(firstFailure?.statusCode || 502).json({
-          error: firstFailure?.message || "No role suggestions were available for the selected champions.",
-          roles: targetRoles,
-          resultsByRole,
-          metaByRole,
-          requestStats,
-        });
-      }
-
-      const payload = {
-        roles: targetRoles,
-        resultsByRole,
-        metaByRole,
-        requestStats,
-      };
-
-      if (targetRoles.length === 1) {
-        payload.results = resultsByRole[targetRoles[0]];
-        payload.meta = metaByRole[targetRoles[0]];
-      }
-
-      response.json(payload);
+      response.status(statusCode).json(payload);
     } catch (error) {
       const statusCode = error.statusCode || 500;
       response.status(statusCode).json({
@@ -269,20 +229,10 @@ app.post("/build-suggestions", async (request, response) =>
           }),
         ),
       );
-      const matchupBuilds = [];
-      const partialFailures = [];
-
-      matchupResults.forEach((result, index) => {
-        const enemyChampion = normalizedRequest.enemies[index];
-        if (result.status === "fulfilled") {
-          matchupBuilds.push(result.value);
-          return;
-        }
-
-        partialFailures.push(
-          `${enemyChampion.name}: ${result.reason?.message || "Unexpected server error."}`,
-        );
-      });
+      const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
+        matchupResults,
+        normalizedRequest.enemies,
+      );
 
       if (matchupBuilds.length === 0) {
         return response.status(502).json({
@@ -300,31 +250,14 @@ app.post("/build-suggestions", async (request, response) =>
       const aggregatedResults = buildBuildSuggestionResults({
         matchupBuilds,
       });
-      const payload = {
-        request: {
-          ally: {
-            champion: normalizedRequest.ally.champion.name,
-            championKey: String(normalizedRequest.ally.champion.key),
-            role: normalizedRequest.ally.role,
-          },
-          enemies: normalizedRequest.enemies.map((champion) => champion.name),
-          rankFilter: normalizedRequest.rankFilter,
-        },
-        summary: {
-          enemyCount: normalizedRequest.enemies.length,
-          sourceMatchups: matchupBuilds.length,
-          lastUpdatedAt: aggregatedResults.lastUpdatedAt,
-          partialFailures,
-        },
-        runes: aggregatedResults.runes,
-        boots: aggregatedResults.boots,
-      };
+      const payload = buildBuildSuggestionsPayload({
+        normalizedRequest,
+        aggregatedResults,
+        sourceMatchups: matchupBuilds.length,
+        partialFailures,
+      });
 
-      if (
-        payload.runes.overview.slotGroups.length === 0 &&
-        !payload.runes.mostPickedPage &&
-        payload.boots.options.length === 0
-      ) {
+      if (!hasUsableBuildSuggestions(payload)) {
         return response.status(502).json({
           error:
             "Lolalytics returned matchup data, but it did not include usable rune or boots suggestions.",
@@ -345,7 +278,9 @@ app.post("/build-suggestions", async (request, response) =>
 );
 
 server = app.listen(PORT, () => {
-  console.log(`PickBan prototype running at http://localhost:${PORT}`);
+  console.log(
+    `PickBan prototype running at http://localhost:${getListeningPort(server, PORT)}`,
+  );
   console.log("Press Ctrl+C in this terminal or use the in-app top-right close button to stop it.");
 });
 
@@ -376,23 +311,28 @@ async function buildSuggestionsForRole({
   targetRole,
 }) {
   const eligibleRoleTierStatsPromise = fetchEligibleTierStats(targetRole, rankFilter);
-
-  const allyResults = await Promise.allSettled(
+  const allyResultsPromise = Promise.allSettled(
     allies.map(async ({ champion, role }) => ({
       champion,
       role,
       rows: await fetchRoleSynergyRows(champion, role, targetRole, rankFilter),
     })),
   );
-
-  const enemyResults = await Promise.allSettled(
+  const enemyResultsPromise = Promise.allSettled(
     enemies.map(async (champion) => ({
       champion,
       rows: await fetchRoleCounterRows(champion, targetRole, rankFilter),
     })),
   );
-
-  const eligibleRoleTierStats = await eligibleRoleTierStatsPromise;
+  const [
+    eligibleRoleTierStats,
+    allyResults,
+    enemyResults,
+  ] = await Promise.all([
+    eligibleRoleTierStatsPromise,
+    allyResultsPromise,
+    enemyResultsPromise,
+  ]);
   const {
     partialFailures,
     results,
@@ -428,16 +368,16 @@ async function fetchRoleCounterRows(champion, targetRole, rankFilter) {
 }
 
 async function fetchRoleSynergyRows(champion, allyRole, targetRole, rankFilter) {
-  if (allyRole) {
-    try {
-      const rows = await fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter);
-      if (rows.size > 0) {
-        return rows;
-      }
-    } catch (error) {
-      return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
-    }
+  if (!allyRole) {
+    return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
+  }
 
+  try {
+    const rows = await fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter);
+    if (rows.size > 0) {
+      return rows;
+    }
+  } catch (error) {
     return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
   }
 
@@ -467,10 +407,13 @@ async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankF
 
 async function fetchEligibleTierStats(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
-  const html = await fetchLolalyticsText(
-    buildTierListUrl(targetRole, rankFilter),
-    `${roleLabel} tier list`,
-  );
+  const tierListUrl = buildTierListUrl(targetRole, rankFilter);
+  const cachedEligibleRoleTierStats = getCachedData(eligibleTierStatsCache, tierListUrl);
+  if (cachedEligibleRoleTierStats) {
+    return cachedEligibleRoleTierStats;
+  }
+
+  const html = await fetchLolalyticsText(tierListUrl, `${roleLabel} tier list`);
   const rows = extractTierListRows(html);
   if (rows.length === 0) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier list was missing champion rows.`);
@@ -490,6 +433,7 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier list returned no eligible picks.`);
   }
 
+  setCachedData(eligibleTierStatsCache, tierListUrl, eligibleRoleTierStats);
   return eligibleRoleTierStats;
 }
 
@@ -511,10 +455,7 @@ async function fetchLolalyticsBuildData(slug, rankFilter) {
   }
 
   const root = resolveQwikPayload(payload);
-  const loaders = Object.values(root.loaders || {});
-  const buildData = loaders.find(
-    (value) => value && typeof value === "object" && value.enemy && value.header,
-  );
+  const buildData = findLoader(root.loaders, isChampionBuildLoader);
 
   if (!buildData) {
     throw createHttpError(502, `Lolalytics build data for ${slug} was missing matchup rows.`);
@@ -577,24 +518,8 @@ async function fetchLolalyticsMatchupBuildPayload(allySlug, enemySlug, role, ran
 
 function extractLolalyticsMatchupBuildLoaders(payload, allyName, enemyName) {
   const root = resolveQwikPayload(payload);
-  const loaders = Object.values(root.loaders || {});
-  const buildLoader = loaders.find(
-    (value) =>
-      value &&
-      typeof value === "object" &&
-      value.header &&
-      value.summary &&
-      value.runes &&
-      value.boots,
-  );
-  const metadataLoader = loaders.find(
-    (value) =>
-      value &&
-      typeof value === "object" &&
-      value.champions &&
-      value.items &&
-      value.runes,
-  );
+  const buildLoader = findLoader(root.loaders, isMatchupBuildLoader);
+  const metadataLoader = findLoader(root.loaders, isMatchupMetadataLoader);
 
   if (!buildLoader || !metadataLoader) {
     throw createHttpError(
@@ -767,6 +692,18 @@ function setCachedData(cache, key, data) {
   });
 }
 
+function normalizeBaseUrl(value, fallback, { requireTrailingSlash = false } = {}) {
+  const configuredValue =
+    typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
+  const trimmedValue = configuredValue.replace(/\/+$/, "");
+
+  if (requireTrailingSlash) {
+    return `${trimmedValue}/`;
+  }
+
+  return trimmedValue;
+}
+
 function resolveQwikPayload(payload) {
   if (!payload || !Array.isArray(payload._objs)) {
     throw createHttpError(502, "Lolalytics returned an unexpected q-data payload.");
@@ -777,70 +714,57 @@ function resolveQwikPayload(payload) {
     return cachedResolvedPayload;
   }
 
-  const objects = payload._objs;
-  const resolvedPayload = resolveQwikValue(payload._entry, objects);
+  const resolvedPayload = resolveRawQwikPayload(payload);
   resolvedQwikPayloadCache.set(payload, resolvedPayload);
   return resolvedPayload;
 }
 
-function resolveQwikValue(value, objects) {
-  if (typeof value === "string") {
-    const index = parseQwikRef(value, objects.length);
-    if (index == null) {
+function findLoader(loaders, predicate) {
+  for (const value of Object.values(loaders || {})) {
+    if (predicate(value)) {
       return value;
     }
-
-    const raw = objects[index];
-
-    if (Array.isArray(raw)) {
-      return raw.map((entry) => resolveQwikValue(entry, objects));
-    }
-
-    if (raw && typeof raw === "object") {
-      const resolved = {};
-      for (const [key, entry] of Object.entries(raw)) {
-        resolved[key] = resolveQwikValue(entry, objects);
-      }
-      return resolved;
-    }
-
-    return raw;
   }
 
-  if (Array.isArray(value)) {
-    return value.map((entry) => resolveQwikValue(entry, objects));
-  }
-
-  if (value && typeof value === "object") {
-    const resolved = {};
-    for (const [key, entry] of Object.entries(value)) {
-      resolved[key] = resolveQwikValue(entry, objects);
-    }
-    return resolved;
-  }
-
-  return value;
+  return null;
 }
 
-function parseQwikRef(value, objectCount) {
-  if (!/^[0-9a-z]+$/i.test(value)) {
-    return null;
-  }
+function isChampionBuildLoader(value) {
+  return Boolean(value && typeof value === "object" && value.enemy && value.header);
+}
 
-  const parsed = Number.parseInt(value, 36);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed >= objectCount) {
-    return null;
-  }
+function isMatchupBuildLoader(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      value.header &&
+      value.summary &&
+      value.runes &&
+      value.boots,
+  );
+}
 
-  return parsed;
+function isMatchupMetadataLoader(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      value.champions &&
+      value.items &&
+      value.runes,
+  );
 }
 
 function extractRoleValues(rows, valueIndex) {
-  const roleValues = new Map();
-
   if (!Array.isArray(rows)) {
-    return roleValues;
+    return new Map();
   }
+
+  const cachedRoleValues = getCachedExtractedRoleValues(rows, valueIndex);
+  if (cachedRoleValues) {
+    return cachedRoleValues;
+  }
+
+  const roleValues = new Map();
 
   for (const row of rows) {
     if (!Array.isArray(row) || row.length <= valueIndex) {
@@ -865,13 +789,42 @@ function extractRoleValues(rows, valueIndex) {
     });
   }
 
+  setCachedExtractedRoleValues(rows, valueIndex, roleValues);
   return roleValues;
+}
+
+function getCachedExtractedRoleValues(rows, valueIndex) {
+  const cachedByValueIndex = extractedRoleValuesCache.get(rows);
+  if (!cachedByValueIndex) {
+    return null;
+  }
+
+  return cachedByValueIndex.get(valueIndex) || null;
+}
+
+function setCachedExtractedRoleValues(rows, valueIndex, roleValues) {
+  let cachedByValueIndex = extractedRoleValuesCache.get(rows);
+  if (!cachedByValueIndex) {
+    cachedByValueIndex = new Map();
+    extractedRoleValuesCache.set(rows, cachedByValueIndex);
+  }
+
+  cachedByValueIndex.set(valueIndex, roleValues);
 }
 
 function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function getListeningPort(serverInstance, fallbackPort) {
+  const address = serverInstance?.address();
+  if (address && typeof address === "object" && address.port != null) {
+    return address.port;
+  }
+
+  return fallbackPort;
 }
 
 function isAuthorizedShutdownRequest(request) {

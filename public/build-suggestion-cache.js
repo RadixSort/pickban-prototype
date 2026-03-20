@@ -11,6 +11,10 @@
       ? roles.normalizeRole
       : (value) => (typeof value === "string" ? value.trim().toLowerCase() : null);
 
+  /**
+   * Cache build suggestions by the inputs that change the server response:
+   * rank filter, one ally champion plus assigned role, and the enemy set.
+   */
   function buildBuildSuggestionCacheKey(rankFilter = "", ally = null, enemies = []) {
     const normalizedRankFilter =
       typeof rankFilter === "string" && rankFilter.trim() ? rankFilter.trim().toLowerCase() : "";
