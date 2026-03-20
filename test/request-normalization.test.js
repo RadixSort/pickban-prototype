@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   normalizeAllySelections,
+  normalizeBuildSuggestionRequest,
   normalizeChampionSelections,
   normalizeRequestedRankFilter,
   validateAllyRoleAssignments,
@@ -91,5 +92,74 @@ test("validateAllyRoleAssignments rejects duplicate normalized roles", () => {
         { champion: championByName.get("jarvaniv"), role: "middle" },
       ]),
     /same role to multiple allied champions/i,
+  );
+});
+
+test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank filter", () => {
+  const request = normalizeBuildSuggestionRequest(
+    {
+      rankFilter: "diamond+",
+      ally: {
+        champion: "Ahri",
+        role: "mid",
+      },
+      enemies: ["Jarvan IV", "Miss Fortune"],
+    },
+    {
+      championByName,
+      defaultRankFilter: DEFAULT_RANK_FILTER,
+      normalizeRankFilter,
+      normalizeRole,
+    },
+  );
+
+  assert.deepEqual(request, {
+    rankFilter: "diamond_plus",
+    ally: {
+      champion: championByName.get("ahri"),
+      role: "middle",
+    },
+    enemies: [championByName.get("jarvaniv"), championByName.get("missfortune")],
+  });
+});
+
+test("normalizeBuildSuggestionRequest rejects missing ally role and empty enemies", () => {
+  assert.throws(
+    () =>
+      normalizeBuildSuggestionRequest(
+        {
+          ally: {
+            champion: "Ahri",
+          },
+          enemies: ["Jarvan IV"],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /ally\.role/i,
+  );
+
+  assert.throws(
+    () =>
+      normalizeBuildSuggestionRequest(
+        {
+          ally: {
+            champion: "Ahri",
+            role: "mid",
+          },
+          enemies: [],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /at least one champion/i,
   );
 });

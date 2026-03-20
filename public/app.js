@@ -2,6 +2,9 @@ const {
   buildSuggestionCacheKey,
 } = globalThis.suggestionCache;
 const {
+  buildBuildSuggestionCacheKey,
+} = globalThis.buildSuggestionCache;
+const {
   buildSelectedChampionKeys,
   getVisibleSuggestionResults,
   MIN_PROJECTED_WIN_RATE,
@@ -12,6 +15,12 @@ const {
   getRankFilterOptions,
   normalizeRankFilter,
 } = globalThis.rankFilters;
+const {
+  BUILD_SUGGESTION_TABS,
+  DEFAULT_BUILD_SUGGESTION_TAB,
+  normalizeBuildSuggestionTab,
+  renderBuildSuggestionBody,
+} = globalThis.buildSuggestionView;
 const {
   DEFAULT_TOP_RESULT_LIMIT,
   DEFAULT_SORT_MODE,
@@ -40,11 +49,13 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "2.2.0",
+  version: "3.0.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
+  buildSuggestionCache: {},
+  buildSuggestionModal: createInitialBuildSuggestionModalState(),
 };
 
 const limits = {
@@ -85,6 +96,15 @@ const resultsRequestStat = document.getElementById("results-request-stat");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
 const versionText = document.getElementById("app-version");
+const buildSuggestionModal = document.getElementById("build-suggestion-modal");
+const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
+const buildSuggestionCloseButton = document.getElementById("build-suggestion-close");
+const buildSuggestionChampionIcon = document.getElementById("build-suggestion-champion-icon");
+const buildSuggestionTitle = document.getElementById("build-suggestion-title");
+const buildSuggestionMeta = document.getElementById("build-suggestion-meta");
+const buildSuggestionTabs = document.getElementById("build-suggestion-tabs");
+const buildSuggestionErrors = document.getElementById("build-suggestion-errors");
+const buildSuggestionBody = document.getElementById("build-suggestion-body");
 
 initialize().catch((error) => {
   setError(error.message || "Failed to initialize champion metadata.");
@@ -114,7 +134,10 @@ async function initialize() {
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
   sortSelect.addEventListener("change", handleSortModeChange);
+  buildSuggestionBackdrop.addEventListener("click", closeBuildSuggestionModal);
+  buildSuggestionCloseButton.addEventListener("click", closeBuildSuggestionModal);
   document.addEventListener("click", handleOutsideClick);
+  document.addEventListener("keydown", handleGlobalKeydown);
 
   clearStatus();
   renderAll();
@@ -253,6 +276,7 @@ function renderAll() {
   renderAllyRoleAssignments();
   renderResults();
   renderActionState();
+  renderBuildSuggestionModal();
   renderVersion();
 }
 
@@ -320,10 +344,146 @@ function renderAllyRoleAssignments() {
     select.value = ally.role || "";
     select.addEventListener("change", (event) => assignAllyRole(ally.id, event.target.value));
 
+    const controls = document.createElement("div");
+    controls.className = "role-row-controls";
+    controls.appendChild(select);
+
+    const buildButton = document.createElement("button");
+    buildButton.type = "button";
+    buildButton.className = "role-build-action";
+    buildButton.textContent = "Runes & Boots";
+    buildButton.disabled = !canOpenBuildSuggestionsForAlly(ally);
+    buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
+    controls.appendChild(buildButton);
+
+    const helperText = getBuildSuggestionHelperText(ally);
+    if (helperText) {
+      const helper = document.createElement("p");
+      helper.className = "role-build-helper";
+      helper.textContent = helperText;
+      controls.appendChild(helper);
+    }
+
     row.appendChild(main);
-    row.appendChild(select);
+    row.appendChild(controls);
     allyRoleList.appendChild(row);
   }
+}
+
+function createInitialBuildSuggestionModalState() {
+  return {
+    open: false,
+    loading: false,
+    allyId: "",
+    cacheKey: "",
+    payload: null,
+    error: "",
+    activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+  };
+}
+
+function canOpenBuildSuggestionsForAlly(ally) {
+  return Boolean(ally?.role) && state.enemies.length > 0 && !isInteractionLocked();
+}
+
+function getBuildSuggestionHelperText(ally) {
+  if (state.loading) {
+    return "Unavailable while role suggestions are loading.";
+  }
+
+  if (state.shuttingDown) {
+    return "Unavailable while the app is stopping.";
+  }
+
+  if (!ally?.role) {
+    return "Assign a role to unlock build suggestions.";
+  }
+
+  if (state.enemies.length === 0) {
+    return "Add at least one enemy champion.";
+  }
+
+  return "";
+}
+
+async function handleOpenBuildSuggestions(allyId) {
+  if (state.shuttingDown) {
+    return;
+  }
+
+  const ally = state.allies.find((entry) => entry.id === allyId);
+  if (!canOpenBuildSuggestionsForAlly(ally)) {
+    return;
+  }
+
+  const cacheKey = buildBuildSuggestionCacheKey(state.rankFilter, ally, state.enemies);
+  const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
+
+  state.buildSuggestionModal = {
+    open: true,
+    loading: !cachedPayload,
+    allyId,
+    cacheKey,
+    payload: cachedPayload,
+    error: "",
+    activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+  };
+  renderBuildSuggestionModal();
+
+  if (cachedPayload) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/build-suggestions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        rankFilter: state.rankFilter,
+        ally: {
+          champion: ally.name,
+          role: ally.role,
+        },
+        enemies: state.enemies.map((enemy) => enemy.name),
+      }),
+    });
+    const payload = await parseJsonSafely(response);
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to load rune and boots suggestions.");
+    }
+
+    state.buildSuggestionCache[cacheKey] = payload;
+    if (
+      state.buildSuggestionModal.open &&
+      state.buildSuggestionModal.cacheKey === cacheKey
+    ) {
+      state.buildSuggestionModal.payload = payload;
+      state.buildSuggestionModal.loading = false;
+      state.buildSuggestionModal.error = "";
+      renderBuildSuggestionModal();
+    }
+  } catch (error) {
+    if (
+      state.buildSuggestionModal.open &&
+      state.buildSuggestionModal.cacheKey === cacheKey
+    ) {
+      state.buildSuggestionModal.loading = false;
+      state.buildSuggestionModal.error =
+        error.message || "Failed to load rune and boots suggestions.";
+      renderBuildSuggestionModal();
+    }
+  }
+}
+
+function closeBuildSuggestionModal() {
+  if (!state.buildSuggestionModal.open) {
+    return;
+  }
+
+  state.buildSuggestionModal = createInitialBuildSuggestionModalState();
+  renderBuildSuggestionModal();
 }
 
 function renderSuggestions(side) {
@@ -408,6 +568,7 @@ function addChampion(side, championId) {
 
   state[side].push(createSelectedChampion(champion, side));
   pickers[side].input.value = "";
+  closeBuildSuggestionModal();
   clearStatus();
   renderAll();
 }
@@ -433,6 +594,7 @@ function removeChampion(side, championId) {
   }
 
   state[side] = state[side].filter((champion) => champion.id !== championId);
+  closeBuildSuggestionModal();
   clearStatus();
   renderAll();
 }
@@ -477,6 +639,7 @@ function assignAllyRole(championId, role) {
       : ally,
   );
 
+  closeBuildSuggestionModal();
   clearStatus();
   renderAll();
 }
@@ -570,6 +733,7 @@ function handleResetDraft() {
   state.selectedResultRole = DEFAULT_TARGET_ROLE;
   pickers.allies.input.value = "";
   pickers.enemies.input.value = "";
+  closeBuildSuggestionModal();
   clearStatus();
   renderAll();
 }
@@ -586,6 +750,7 @@ function handleRankFilterChange(event) {
   }
 
   state.rankFilter = normalizedRankFilter;
+  closeBuildSuggestionModal();
   clearStatus();
   renderAll();
 }
@@ -650,6 +815,139 @@ async function handleCloseApp() {
   } finally {
     renderAll();
   }
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key === "Escape" && state.buildSuggestionModal.open) {
+    closeBuildSuggestionModal();
+  }
+}
+
+function renderBuildSuggestionModal() {
+  const modalState = state.buildSuggestionModal;
+  const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
+  const payload = modalState.payload;
+
+  buildSuggestionModal.classList.toggle("hidden", !modalState.open);
+  buildSuggestionModal.setAttribute("aria-hidden", modalState.open ? "false" : "true");
+
+  if (!modalState.open) {
+    buildSuggestionChampionIcon.classList.add("hidden");
+    buildSuggestionChampionIcon.src = "";
+    buildSuggestionChampionIcon.alt = "";
+    buildSuggestionTitle.textContent = "Rune and boots suggestions";
+    buildSuggestionMeta.textContent = "";
+    buildSuggestionTabs.innerHTML = "";
+    buildSuggestionErrors.innerHTML = "";
+    buildSuggestionBody.innerHTML = "";
+    return;
+  }
+
+  if (ally?.icon) {
+    buildSuggestionChampionIcon.classList.remove("hidden");
+    buildSuggestionChampionIcon.src = ally.icon;
+    buildSuggestionChampionIcon.alt = ally.name;
+  } else {
+    buildSuggestionChampionIcon.classList.add("hidden");
+    buildSuggestionChampionIcon.src = "";
+    buildSuggestionChampionIcon.alt = "";
+  }
+
+  buildSuggestionTitle.textContent = ally
+    ? `${ally.name} ${ally.role ? getRoleLabel(ally.role) : ""} runes & boots`
+    : "Rune and boots suggestions";
+  buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(ally, payload);
+  buildSuggestionTabs.innerHTML = BUILD_SUGGESTION_TABS.map((tab) => {
+    const isSelected = normalizeBuildSuggestionTab(modalState.activeTab) === tab.value;
+    return `
+      <button
+        type="button"
+        class="build-modal-tab"
+        data-tab="${tab.value}"
+        role="tab"
+        aria-selected="${isSelected ? "true" : "false"}"
+      >
+        ${tab.label}
+      </button>
+    `;
+  }).join("");
+  buildSuggestionTabs.querySelectorAll("[data-tab]").forEach((button) => {
+    button.disabled = modalState.loading;
+    button.addEventListener("click", () => {
+      state.buildSuggestionModal.activeTab = normalizeBuildSuggestionTab(button.dataset.tab);
+      renderBuildSuggestionModal();
+    });
+  });
+  buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
+  buildSuggestionBody.innerHTML = modalState.loading
+    ? '<div class="build-empty-state">Fetching matchup build data from Lolalytics...</div>'
+    : modalState.error
+      ? '<div class="build-empty-state">The build suggestion request failed.</div>'
+      : renderBuildSuggestionBody(payload, modalState.activeTab);
+}
+
+function buildBuildSuggestionMetaText(ally, payload) {
+  const parts = [];
+
+  if (ally?.role) {
+    parts.push(getRoleLabel(ally.role));
+  }
+
+  parts.push(getRankFilterDisplayLabel());
+
+  if (payload?.summary?.enemyCount) {
+    parts.push(
+      `${payload.summary.enemyCount} ${payload.summary.enemyCount === 1 ? "enemy" : "enemies"}`,
+    );
+  } else if (state.enemies.length > 0) {
+    parts.push(`${state.enemies.length} ${state.enemies.length === 1 ? "enemy" : "enemies"}`);
+  }
+
+  if (payload?.summary?.sourceMatchups) {
+    parts.push(
+      `${payload.summary.sourceMatchups} ${payload.summary.sourceMatchups === 1 ? "matchup" : "matchups"}`,
+    );
+  }
+
+  if (payload?.summary?.lastUpdatedAt) {
+    parts.push(`Updated ${formatBuildSuggestionTimestamp(payload.summary.lastUpdatedAt)}`);
+  }
+
+  return parts.join(" | ");
+}
+
+function buildBuildSuggestionMessages(payload, errorMessage = "") {
+  const sections = [];
+
+  if (errorMessage) {
+    sections.push(`<p class="partial-failures-title">${escapeHtml(errorMessage)}</p>`);
+  }
+
+  const failures = Array.isArray(payload?.summary?.partialFailures)
+    ? payload.summary.partialFailures
+    : [];
+  if (failures.length > 0) {
+    sections.push('<p class="partial-failures-title">Partial matchup failures</p>');
+    failures.forEach((failure) => {
+      sections.push(`<p class="partial-failure-item">${escapeHtml(failure)}</p>`);
+    });
+  }
+
+  return sections.join("");
+}
+
+function formatBuildSuggestionTimestamp(value) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return "Unknown";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 function renderResults() {
@@ -929,6 +1227,15 @@ function formatDisplayMessage(message) {
   }
 
   return normalizedMessage;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function normalizeSortMode(value) {

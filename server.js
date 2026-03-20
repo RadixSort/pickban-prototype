@@ -9,11 +9,18 @@ const {
 } = require("./lib/lolalytics-tier-list.js");
 const {
   normalizeAllySelections,
+  normalizeBuildSuggestionRequest,
   normalizeChampionName,
   normalizeChampionSelections,
   normalizeRequestedRankFilter,
   validateAllyRoleAssignments,
 } = require("./lib/request-normalization.js");
+const {
+  buildBuildSuggestionResults,
+} = require("./lib/build-suggestion-results.js");
+const {
+  parseLolalyticsMatchupBuildData,
+} = require("./lib/lolalytics-build-parser.js");
 const {
   buildRoleSuggestionResults,
   buildSuggestionMeta,
@@ -36,6 +43,10 @@ const {
   resolveRequestedTargetRoles,
 } = require("./lib/requested-target-roles.js");
 const { buildSelectedChampionKeys } = require(path.join(publicDir, "suggestion-filters.js"));
+const { buildBuildSuggestionCacheKey } = require(path.join(
+  publicDir,
+  "build-suggestion-cache.js",
+));
 
 const PORT = process.env.PORT || 3000;
 const PATCH_WINDOW = "7";
@@ -50,6 +61,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
+const normalizedMatchupBuildCache = new Map();
+const buildSuggestionQueryCache = new Map();
 const resolvedQwikPayloadCache = new WeakMap();
 const lolalyticsBuildDataCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
@@ -222,6 +235,114 @@ app.post("/shutdown", (request, response) => {
     beginShutdown("browser close request");
   });
 });
+
+app.post("/build-suggestions", async (request, response) =>
+  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
+    try {
+      const normalizedRequest = normalizeBuildSuggestionRequest(request.body, {
+        championByName,
+        defaultRankFilter: DEFAULT_RANK_FILTER,
+        normalizeRankFilter,
+        normalizeRole,
+        createError: createHttpError,
+      });
+      const aggregatedCacheKey = buildBuildSuggestionCacheKey(
+        normalizedRequest.rankFilter,
+        {
+          key: normalizedRequest.ally.champion.key,
+          role: normalizedRequest.ally.role,
+        },
+        normalizedRequest.enemies,
+      );
+      const cachedPayload = getCachedData(buildSuggestionQueryCache, aggregatedCacheKey);
+      if (cachedPayload) {
+        return response.json(cachedPayload);
+      }
+
+      const matchupResults = await Promise.allSettled(
+        normalizedRequest.enemies.map((enemyChampion) =>
+          fetchNormalizedMatchupBuildData({
+            allyChampion: normalizedRequest.ally.champion,
+            enemyChampion,
+            rankFilter: normalizedRequest.rankFilter,
+            role: normalizedRequest.ally.role,
+          }),
+        ),
+      );
+      const matchupBuilds = [];
+      const partialFailures = [];
+
+      matchupResults.forEach((result, index) => {
+        const enemyChampion = normalizedRequest.enemies[index];
+        if (result.status === "fulfilled") {
+          matchupBuilds.push(result.value);
+          return;
+        }
+
+        partialFailures.push(
+          `${enemyChampion.name}: ${result.reason?.message || "Unexpected server error."}`,
+        );
+      });
+
+      if (matchupBuilds.length === 0) {
+        return response.status(502).json({
+          error:
+            "No rune or boots data was returned from Lolalytics for the selected ally, role, and enemies.",
+          summary: {
+            enemyCount: normalizedRequest.enemies.length,
+            sourceMatchups: 0,
+            lastUpdatedAt: new Date().toISOString(),
+            partialFailures,
+          },
+        });
+      }
+
+      const aggregatedResults = buildBuildSuggestionResults({
+        matchupBuilds,
+      });
+      const payload = {
+        request: {
+          ally: {
+            champion: normalizedRequest.ally.champion.name,
+            championKey: String(normalizedRequest.ally.champion.key),
+            role: normalizedRequest.ally.role,
+          },
+          enemies: normalizedRequest.enemies.map((champion) => champion.name),
+          rankFilter: normalizedRequest.rankFilter,
+        },
+        summary: {
+          enemyCount: normalizedRequest.enemies.length,
+          sourceMatchups: matchupBuilds.length,
+          lastUpdatedAt: aggregatedResults.lastUpdatedAt,
+          partialFailures,
+        },
+        runes: aggregatedResults.runes,
+        boots: aggregatedResults.boots,
+      };
+
+      if (
+        payload.runes.overview.slotGroups.length === 0 &&
+        !payload.runes.mostPickedPage &&
+        payload.boots.options.length === 0
+      ) {
+        return response.status(502).json({
+          error:
+            "Lolalytics returned matchup data, but it did not include usable rune or boots suggestions.",
+          request: payload.request,
+          summary: payload.summary,
+        });
+      }
+
+      setCachedData(buildSuggestionQueryCache, aggregatedCacheKey, payload);
+      response.json(payload);
+    } catch (error) {
+      const statusCode = error.statusCode || 500;
+      response.status(statusCode).json({
+        error: error.message || "Unexpected server error.",
+      });
+    }
+  }),
+);
 
 server = app.listen(PORT, () => {
   console.log(`PickBan prototype running at http://localhost:${PORT}`);
@@ -403,6 +524,91 @@ async function fetchLolalyticsBuildData(slug, rankFilter) {
   return buildData;
 }
 
+async function fetchNormalizedMatchupBuildData({
+  allyChampion,
+  enemyChampion,
+  rankFilter,
+  role,
+}) {
+  const cacheKey = buildMatchupBuildCacheKey(
+    allyChampion.key,
+    role,
+    enemyChampion.key,
+    rankFilter,
+  );
+  const cached = getCachedData(normalizedMatchupBuildCache, cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const payload = await fetchLolalyticsMatchupBuildPayload(
+    allyChampion.id,
+    enemyChampion.id,
+    role,
+    rankFilter,
+  );
+  const {
+    buildLoader,
+    metadataLoader,
+  } = extractLolalyticsMatchupBuildLoaders(payload, allyChampion.name, enemyChampion.name);
+  const parsedBuildData = parseLolalyticsMatchupBuildData(buildLoader, metadataLoader, {
+    fetchedAt: new Date().toISOString(),
+  });
+
+  setCachedData(normalizedMatchupBuildCache, cacheKey, parsedBuildData);
+  return parsedBuildData;
+}
+
+async function fetchLolalyticsMatchupBuildPayload(allySlug, enemySlug, role, rankFilter) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      lane: role,
+      patch: PATCH_WINDOW,
+    },
+    rankFilter,
+    { includeDefaultTier: true },
+  );
+
+  return fetchLolalyticsJson(
+    `${LOLALYTICS_BASE_URL}/lol/${allySlug}/vs/${enemySlug}/build/q-data.json?${searchParams.toString()}`,
+    `${allySlug} vs ${enemySlug} ${role} build q-data`,
+  );
+}
+
+function extractLolalyticsMatchupBuildLoaders(payload, allyName, enemyName) {
+  const root = resolveQwikPayload(payload);
+  const loaders = Object.values(root.loaders || {});
+  const buildLoader = loaders.find(
+    (value) =>
+      value &&
+      typeof value === "object" &&
+      value.header &&
+      value.summary &&
+      value.runes &&
+      value.boots,
+  );
+  const metadataLoader = loaders.find(
+    (value) =>
+      value &&
+      typeof value === "object" &&
+      value.champions &&
+      value.items &&
+      value.runes,
+  );
+
+  if (!buildLoader || !metadataLoader) {
+    throw createHttpError(
+      502,
+      `Lolalytics matchup build data for ${allyName} vs ${enemyName} was missing rune or item metadata.`,
+    );
+  }
+
+  return {
+    buildLoader,
+    metadataLoader,
+  };
+}
+
 async function fetchLolalyticsMegaJson(query, label) {
   return fetchLolalyticsJson(`${LOLALYTICS_MEGA_URL}${query}`, label);
 }
@@ -528,6 +734,37 @@ function buildLolalyticsRequestStats() {
   return {
     lolalyticsLiveAccessCount: Number(requestStats?.lolalyticsLiveAccessCount || 0),
   };
+}
+
+function buildMatchupBuildCacheKey(allyChampionKey, role, enemyChampionKey, rankFilter) {
+  return [
+    `ally=${String(allyChampionKey || "")}`,
+    `role=${String(role || "")}`,
+    `enemy=${String(enemyChampionKey || "")}`,
+    `rank=${String(rankFilter || "")}`,
+    `patch=${PATCH_WINDOW}`,
+  ].join("|");
+}
+
+function getCachedData(cache, key) {
+  const cachedEntry = cache.get(key);
+  if (!cachedEntry) {
+    return null;
+  }
+
+  if (cachedEntry.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+
+  return cachedEntry.data;
+}
+
+function setCachedData(cache, key, data) {
+  cache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
 }
 
 function resolveQwikPayload(payload) {
