@@ -99,11 +99,11 @@
             <h2 id="results-title">Support recommendations</h2>
           </div>
           <div class="results-toolbar">
-            <label class="sort-control" for="results-role">
+            <label id="results-role-control" class="sort-control" for="results-role">
               <span>Target role</span>
               <select id="results-role"></select>
             </label>
-            <label class="sort-control" for="results-sort">
+            <label id="results-sort-control" class="sort-control" for="results-sort">
               <span>Rank by</span>
               <select id="results-sort">
                 <option value="projectedWinRate">Projected Win Rate</option>
@@ -119,6 +119,8 @@
           Select some champions, optionally assign known ally roles, then fetch suggestions to load
           every remaining role.
         </div>
+
+        <div id="draft-projection-wrap" class="hidden"></div>
 
         <div id="results-table-wrap" class="results-table-wrap hidden">
           <table class="results-table">
@@ -143,7 +145,7 @@
       id="build-suggestion-modal"
       class="build-modal hidden"
       aria-hidden="true"
-      aria-label="Rune and boots suggestions"
+      aria-label="Build recommendation"
     >
       <div id="build-suggestion-backdrop" class="build-modal-backdrop"></div>
       <div
@@ -165,8 +167,8 @@
                 height="48"
               />
               <div>
-                <p class="picker-kicker">Runes &amp; Boots</p>
-                <h2 id="build-suggestion-title">Rune and boots suggestions</h2>
+                <p class="picker-kicker">Build Recommendation</p>
+                <h2 id="build-suggestion-title">Build Recommendation</h2>
               </div>
             </div>
             <p id="build-suggestion-meta" class="build-modal-meta"></p>
@@ -189,7 +191,7 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v3.2</span>
+      <span id="app-version">v5.0</span>
     </div>
 
     <script src="/roles.js" defer></script>
@@ -198,6 +200,7 @@
     <script src="/suggestion-filters.js" defer></script>
     <script src="/suggestion-cache.js" defer></script>
     <script src="/build-suggestion-cache.js" defer></script>
+    <script src="/draft-projection-view.js" defer></script>
     <script src="/rune-metadata.js" defer></script>
     <script src="/build-suggestion-view.js" defer></script>
     <script src="/app.js" defer></script>

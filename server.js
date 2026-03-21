@@ -9,8 +9,13 @@ const {
 } = require("./lib/lolalytics-tier-list.js");
 const {
   normalizeBuildSuggestionRequest,
+  normalizeDraftProjectionRequest,
   normalizeChampionName,
 } = require("./lib/request-normalization.js");
+const {
+  buildDraftProjection,
+  hasUsableDraftProjection,
+} = require("./lib/draft-projection.js");
 const {
   buildBuildSuggestionResults,
 } = require("./lib/build-suggestion-results.js");
@@ -26,11 +31,17 @@ const {
 } = require("./lib/role-suggestion-results.js");
 const {
   buildBuildSuggestionsPayload,
+  buildDraftProjectionPayload,
   buildRoleSuggestionResponse,
   collectSuccessfulMatchupBuilds,
   hasUsableBuildSuggestions,
   normalizeSuggestRequest,
 } = require("./lib/server-route-helpers.js");
+const {
+  buildTargetRoleRowResults,
+  buildTargetRoleRowResultsWithFallback,
+  getTargetRoleRowResult,
+} = require("./lib/target-role-row-results.js");
 
 const app = express();
 const publicDir = path.join(__dirname, "public");
@@ -49,6 +60,7 @@ const {
   resolveRequestedTargetRoles,
 } = require("./lib/requested-target-roles.js");
 const { buildSelectedChampionKeys } = require(path.join(publicDir, "suggestion-filters.js"));
+const { buildSuggestionCacheKey } = require(path.join(publicDir, "suggestion-cache.js"));
 const { buildBuildSuggestionCacheKey } = require(path.join(
   publicDir,
   "build-suggestion-cache.js",
@@ -77,10 +89,12 @@ const requestCache = new Map();
 const eligibleTierStatsCache = new Map();
 const normalizedMatchupBuildCache = new Map();
 const buildSuggestionQueryCache = new Map();
+const draftProjectionQueryCache = new Map();
 const resolvedQwikPayloadCache = new WeakMap();
 const extractedRoleValuesCache = new WeakMap();
 const lolalyticsBuildDataCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
+let lolalyticsLifetimeAccessCount = 0;
 const shutdownToken = crypto.randomBytes(24).toString("hex");
 const openSockets = new Set();
 let server;
@@ -149,17 +163,13 @@ app.post("/suggest", async (request, response) =>
         });
       }
 
-      const roleSuggestions = await Promise.allSettled(
-        targetRoles.map((targetRole) =>
-          buildSuggestionsForRole({
-            allies,
-            enemies,
-            rankFilter,
-            selectedChampionKeys,
-            targetRole,
-          }),
-        ),
-      );
+      const roleSuggestions = await buildSuggestionsForRoles({
+        allies,
+        enemies,
+        rankFilter,
+        selectedChampionKeys,
+        targetRoles,
+      });
 
       const { statusCode, payload } = buildRoleSuggestionResponse({
         targetRoles,
@@ -172,6 +182,89 @@ app.post("/suggest", async (request, response) =>
       });
 
       response.status(statusCode).json(payload);
+    } catch (error) {
+      const statusCode = error.statusCode || 500;
+      response.status(statusCode).json({
+        error: error.message || "Unexpected server error.",
+        requestStats: buildLolalyticsRequestStats(),
+      });
+    }
+  }),
+);
+
+app.post("/draft-outlook", async (request, response) =>
+  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
+    try {
+      const normalizedRequest = normalizeDraftProjectionRequest(request.body, {
+        championByName,
+        defaultRankFilter: DEFAULT_RANK_FILTER,
+        normalizeRankFilter,
+        normalizeRole,
+        createError: createHttpError,
+      });
+      const cacheKey = buildSuggestionCacheKey(
+        normalizedRequest.rankFilter,
+        normalizedRequest.allies,
+        normalizedRequest.enemies,
+      );
+      const cachedPayload = getCachedData(draftProjectionQueryCache, cacheKey);
+      if (cachedPayload) {
+        return response.json({
+          ...cachedPayload,
+          requestStats: buildLolalyticsRequestStats(),
+        });
+      }
+
+      const [
+        allySynergyResults,
+        enemyCounterResults,
+      ] = await Promise.all([
+        buildDraftSynergyResults(normalizedRequest.allies, normalizedRequest.rankFilter),
+        buildDraftCounterResults(
+          normalizedRequest.allies,
+          normalizedRequest.enemies,
+          normalizedRequest.rankFilter,
+        ),
+      ]);
+      const projection = buildDraftProjection({
+        allySynergyResults,
+        enemyCounterResults,
+      });
+
+      if (!hasUsableDraftProjection(projection)) {
+        return response.status(502).json({
+          error:
+            "No projected draft win-rate data was returned from Lolalytics for the selected team compositions.",
+          request: {
+            allies: normalizedRequest.allies.map(({ champion, role }) => ({
+              champion: champion.name,
+              championKey: String(champion.key),
+              role,
+            })),
+            enemies: normalizedRequest.enemies.map((champion) => champion.name),
+            rankFilter: normalizedRequest.rankFilter,
+          },
+          summary: {
+            allyCount: normalizedRequest.allies.length,
+            enemyCount: normalizedRequest.enemies.length,
+            synergyMatchupCount: projection.synergyMatchupCount,
+            counterMatchupCount: projection.counterMatchupCount,
+            sourceMatchups: projection.sourceMatchups,
+            projectedWinRateMatchupCount: projection.projectedWinRateMatchupCount,
+            partialFailures: projection.partialFailures,
+          },
+          requestStats: buildLolalyticsRequestStats(),
+        });
+      }
+
+      const payload = buildDraftProjectionPayload({
+        normalizedRequest,
+        projection,
+        requestStats: buildLolalyticsRequestStats(),
+      });
+
+      setCachedData(draftProjectionQueryCache, cacheKey, payload);
+      response.json(payload);
     } catch (error) {
       const statusCode = error.statusCode || 500;
       response.status(statusCode).json({
@@ -245,7 +338,7 @@ app.post("/build-suggestions", async (request, response) =>
       if (matchupBuilds.length === 0) {
         return response.status(502).json({
           error:
-            "No rune or boots data was returned from Lolalytics for the selected ally, role, and enemies.",
+            "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
           summary: {
             enemyCount: normalizedRequest.enemies.length,
             sourceMatchups: 0,
@@ -268,7 +361,7 @@ app.post("/build-suggestions", async (request, response) =>
       if (!hasUsableBuildSuggestions(payload)) {
         return response.status(502).json({
           error:
-            "Lolalytics returned matchup data, but it did not include usable rune or boots suggestions.",
+            "Lolalytics returned matchup data, but it did not include usable build recommendations.",
           request: payload.request,
           summary: payload.summary,
         });
@@ -311,48 +404,89 @@ process.on("SIGTERM", () => {
   beginShutdown("SIGTERM");
 });
 
-async function buildSuggestionsForRole({
+/**
+ * Fetch every upstream input required for the requested target roles, then
+ * return one fulfilled or rejected suggestion outcome per role.
+ *
+ * Shared upstream fetches are resolved once and then re-used across roles so
+ * `/suggest` can stay efficient when the UI asks for multiple open roles.
+ */
+async function buildSuggestionsForRoles({
+  allies,
+  enemies,
+  rankFilter,
+  selectedChampionKeys,
+  targetRoles,
+}) {
+  const eligibleTierStatsResultsPromise = Promise.allSettled(
+    targetRoles.map((targetRole) => fetchEligibleTierStats(targetRole, rankFilter)),
+  );
+  const allyTargetRoleRowResultsPromise = Promise.all(
+    allies.map(({ champion, role }) =>
+      fetchRoleSynergyRowResults(champion, role, targetRoles, rankFilter),
+    ),
+  );
+  const enemyTargetRoleRowResultsPromise = Promise.all(
+    enemies.map((champion) => fetchRoleCounterRowResults(champion, targetRoles, rankFilter)),
+  );
+  const [
+    eligibleTierStatsResults,
+    allyTargetRoleRowResults,
+    enemyTargetRoleRowResults,
+  ] = await Promise.all([
+    eligibleTierStatsResultsPromise,
+    allyTargetRoleRowResultsPromise,
+    enemyTargetRoleRowResultsPromise,
+  ]);
+
+  return targetRoles.map((targetRole, index) =>
+    buildSuggestionOutcome({
+      allies,
+      enemies,
+      rankFilter,
+      selectedChampionKeys,
+      targetRole,
+      eligibleTierStatsResult: eligibleTierStatsResults[index],
+      allyTargetRoleRowResults,
+      enemyTargetRoleRowResults,
+    }),
+  );
+}
+
+function buildSuggestionOutcome({
   allies,
   enemies,
   rankFilter,
   selectedChampionKeys,
   targetRole,
+  eligibleTierStatsResult,
+  allyTargetRoleRowResults,
+  enemyTargetRoleRowResults,
 }) {
-  const eligibleRoleTierStatsPromise = fetchEligibleTierStats(targetRole, rankFilter);
-  const allyResultsPromise = Promise.allSettled(
-    allies.map(async ({ champion, role }) => ({
-      champion,
-      role,
-      rows: await fetchRoleSynergyRows(champion, role, targetRole, rankFilter),
-    })),
+  if (eligibleTierStatsResult.status !== "fulfilled") {
+    return {
+      status: "rejected",
+      reason: eligibleTierStatsResult.reason,
+    };
+  }
+
+  const allyResults = allyTargetRoleRowResults.map((targetRoleRowResults) =>
+    createRowPromiseResult(getTargetRoleRowResult(targetRoleRowResults, targetRole)),
   );
-  const enemyResultsPromise = Promise.allSettled(
-    enemies.map(async (champion) => ({
-      champion,
-      rows: await fetchRoleCounterRows(champion, targetRole, rankFilter),
-    })),
+  const enemyResults = enemyTargetRoleRowResults.map((targetRoleRowResults) =>
+    createRowPromiseResult(getTargetRoleRowResult(targetRoleRowResults, targetRole)),
   );
-  const [
-    eligibleRoleTierStats,
-    allyResults,
-    enemyResults,
-  ] = await Promise.all([
-    eligibleRoleTierStatsPromise,
-    allyResultsPromise,
-    enemyResultsPromise,
-  ]);
   const {
     partialFailures,
     results,
   } = buildRoleSuggestionResults({
     allyResults,
     enemyResults,
-    eligibleTierStats: eligibleRoleTierStats,
+    eligibleTierStats: eligibleTierStatsResult.value,
     selectedChampionKeys,
     targetRole,
     championByKey,
   });
-
   const meta = buildSuggestionMeta(rankFilter, targetRole, allies, enemies, partialFailures);
 
   if (results.length === 0) {
@@ -361,38 +495,182 @@ async function buildSuggestionsForRole({
       `No ${getRoleLabel(targetRole).toLowerCase()} data was returned from Lolalytics for the selected champions.`,
     );
     error.meta = meta;
-    throw error;
+
+    return {
+      status: "rejected",
+      reason: error,
+    };
   }
 
   return {
-    results,
-    meta,
+    status: "fulfilled",
+    value: {
+      results,
+      meta,
+    },
   };
 }
 
-async function fetchRoleCounterRows(champion, targetRole, rankFilter) {
-  const payload = await fetchLolalyticsBuildData(champion.id, rankFilter);
-  return extractRoleValues(payload?.enemy?.[targetRole], 2);
+async function buildDraftSynergyResults(allies, rankFilter) {
+  const teammatesByAlly = allies.map((ally) =>
+    allies.filter((teammate) => teammate.champion.key !== ally.champion.key),
+  );
+  const allyTargetRoleRowResults = await Promise.all(
+    allies.map((ally, index) =>
+      fetchRoleSynergyRowResults(
+        ally.champion,
+        ally.role,
+        teammatesByAlly[index].map((teammate) => teammate.role),
+        rankFilter,
+      ),
+    ),
+  );
+
+  return allies.flatMap((ally, allyIndex) =>
+    teammatesByAlly[allyIndex].map((teammate) =>
+      buildDraftSynergyResult(
+        ally,
+        teammate,
+        getTargetRoleRowResult(allyTargetRoleRowResults[allyIndex], teammate.role),
+      ),
+    ),
+  );
 }
 
-async function fetchRoleSynergyRows(champion, allyRole, targetRole, rankFilter) {
+async function buildDraftCounterResults(allies, enemies, rankFilter) {
+  const enemyTargetRoleRowResults = await Promise.all(
+    enemies.map((enemyChampion) =>
+      fetchRoleCounterRowResults(
+        enemyChampion,
+        allies.map((ally) => ally.role),
+        rankFilter,
+      ),
+    ),
+  );
+
+  return allies.flatMap((ally) =>
+    enemies.map((enemyChampion, enemyIndex) =>
+      buildDraftCounterResult(
+        ally,
+        enemyChampion,
+        getTargetRoleRowResult(enemyTargetRoleRowResults[enemyIndex], ally.role),
+      ),
+    ),
+  );
+}
+
+function buildDraftSynergyResult(ally, teammate, targetRoleRowResult) {
+  if (targetRoleRowResult.status !== "fulfilled") {
+    return {
+      status: "rejected",
+      reason: targetRoleRowResult.reason,
+    };
+  }
+
+  const row = targetRoleRowResult.value.get(String(teammate.champion.key));
+  if (!row) {
+    return {
+      status: "rejected",
+      reason: createHttpError(
+        502,
+        `Lolalytics returned no ${getRoleLabel(teammate.role).toLowerCase()} synergy row for ${ally.champion.name} ${getRoleLabel(ally.role)} with ${teammate.champion.name}.`,
+      ),
+    };
+  }
+
+  return {
+    status: "fulfilled",
+    value: {
+      row,
+    },
+  };
+}
+
+function buildDraftCounterResult(ally, enemyChampion, targetRoleRowResult) {
+  if (targetRoleRowResult.status !== "fulfilled") {
+    return {
+      status: "rejected",
+      reason: targetRoleRowResult.reason,
+    };
+  }
+
+  const row = targetRoleRowResult.value.get(String(ally.champion.key));
+  if (!row) {
+    return {
+      status: "rejected",
+      reason: createHttpError(
+        502,
+        `Lolalytics returned no ${getRoleLabel(ally.role).toLowerCase()} counter row for ${ally.champion.name} into ${enemyChampion.name}.`,
+      ),
+    };
+  }
+
+  return {
+    status: "fulfilled",
+    value: {
+      row,
+    },
+  };
+}
+
+function createRowPromiseResult(targetRoleRowResult) {
+  if (targetRoleRowResult.status !== "fulfilled") {
+    return {
+      status: "rejected",
+      reason: targetRoleRowResult.reason,
+    };
+  }
+
+  return {
+    status: "fulfilled",
+    value: {
+      rows: targetRoleRowResult.value,
+    },
+  };
+}
+
+async function fetchRoleCounterRowResults(champion, targetRoles, rankFilter) {
+  return buildTargetRoleRowResults(targetRoles, (requestedTargetRoles) =>
+    fetchRoleCounterRowsByTargetRole(champion, requestedTargetRoles, rankFilter),
+  );
+}
+
+/**
+ * Prefer role-specific ally synergy rows when an ally role is known, but fall
+ * back to Lolalytics `lane=all` rows for any target roles that are missing or
+ * failed under the role-specific query.
+ */
+async function fetchRoleSynergyRowResults(champion, allyRole, targetRoles, rankFilter) {
   if (!allyRole) {
-    return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
+    return buildTargetRoleRowResults(targetRoles, (requestedTargetRoles) =>
+      fetchRoleSynergyRowsByTargetRoleForLane(champion, "all", requestedTargetRoles, rankFilter),
+    );
   }
 
-  try {
-    const rows = await fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter);
-    if (rows.size > 0) {
-      return rows;
-    }
-  } catch (error) {
-    return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
-  }
-
-  return fetchRoleSynergyRowsForRole(champion, "all", targetRole, rankFilter);
+  return buildTargetRoleRowResultsWithFallback(targetRoles, {
+    fetchPrimaryRowsByTargetRoles: (requestedTargetRoles) =>
+      fetchRoleSynergyRowsByTargetRoleForLane(
+        champion,
+        allyRole,
+        requestedTargetRoles,
+        rankFilter,
+      ),
+    fetchFallbackRowsByTargetRoles: (requestedTargetRoles) =>
+      fetchRoleSynergyRowsByTargetRoleForLane(champion, "all", requestedTargetRoles, rankFilter),
+  });
 }
 
-async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankFilter) {
+async function fetchRoleCounterRowsByTargetRole(champion, targetRoles, rankFilter) {
+  const payload = await fetchLolalyticsBuildData(champion.id, rankFilter);
+  return extractRequestedRoleValues(payload?.enemy, targetRoles, 2);
+}
+
+async function fetchRoleSynergyRowsByTargetRoleForLane(
+  champion,
+  allyRole,
+  targetRoles,
+  rankFilter,
+) {
   const searchParams = buildLolalyticsSearchParams(
     {
       ep: "build-team",
@@ -410,7 +688,20 @@ async function fetchRoleSynergyRowsForRole(champion, allyRole, targetRole, rankF
     `?${searchParams.toString()}`,
     `${champion.name} ${allyRole} synergy`,
   );
-  return extractRoleValues(payload?.team?.[targetRole], 3);
+  return extractRequestedRoleValues(payload?.team, targetRoles, 3);
+}
+
+function extractRequestedRoleValues(rowsByTargetRole, targetRoles, valueIndex) {
+  const extractedRowsByTargetRole = new Map();
+
+  for (const targetRole of targetRoles) {
+    extractedRowsByTargetRole.set(
+      targetRole,
+      extractRoleValues(rowsByTargetRole?.[targetRole], valueIndex),
+    );
+  }
+
+  return extractedRowsByTargetRole;
 }
 
 async function fetchEligibleTierStats(targetRole, rankFilter) {
@@ -578,6 +869,11 @@ function buildLolalyticsSearchParams(params, rankFilter, options = {}) {
   return searchParams;
 }
 
+/**
+ * Shared live-resource fetcher with TTL caching and in-flight request
+ * coalescing. If multiple handlers ask for the same Lolalytics URL at once,
+ * they all await the same pending promise instead of duplicating the fetch.
+ */
 async function fetchLolalyticsResource(url, label, responseType) {
   const cached = requestCache.get(url);
   if (cached) {
@@ -654,6 +950,7 @@ function createLolalyticsRequestStats() {
 }
 
 function recordLolalyticsLiveAccess() {
+  lolalyticsLifetimeAccessCount += 1;
   const requestStats = lolalyticsRequestStatsStorage.getStore();
   if (!requestStats) {
     return;
@@ -666,6 +963,7 @@ function buildLolalyticsRequestStats() {
   const requestStats = lolalyticsRequestStatsStorage.getStore();
   return {
     lolalyticsLiveAccessCount: Number(requestStats?.lolalyticsLiveAccessCount || 0),
+    lolalyticsLifetimeAccessCount: Number(lolalyticsLifetimeAccessCount || 0),
   };
 }
 

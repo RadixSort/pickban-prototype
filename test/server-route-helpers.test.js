@@ -16,6 +16,7 @@ const {
 } = require("../lib/requested-target-roles.js");
 const {
   buildBuildSuggestionsPayload,
+  buildDraftProjectionPayload,
   buildRoleSuggestionResponse,
   collectSuccessfulMatchupBuilds,
   hasUsableBuildSuggestions,
@@ -93,7 +94,10 @@ test("buildRoleSuggestionResponse preserves legacy single-role fields", () => {
     rankFilter: "emerald_plus",
     allies: [],
     enemies: [],
-    requestStats: { lolalyticsLiveAccessCount: 2 },
+    requestStats: {
+      lolalyticsLiveAccessCount: 2,
+      lolalyticsLifetimeAccessCount: 2,
+    },
     buildSuggestionMeta: createSuggestionMeta,
   });
 
@@ -121,7 +125,10 @@ test("buildRoleSuggestionResponse reports the first failure when every role fail
     rankFilter: "emerald_plus",
     allies: [{ role: "support" }],
     enemies: [{ name: "Lux" }],
-    requestStats: { lolalyticsLiveAccessCount: 5 },
+    requestStats: {
+      lolalyticsLiveAccessCount: 5,
+      lolalyticsLifetimeAccessCount: 5,
+    },
     buildSuggestionMeta: createSuggestionMeta,
   });
 
@@ -138,6 +145,46 @@ test("buildRoleSuggestionResponse reports the first failure when every role fail
     response.payload.metaByRole.middle.error,
     "Failed to parse middle suggestions.",
   );
+});
+
+test("buildRoleSuggestionResponse keeps successful roles while surfacing failed roles", () => {
+  const results = [{ candidate: "Thresh" }];
+  const meta = { role: "support", partialFailures: [] };
+  const timeoutError = createHttpError(504, "Timed out while fetching bottom suggestions.");
+  timeoutError.meta = {
+    partialFailures: ["Jinx: upstream timeout"],
+  };
+
+  const response = buildRoleSuggestionResponse({
+    targetRoles: ["support", "bottom"],
+    roleSuggestions: [
+      { status: "fulfilled", value: { results, meta } },
+      { status: "rejected", reason: timeoutError },
+    ],
+    rankFilter: "emerald_plus",
+    allies: [{ role: "middle" }],
+    enemies: [{ name: "Jinx" }],
+    requestStats: {
+      lolalyticsLiveAccessCount: 4,
+      lolalyticsLifetimeAccessCount: 4,
+    },
+    buildSuggestionMeta: createSuggestionMeta,
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.payload.roles, ["support", "bottom"]);
+  assert.deepEqual(response.payload.resultsByRole.support, results);
+  assert.deepEqual(response.payload.metaByRole.support, meta);
+  assert.deepEqual(response.payload.resultsByRole.bottom, []);
+  assert.equal(
+    response.payload.metaByRole.bottom.error,
+    "Timed out while fetching bottom suggestions.",
+  );
+  assert.deepEqual(response.payload.metaByRole.bottom.partialFailures, [
+    "Jinx: upstream timeout",
+  ]);
+  assert.equal("results" in response.payload, false);
+  assert.equal("meta" in response.payload, false);
 });
 
 test("build suggestion helper payloads preserve request and summary fields", () => {
@@ -173,6 +220,12 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         },
         mostPickedPage: null,
       },
+      items: {
+        highestWinBuild: null,
+        mostPickedBuild: {
+          selections: [{ itemId: 3118 }],
+        },
+      },
       boots: {
         options: [],
       },
@@ -196,6 +249,12 @@ test("build suggestion helper payloads preserve request and summary fields", () 
     lastUpdatedAt: "2026-03-19T20:30:00.000Z",
     partialFailures: ["Leona: Missing matchup rows."],
   });
+  assert.deepEqual(payload.items, {
+    highestWinBuild: null,
+    mostPickedBuild: {
+      selections: [{ itemId: 3118 }],
+    },
+  });
   assert.equal(hasUsableBuildSuggestions(payload), true);
 
   const emptyPayload = buildBuildSuggestionsPayload({
@@ -215,6 +274,10 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         },
         mostPickedPage: null,
       },
+      items: {
+        highestWinBuild: null,
+        mostPickedBuild: null,
+      },
       boots: {
         options: [],
       },
@@ -224,4 +287,79 @@ test("build suggestion helper payloads preserve request and summary fields", () 
   });
 
   assert.equal(hasUsableBuildSuggestions(emptyPayload), false);
+});
+
+test("buildDraftProjectionPayload preserves request, summary, and projection fields", () => {
+  const payload = buildDraftProjectionPayload({
+    normalizedRequest: {
+      allies: [
+        {
+          champion: championByName.get(normalizeChampionName("Nami")),
+          role: "support",
+        },
+        {
+          champion: championByName.get(normalizeChampionName("Ahri")),
+          role: "middle",
+        },
+      ],
+      enemies: [
+        championByName.get(normalizeChampionName("Blitzcrank")),
+        championByName.get(normalizeChampionName("Leona")),
+      ],
+      rankFilter: "emerald_plus",
+    },
+    projection: {
+      allyWinRate: 53.2,
+      enemyWinRate: 46.8,
+      synergyScore: 4,
+      counterScore: -2,
+      projectedAgency: 2,
+      synergyMatchupCount: 3,
+      counterMatchupCount: 2,
+      sourceMatchups: 5,
+      projectedWinRateMatchupCount: 4,
+      partialFailures: ["Ahri vs Leona: Missing counter row."],
+    },
+    requestStats: {
+      lolalyticsLiveAccessCount: 5,
+      lolalyticsLifetimeAccessCount: 5,
+    },
+  });
+
+  assert.deepEqual(payload.request, {
+    allies: [
+      {
+        champion: "Nami",
+        championKey: String(championByName.get(normalizeChampionName("Nami")).key),
+        role: "support",
+      },
+      {
+        champion: "Ahri",
+        championKey: String(championByName.get(normalizeChampionName("Ahri")).key),
+        role: "middle",
+      },
+    ],
+    enemies: ["Blitzcrank", "Leona"],
+    rankFilter: "emerald_plus",
+  });
+  assert.deepEqual(payload.summary, {
+    allyCount: 2,
+    enemyCount: 2,
+    synergyMatchupCount: 3,
+    counterMatchupCount: 2,
+    sourceMatchups: 5,
+    projectedWinRateMatchupCount: 4,
+    partialFailures: ["Ahri vs Leona: Missing counter row."],
+  });
+  assert.deepEqual(payload.projection, {
+    allyWinRate: 53.2,
+    enemyWinRate: 46.8,
+    synergyScore: 4,
+    counterScore: -2,
+    projectedAgency: 2,
+  });
+  assert.deepEqual(payload.requestStats, {
+    lolalyticsLiveAccessCount: 5,
+    lolalyticsLifetimeAccessCount: 5,
+  });
 });

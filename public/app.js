@@ -5,6 +5,9 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
+  renderDraftProjectionView,
+} = globalThis.draftProjectionView;
+const {
   buildSelectedChampionKeys,
   getVisibleSuggestionResults,
   MIN_PROJECTED_WIN_RATE,
@@ -35,6 +38,7 @@ const {
 } = globalThis.resultRanking;
 const {
   DEFAULT_TARGET_ROLE,
+  getAutoAssignableAllyRole,
   getRoleLabel,
   getTargetRoleOptions,
   getUnassignedTargetRoleOptions,
@@ -49,7 +53,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "3.2.0",
+  version: "5.0.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -92,9 +96,12 @@ const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const resultsTitle = document.getElementById("results-title");
 const resultsRoleSelect = document.getElementById("results-role");
+const resultsRoleControl = document.getElementById("results-role-control");
 const resultsRequestStat = document.getElementById("results-request-stat");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
+const sortControl = document.getElementById("results-sort-control");
+const draftProjectionWrap = document.getElementById("draft-projection-wrap");
 const versionText = document.getElementById("app-version");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
@@ -218,6 +225,18 @@ function getNoAvailableResultRolesMessage() {
   return "All five allied roles are assigned. Remove one ally or clear a role to fetch more suggestions.";
 }
 
+function hasCompleteAssignedAllyDraft() {
+  return (
+    state.allies.length === limits.allies &&
+    state.allies.every((ally) => normalizeRole(ally.role)) &&
+    new Set(state.allies.map((ally) => normalizeRole(ally.role))).size === limits.allies
+  );
+}
+
+function isDraftProjectionModeActive() {
+  return hasCompleteAssignedAllyDraft();
+}
+
 function getSelectedResultRole() {
   const availableRoleValues = getAvailableResultRoleOptions().map((option) => option.value);
   if (availableRoleValues.length === 0) {
@@ -260,6 +279,7 @@ function initializeRankFilterOptions() {
 function renderControls() {
   const selectedRole = syncSelectedResultRole();
   const availableRoleOptions = getAvailableResultRoleOptions();
+  const isDraftProjectionMode = isDraftProjectionModeActive();
 
   rankFilterSelect.value = state.rankFilter;
   rankFilterSelect.disabled = isInteractionLocked();
@@ -267,11 +287,14 @@ function renderControls() {
     .map((option) => `<option value="${option.value}">${option.label}</option>`)
     .join("");
   resultsRoleSelect.value = selectedRole;
-  resultsRoleSelect.disabled = isInteractionLocked() || availableRoleOptions.length === 0;
+  resultsRoleSelect.disabled =
+    isInteractionLocked() || isDraftProjectionMode || availableRoleOptions.length === 0;
+  resultsRoleControl.classList.toggle("hidden", isDraftProjectionMode);
+  sortControl.classList.toggle("hidden", isDraftProjectionMode);
 
   allyRoleTitle.textContent = "Assign known roles";
   resultsTitle.textContent =
-    availableRoleOptions.length === 0 ? "Draft complete" : `${getRoleLabel(selectedRole)} recommendations`;
+    isDraftProjectionMode ? "Projected win rate" : `${getRoleLabel(selectedRole)} recommendations`;
 }
 
 function renderAll() {
@@ -358,14 +381,14 @@ function renderAllyRoleAssignments() {
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "role-build-action";
-    buildButton.textContent = "Runes & Boots";
+    buildButton.textContent = "Build";
     buildButton.disabled = Boolean(helperText);
-    buildButton.title = helperText || `Open matchup runes and boots for ${ally.name}`;
+    buildButton.title = helperText || `Open build recommendation for ${ally.name}`;
     buildButton.setAttribute(
       "aria-label",
       helperText
-        ? `Runes and boots for ${ally.name}. ${helperText}`
-        : `Open matchup runes and boots for ${ally.name}`,
+        ? `Build recommendation for ${ally.name}. ${helperText}`
+        : `Open build recommendation for ${ally.name}`,
     );
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
     controls.appendChild(buildButton);
@@ -458,7 +481,7 @@ async function handleOpenBuildSuggestions(allyId) {
     });
     const payload = await parseJsonSafely(response);
     if (!response.ok) {
-      throw new Error(payload.error || "Failed to load rune and boots suggestions.");
+      throw new Error(payload.error || "Failed to load build recommendations.");
     }
 
     state.buildSuggestionCache[cacheKey] = payload;
@@ -478,7 +501,7 @@ async function handleOpenBuildSuggestions(allyId) {
     ) {
       state.buildSuggestionModal.loading = false;
       state.buildSuggestionModal.error =
-        error.message || "Failed to load rune and boots suggestions.";
+        error.message || "Failed to load build recommendations.";
       renderBuildSuggestionModal();
     }
   }
@@ -574,6 +597,9 @@ function addChampion(side, championId) {
   }
 
   state[side].push(createSelectedChampion(champion, side));
+  if (side === "allies") {
+    applyAutoAssignedLastAllyRole();
+  }
   pickers[side].input.value = "";
   closeBuildSuggestionModal();
   clearStatus();
@@ -668,6 +694,7 @@ function handleSelectResultForDraft(targetRole, result) {
     ...createSelectedChampion(champion, "allies"),
     role: normalizedRole,
   });
+  applyAutoAssignedLastAllyRole();
   closeBuildSuggestionModal();
   clearStatus();
   renderAll();
@@ -712,10 +739,31 @@ function assignAllyRole(championId, role) {
         }
       : ally,
   );
+  if (role) {
+    applyAutoAssignedLastAllyRole();
+  }
 
   closeBuildSuggestionModal();
   clearStatus();
   renderAll();
+}
+
+function applyAutoAssignedLastAllyRole() {
+  const autoAssignment = getAutoAssignableAllyRole(state.allies);
+  if (!autoAssignment) {
+    return false;
+  }
+
+  state.allies = state.allies.map((ally, index) =>
+    index === autoAssignment.allyIndex
+      ? {
+          ...ally,
+          role: autoAssignment.role,
+        }
+      : ally,
+  );
+
+  return true;
 }
 
 async function handleFetchSuggestions() {
@@ -731,6 +779,11 @@ async function handleFetchSuggestions() {
   const cacheKey = getCurrentSuggestionCacheKey();
   const availableRoleOptions = getAvailableResultRoleOptions();
   const availableRoleValues = availableRoleOptions.map((option) => option.value);
+
+  if (isDraftProjectionModeActive()) {
+    await handleFetchDraftProjection(cacheKey);
+    return;
+  }
 
   if (availableRoleValues.length === 0) {
     setError(getNoAvailableResultRolesMessage());
@@ -796,6 +849,47 @@ async function handleFetchSuggestions() {
       error.message ||
         `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
     );
+  } finally {
+    setLoading(false);
+    renderAll();
+  }
+}
+
+async function handleFetchDraftProjection(cacheKey = getCurrentSuggestionCacheKey()) {
+  setLoading(true);
+  clearStatus();
+  setStatus(
+    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} draft win-rate data...`,
+  );
+
+  try {
+    const response = await fetch("/draft-outlook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        rankFilter: state.rankFilter,
+        allies: state.allies.map((champion) => ({
+          champion: champion.name,
+          role: champion.role,
+        })),
+        enemies: state.enemies.map((champion) => champion.name),
+      }),
+    });
+    const payload = await parseJsonSafely(response);
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to project the current draft win rates.");
+    }
+
+    state.resultsCache[cacheKey] = buildDraftProjectionBundle(payload);
+    const lolalyticsAccessCount = getLolalyticsLiveAccessCount(state.resultsCache[cacheKey]);
+
+    setStatus(
+      `Projected the current draft win rates. ${formatLolalyticsAccessStatus(lolalyticsAccessCount)}`,
+    );
+  } catch (error) {
+    setError(error.message || "Failed to project the current draft win rates.");
   } finally {
     setLoading(false);
     renderAll();
@@ -914,7 +1008,7 @@ function renderBuildSuggestionModal() {
     buildSuggestionChampionIcon.classList.add("hidden");
     buildSuggestionChampionIcon.src = "";
     buildSuggestionChampionIcon.alt = "";
-    buildSuggestionTitle.textContent = "Rune and boots suggestions";
+    buildSuggestionTitle.textContent = "Build Recommendation";
     buildSuggestionMeta.textContent = "";
     buildSuggestionTabs.innerHTML = "";
     buildSuggestionErrors.innerHTML = "";
@@ -933,8 +1027,10 @@ function renderBuildSuggestionModal() {
   }
 
   buildSuggestionTitle.textContent = ally
-    ? `${ally.name} ${ally.role ? getRoleLabel(ally.role) : ""} runes & boots`
-    : "Rune and boots suggestions";
+    ? [ally.name, ally.role ? getRoleLabel(ally.role) : "", "Build Recommendation"]
+        .filter(Boolean)
+        .join(" ")
+    : "Build Recommendation";
   buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(ally, payload);
   const shouldShowBuildSuggestionTabs = BUILD_SUGGESTION_TABS.length > 1;
   buildSuggestionTabs.classList.toggle("hidden", !shouldShowBuildSuggestionTabs);
@@ -965,9 +1061,9 @@ function renderBuildSuggestionModal() {
   }
   buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
   buildSuggestionBody.innerHTML = modalState.loading
-    ? '<div class="build-empty-state">Fetching matchup build data from Lolalytics...</div>'
+    ? '<div class="build-empty-state">Fetching matchup build recommendations from Lolalytics...</div>'
     : modalState.error
-      ? '<div class="build-empty-state">The build suggestion request failed.</div>'
+      ? '<div class="build-empty-state">The build recommendation request failed.</div>'
       : renderBuildSuggestionBody(payload, modalState.activeTab);
 }
 
@@ -1038,6 +1134,7 @@ function formatBuildSuggestionTimestamp(value) {
 function renderResults() {
   const selectedRole = syncSelectedResultRole();
   const currentBundle = getCurrentResultsBundle();
+  const isDraftProjectionBundle = currentBundle?.mode === "draftProjection";
   const currentMeta = currentBundle?.metaByRole?.[selectedRole] || null;
   const currentResults = currentBundle?.resultsByRole?.[selectedRole] || [];
   const visibleResults = sortResults(getVisibleResults(currentResults), state.sortMode);
@@ -1054,31 +1151,51 @@ function renderResults() {
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
+  draftProjectionWrap.innerHTML = "";
   resultsRequestStat.textContent = "";
   resultsRequestStat.classList.add("hidden");
   sortSelect.value = state.sortMode;
   sortSelect.disabled =
     state.loading ||
     state.shuttingDown ||
+    isDraftProjectionBundle ||
     currentResults.length === 0 ||
     Boolean(currentMeta?.error);
 
   if (!currentBundle) {
     emptyState.textContent = getPendingResultsMessage();
     emptyState.classList.remove("hidden");
+    draftProjectionWrap.classList.add("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = "";
     return;
   }
 
   resultsRequestStat.textContent = formatDisplayMessage(
-    formatLolalyticsAccessStat(getLolalyticsLiveAccessCount(currentBundle)),
+    formatLolalyticsAccessStat(getLolalyticsLifetimeAccessCount(currentBundle)),
   );
   resultsRequestStat.classList.remove("hidden");
+
+  if (isDraftProjectionBundle) {
+    const projectionPayload = currentBundle.payload || {};
+
+    emptyState.classList.add("hidden");
+    resultsWrap.classList.add("hidden");
+    draftProjectionWrap.classList.remove("hidden");
+    draftProjectionWrap.innerHTML = renderDraftProjectionView(projectionPayload, {
+      partialFailures: (projectionPayload?.summary?.partialFailures || []).map((message) =>
+        formatDisplayMessage(message),
+      ),
+      rankFilterLabel: getRankFilterDisplayLabel(),
+    });
+    resultsMeta.textContent = `${projectionPayload?.summary?.allyCount || state.allies.length} allies vs ${projectionPayload?.summary?.enemyCount || state.enemies.length} ${Number(projectionPayload?.summary?.enemyCount || state.enemies.length) === 1 ? "enemy" : "enemies"}`;
+    return;
+  }
 
   if (currentMeta?.error) {
     emptyState.textContent = formatDisplayMessage(currentMeta.error);
     emptyState.classList.remove("hidden");
+    draftProjectionWrap.classList.add("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = `${getRoleLabel(selectedRole)} unavailable`;
     renderPartialFailures(currentMeta.partialFailures || []);
@@ -1088,6 +1205,7 @@ function renderResults() {
   if (!visibleResults.length) {
     emptyState.textContent = `No ${getRoleLabel(selectedRole).toLowerCase()} recommendations are available for the current draft.`;
     emptyState.classList.remove("hidden");
+    draftProjectionWrap.classList.add("hidden");
     resultsWrap.classList.add("hidden");
     resultsMeta.textContent = "";
     renderPartialFailures(currentMeta?.partialFailures || []);
@@ -1095,6 +1213,7 @@ function renderResults() {
   }
 
   emptyState.classList.add("hidden");
+  draftProjectionWrap.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
   resultsMeta.textContent = `${visibleResults.length} ranked ${getRoleLabel(selectedRole).toLowerCase()} options`;
 
@@ -1215,27 +1334,43 @@ function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT
   });
 
   return {
+    mode: "suggestions",
     roles: [...requestedRoles],
     resultsByRole,
     metaByRole,
     requestStats: {
       lolalyticsLiveAccessCount: Number(payload?.requestStats?.lolalyticsLiveAccessCount || 0),
+      lolalyticsLifetimeAccessCount: Number(
+        payload?.requestStats?.lolalyticsLifetimeAccessCount || 0,
+      ),
     },
     selectedRole: requestedRoles.includes(selectedRole) ? selectedRole : requestedRoles[0] || DEFAULT_TARGET_ROLE,
   };
 }
 
-function getPendingResultsMessage() {
-  const availableRoleOptions = getAvailableResultRoleOptions();
+function buildDraftProjectionBundle(payload) {
+  return {
+    mode: "draftProjection",
+    payload,
+    requestStats: {
+      lolalyticsLiveAccessCount: Number(payload?.requestStats?.lolalyticsLiveAccessCount || 0),
+      lolalyticsLifetimeAccessCount: Number(
+        payload?.requestStats?.lolalyticsLifetimeAccessCount || 0,
+      ),
+    },
+  };
+}
 
+function getPendingResultsMessage() {
   if (state.allies.length === 0 && state.enemies.length === 0) {
     return "Select some champions, optionally assign known ally roles, then fetch suggestions to load every remaining role.";
   }
 
-  if (availableRoleOptions.length === 0) {
-    return getNoAvailableResultRolesMessage();
+  if (isDraftProjectionModeActive()) {
+    return 'Click "Who will win?" to project the current draft win rates for both teams.';
   }
 
+  const availableRoleOptions = getAvailableResultRoleOptions();
   return `Fetch suggestions to load ${formatRoleLabels(availableRoleOptions)} for the current draft.`;
 }
 
@@ -1261,6 +1396,10 @@ function getLolalyticsLiveAccessCount(resultsBundle = null) {
   return Number(resultsBundle?.requestStats?.lolalyticsLiveAccessCount || 0);
 }
 
+function getLolalyticsLifetimeAccessCount(resultsBundle = null) {
+  return Number(resultsBundle?.requestStats?.lolalyticsLifetimeAccessCount || 0);
+}
+
 function formatLolalyticsAccessStatus(accessCount) {
   if (accessCount === 0) {
     return "No new live Lolalytics hits were needed.";
@@ -1270,7 +1409,7 @@ function formatLolalyticsAccessStatus(accessCount) {
 }
 
 function formatLolalyticsAccessStat(accessCount) {
-  return `Lolalytics live hits for this draft: ${Math.max(0, accessCount)}.`;
+  return `Total Lolalytics live hits since server start: ${Math.max(0, accessCount)}.`;
 }
 
 function formatScore(value) {
@@ -1413,11 +1552,15 @@ function clearStatus() {
 
 function renderActionState() {
   const availableRoleCount = getAvailableResultRoleOptions().length;
+  const isDraftProjectionMode = isDraftProjectionModeActive();
 
   rankFilterSelect.disabled = state.loading || state.shuttingDown;
-  resultsRoleSelect.disabled = state.loading || state.shuttingDown || availableRoleCount === 0;
-  fetchButton.disabled = state.loading || state.shuttingDown || availableRoleCount === 0;
-  fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
+  resultsRoleSelect.disabled =
+    state.loading || state.shuttingDown || isDraftProjectionMode || availableRoleCount === 0;
+  fetchButton.disabled =
+    state.loading || state.shuttingDown || (!isDraftProjectionMode && availableRoleCount === 0);
+  fetchButton.textContent =
+    state.loading ? "Fetching..." : isDraftProjectionMode ? "Who will win?" : "Fetch Suggestions";
 
   resetButton.disabled = state.loading || state.shuttingDown;
   closeButton.hidden = !state.canShutdown;
@@ -1427,6 +1570,7 @@ function renderActionState() {
   sortSelect.disabled =
     state.loading ||
     state.shuttingDown ||
+    isDraftProjectionMode ||
     (getCurrentResultsBundle()?.resultsByRole?.[getSelectedResultRole()] || []).length === 0 ||
     Boolean(getCurrentResultsBundle()?.metaByRole?.[getSelectedResultRole()]?.error);
 }

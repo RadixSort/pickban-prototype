@@ -1,9 +1,10 @@
 # PickBan Prototype
 
-PickBan Prototype is a local Node/Express web app for two live Lolalytics-backed workflows:
+PickBan Prototype is a local Node/Express web app for three live Lolalytics-backed workflows:
 
 - draft pick recommendations for every unassigned allied role
-- matchup-specific rune and boots suggestions for an assigned ally role
+- full-draft win-rate projection once all five allied roles are assigned
+- matchup-specific build recommendations for an assigned ally role, including runes, item paths, and boots
 
 It runs as one local process, serves plain browser JavaScript from `public/`, and has no build step, database, auth, or hosted deployment flow.
 
@@ -37,8 +38,9 @@ PORT=3001 npm start
 npm run bench:efficiency
 ```
 
-Advanced runtime overrides:
+Supported runtime overrides:
 
+- `PORT`: override the local listen port
 - `LOLALYTICS_BASE_URL`: override the main Lolalytics origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
 
@@ -50,7 +52,8 @@ There is no build, lint, or bundling command in this repo.
 2. Open the app in a browser and build a draft with allied and enemy champions. The same champion cannot appear on both sides.
 3. Optionally assign known ally roles. The app will fetch every remaining role.
 4. Use `Fetch Suggestions` for role recommendations.
-5. Use `Runes & Boots` on an ally row after that ally has a role and at least one enemy is selected.
+5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
+6. Use `Build` on an ally row after that ally has a role and at least one enemy is selected.
 
 Change feedback loops:
 
@@ -62,7 +65,7 @@ Change feedback loops:
 
 Entry points:
 
-- `server.js`: Express startup, `GET /app-config`, `POST /suggest`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
+- `server.js`: Express startup, `GET /app-config`, `POST /suggest`, `POST /draft-outlook`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
 - `public/index.html`: browser entry point
 - `public/app.js`: frontend controller, draft state, fetch flows, modal state, and rendering
 
@@ -75,16 +78,17 @@ Core module groups:
 
 High-value files when you are new to the codebase:
 
-- `lib/request-normalization.js`: validates and normalizes `/suggest` and `/build-suggestions` payloads
+- `lib/request-normalization.js`: validates and normalizes `/suggest`, `/draft-outlook`, and `/build-suggestions` payloads
 - `lib/requested-target-roles.js`: resolves explicit roles or infers unassigned roles from ally assignments
 - `lib/server-route-helpers.js`: shared request normalization and response shaping for the Express routes
+- `lib/draft-projection.js`: aggregates full-team ally synergy and enemy counter rows into one projected matchup summary
 - `lib/lolalytics-tier-list.js`: parses tier-list HTML into role eligibility data
 - `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
-- `lib/lolalytics-build-parser.js`: normalizes Lolalytics matchup `q-data.json` payloads into rune/boots data
+- `lib/lolalytics-build-parser.js`: normalizes Lolalytics matchup `q-data.json` payloads into rune, item, and boots data
 - `lib/build-suggestion-results.js`: aggregates matchup build data across enemies into one summary payload
 - `public/result-ranking.js`: shared ranking and top-N helpers
 - `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
-- `public/build-suggestion-view.js`: HTML rendering for the runes/boots modal
+- `public/build-suggestion-view.js`: HTML rendering for the build recommendation modal
 
 ## Architecture Overview
 
@@ -94,7 +98,7 @@ The app has three code layers:
 2. `public/` contains the browser shell plus small shared modules that both the browser and Node can import.
 3. `lib/` contains the Node-only logic for normalization, parsing, and result aggregation.
 
-The two main request flows are:
+The three main request flows are:
 
 ### Role Suggestions
 
@@ -107,13 +111,24 @@ The two main request flows are:
 4. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
 5. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
 
-### Matchup Runes & Boots
+### Draft Outlook
 
-1. The UI enables `Runes & Boots` only when an ally role is assigned and at least one enemy exists.
+1. When all five allied champions are selected and every ally has a unique role, the main action switches to `Who will win?`.
+2. `POST /draft-outlook` validates the five-ally full-draft request.
+3. The server fetches:
+   - ally synergy rows across the full allied lineup
+   - enemy counter rows for each ally-role matchup
+4. `lib/draft-projection.js` combines those rows into one team-vs-team projection.
+5. If Lolalytics returns no usable win-rate samples, the route fails closed instead of returning a misleading 0%-vs-100% projection.
+6. The response returns `request`, `summary`, `projection`, and `requestStats`.
+
+### Build Recommendations
+
+1. The UI enables `Build` only when an ally role is assigned and at least one enemy exists.
 2. `POST /build-suggestions` validates the ally-role request.
 3. The server fetches Lolalytics matchup build payloads for each enemy.
 4. `lib/lolalytics-build-parser.js` normalizes those payloads.
-5. `lib/build-suggestion-results.js` merges the matchup data into one rune-and-boots summary.
+5. `lib/build-suggestion-results.js` merges the matchup data into one summary that includes runes, ordered item paths, and completed boots.
 
 Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
 
@@ -134,7 +149,7 @@ curl -s http://localhost:3000/suggest \
   }'
 ```
 
-Sanity-check matchup runes and boots:
+Sanity-check build recommendations:
 
 ```bash
 curl -s http://localhost:3000/build-suggestions \
@@ -143,6 +158,24 @@ curl -s http://localhost:3000/build-suggestions \
     "rankFilter": "emerald_plus",
     "ally": { "champion": "Ahri", "role": "middle" },
     "enemies": ["Zed", "Sejuani"]
+  }'
+```
+
+Sanity-check full-draft projection:
+
+```bash
+curl -s http://localhost:3000/draft-outlook \
+  -H 'content-type: application/json' \
+  -d '{
+    "rankFilter": "emerald_plus",
+    "allies": [
+      { "champion": "Darius", "role": "top" },
+      { "champion": "Jarvan IV", "role": "jungle" },
+      { "champion": "Ahri", "role": "middle" },
+      { "champion": "Miss Fortune", "role": "bottom" },
+      { "champion": "Leona", "role": "support" }
+    ],
+    "enemies": ["Jinx", "Lux"]
   }'
 ```
 
@@ -169,7 +202,11 @@ Run `node -v`. This repo expects Node 18+ because it uses built-in `fetch` and `
 - partial role failures are surfaced in the UI and in `metaByRole[role].partialFailures`
 - if every requested role fails, `/suggest` returns an HTTP error
 
-### The `Runes & Boots` button is disabled
+### The main button says `Who will win?`
+
+That means all five allied champions are selected and all five allied roles are assigned. Clear one role or remove one ally if you want to go back to role suggestions.
+
+### The `Build` button is disabled
 
 The current UI only enables that flow when:
 

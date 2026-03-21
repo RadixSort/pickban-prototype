@@ -22,7 +22,7 @@
     void activeTab;
 
     if (!payload || typeof payload !== "object") {
-      return renderEmptyState("Select an ally with a role, then load rune and boots suggestions.");
+      return renderEmptyState("Select an ally with a role, then load build recommendations.");
     }
 
     const notes = Array.isArray(payload?.runes?.highlighting?.notes)
@@ -33,25 +33,42 @@
       : [];
     const highestWinPage = payload?.runes?.highestWinPage || null;
     const mostPickedPage = payload?.runes?.mostPickedPage || null;
+    const highestWinItemBuild = payload?.items?.highestWinBuild || null;
+    const mostPickedItemBuild = payload?.items?.mostPickedBuild || null;
     const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
 
     return renderSummaryPanel({
       highestWinPage,
       mostPickedPage,
+      highestWinItemBuild,
+      mostPickedItemBuild,
       boots,
       notes,
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
   }
 
-  function renderSummaryPanel({ highestWinPage, mostPickedPage, boots, notes, slotGroupMap }) {
-    const hasAnyContent = highestWinPage || mostPickedPage || boots.length > 0;
+  function renderSummaryPanel({
+    highestWinPage,
+    mostPickedPage,
+    highestWinItemBuild,
+    mostPickedItemBuild,
+    boots,
+    notes,
+    slotGroupMap,
+  }) {
+    const hasAnyContent =
+      highestWinPage ||
+      mostPickedPage ||
+      highestWinItemBuild ||
+      mostPickedItemBuild ||
+      boots.length > 0;
 
     if (!hasAnyContent) {
       return `
         <div class="build-view build-view--summary">
           ${renderInlineNotes(notes)}
-          ${renderEmptyState("No build suggestion data is available.")}
+          ${renderEmptyState("No build recommendation data is available.")}
         </div>
       `;
     }
@@ -59,7 +76,7 @@
     return `
       <div class="build-view build-view--summary">
         ${renderInlineNotes(notes)}
-        <section class="build-summary-board" aria-label="Rune and boots summary">
+        <section class="build-summary-board" aria-label="Top build recommendation summary">
           ${renderSummaryPageColumn({
             title: "Highest Win",
             tone: "highest-win",
@@ -76,6 +93,10 @@
           })}
           ${renderSummaryBootsColumn(boots)}
         </section>
+        ${renderItemsSection({
+          highestWinBuild: highestWinItemBuild,
+          mostPickedBuild: mostPickedItemBuild,
+        })}
       </div>
     `;
   }
@@ -149,6 +170,80 @@
         </header>
         <div class="build-summary-boot-list">
           ${boots.map((boot) => renderCompactBootCard(boot)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderItemsSection({ highestWinBuild, mostPickedBuild }) {
+    const hasItems =
+      Array.isArray(highestWinBuild?.selections) || Array.isArray(mostPickedBuild?.selections);
+
+    if (!hasItems) {
+      return `
+        <section class="build-items-panel" aria-label="Recommended items">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
+              <span class="build-summary-kicker">Items</span>
+              <h3>Items</h3>
+            </div>
+            <p class="build-summary-caption">Five non-boot purchases in order.</p>
+          </header>
+          <div class="build-summary-column-empty">No ordered item path data was available.</div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-items-panel" aria-label="Recommended items">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <span class="build-summary-kicker">Items</span>
+            <h3>Items</h3>
+          </div>
+          <p class="build-summary-caption">Five non-boot purchases in order.</p>
+        </header>
+        <div class="build-items-grid">
+          ${renderItemBuildColumn({
+            title: "Highest Win",
+            tone: "highest-win",
+            build: highestWinBuild,
+            emptyMessage: "No highest-win item path was available.",
+          })}
+          ${renderItemBuildColumn({
+            title: "Most Picked",
+            tone: "most-picked",
+            build: mostPickedBuild,
+            emptyMessage: "No most-picked item path was available.",
+          })}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderItemBuildColumn({ title, tone, build, emptyMessage }) {
+    const selections = getOrderedSelections(build?.selections);
+
+    if (selections.length === 0) {
+      return `
+        <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
+          <header class="build-item-column-header">
+            <span class="build-summary-kicker">${escapeHtml(title)}</span>
+            <h4>${escapeHtml(title)}</h4>
+          </header>
+          <div class="build-summary-column-empty">${escapeHtml(emptyMessage)}</div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
+        <header class="build-item-column-header">
+          <span class="build-summary-kicker">${escapeHtml(title)}</span>
+          <h4>${escapeHtml(title)}</h4>
+        </header>
+        <div class="build-item-list">
+          ${selections.map((selection, index) => renderItemCard(selection, index + 1)).join("")}
         </div>
       </section>
     `;
@@ -255,6 +350,38 @@
     return `
       <span class="build-rune-card-stat build-rune-card-stat--${escapeAttribute(tone)}">
         ${escapeHtml(formatPercent(value))} ${escapeHtml(tone)}
+      </span>
+    `;
+  }
+
+  function renderItemCard(selection, orderNumber) {
+    return `
+      <article class="build-item-card" title="${escapeAttribute(selection?.name || "Item")}">
+        <div class="build-item-card-media">
+          <span class="build-item-card-order">${escapeHtml(String(orderNumber))}</span>
+          <img
+            src="${escapeAttribute(selection?.icon || "")}"
+            alt="${escapeAttribute(selection?.name || "Item")}"
+            width="44"
+            height="44"
+          />
+        </div>
+        <div class="build-item-card-copy">
+          <strong>${escapeHtml(selection?.name || "Unknown")}</strong>
+          <div class="build-item-card-stats">
+            ${renderItemCardStat(formatPercent(selection?.winRate), "win")}
+            ${renderItemCardStat(formatPercent(selection?.pickRate), "pick")}
+            ${renderItemCardStat(formatMinute(selection?.purchaseMinute), "minute")}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderItemCardStat(value, tone) {
+    return `
+      <span class="build-item-card-stat build-item-card-stat--${escapeAttribute(tone)}">
+        ${escapeHtml(value)}${tone === "minute" ? "" : ` ${escapeHtml(tone)}`}
       </span>
     `;
   }
@@ -389,6 +516,10 @@
 
   function formatPercent(value) {
     return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : "-";
+  }
+
+  function formatMinute(value) {
+    return Number.isFinite(Number(value)) ? `${Math.round(Number(value))} min` : "-";
   }
 
   function escapeAttribute(value) {

@@ -8,7 +8,10 @@ The app uses live Lolalytics data and is built independently with appreciation f
 
 The app helps you compare champion options for any role that is still open in your draft.
 
-It also has a smaller matchup-specific workflow for rune and boots suggestions after you assign a role to one allied champion.
+It also has:
+
+- a full-draft win-rate projection once all five allied roles are assigned
+- a matchup-specific build view for one ally, including runes, item path, and boots
 
 You choose:
 
@@ -17,6 +20,8 @@ You choose:
 - any ally roles you already know
 
 Then the app fetches suggestions for every role that is still unassigned and lets you switch between those role results.
+
+If you fill all five allied slots and assign every ally role, the main button switches to **Who will win?** and shows a projected team win rate instead of open-role suggestions.
 
 ## Before You Start
 
@@ -92,7 +97,8 @@ Leave that terminal window open while you use the app.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
 6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-8. If one ally already has a role and you have picked at least one enemy, click **Runes & Boots** on that ally row to open matchup build suggestions.
+8. If one ally already has a role and you have picked at least one enemy, click **Build** on that ally row to open matchup build suggestions.
+9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
 
 ## What The Scores Mean
 
@@ -108,6 +114,8 @@ Leave that terminal window open while you use the app.
 - At least 1 champion must be selected before fetching
 - A champion can only appear once across both teams
 - Ally role assignment is optional
+- Build recommendations need 1 ally with an assigned role and at least 1 enemy champion
+- Full-draft projection needs all 5 allies plus 5 unique ally roles
 
 ## The Next Time You Use It
 
@@ -142,11 +150,11 @@ Node.js is probably missing or was not installed correctly. Reinstall it from [h
 - Make sure `npm start` is still running
 - Make sure you opened `http://localhost:3000`
 
-### The app loads, but suggestions fail
+### The app loads, but data fails to load
 
 The app needs internet access and working Lolalytics responses. Wait a moment and try again.
 
-### The `Runes & Boots` button is disabled
+### The `Build` button is disabled
 
 That button only works after:
 
@@ -156,6 +164,10 @@ That button only works after:
 ### I expected one role, but the app shows others
 
 The app fetches every role that is still unassigned. If you want fewer result roles, assign more ally roles before fetching.
+
+### The main button says `Who will win?`
+
+That is expected when all five allied champions are selected and all five ally roles are assigned.
 
 ### Port 3000 is already in use
 
