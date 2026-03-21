@@ -173,6 +173,12 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         },
         mostPickedPage: null,
       },
+      items: {
+        highestWinBuild: null,
+        mostPickedBuild: {
+          selections: [{ itemId: 3118 }],
+        },
+      },
       boots: {
         options: [],
       },
@@ -196,6 +202,12 @@ test("build suggestion helper payloads preserve request and summary fields", () 
     lastUpdatedAt: "2026-03-19T20:30:00.000Z",
     partialFailures: ["Leona: Missing matchup rows."],
   });
+  assert.deepEqual(payload.items, {
+    highestWinBuild: null,
+    mostPickedBuild: {
+      selections: [{ itemId: 3118 }],
+    },
+  });
   assert.equal(hasUsableBuildSuggestions(payload), true);
 
   const emptyPayload = buildBuildSuggestionsPayload({
@@ -214,6 +226,10 @@ test("build suggestion helper payloads preserve request and summary fields", () 
           slotGroups: [],
         },
         mostPickedPage: null,
+      },
+      items: {
+        highestWinBuild: null,
+        mostPickedBuild: null,
       },
       boots: {
         options: [],

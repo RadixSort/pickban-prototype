@@ -181,12 +181,23 @@ function createMatchupBuildQData({
           },
         },
       },
+      item1: [[3118, winRate, totalGames, totalGames, 10]],
+      item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
+      item3: [[3157, winRate, totalGames, totalGames, 21]],
+      item4: [[3089, winRate, totalGames, totalGames, 27]],
+      item5: [[3135, winRate, totalGames, totalGames, 31]],
+      item6: [[4645, winRate, totalGames, totalGames, 34]],
       boots: [[bootItemId, winRate, totalGames, totalGames, 0]],
     },
     metadata: {
       champions: {},
       items: {
         [bootItemId]: bootName,
+        3118: "Malignance",
+        3135: "Void Staff",
+        3157: "Zhonya's Hourglass",
+        3089: "Rabadon's Deathcap",
+        4645: "Shadowflame",
       },
       runes: {
         5005: "Attack Speed",

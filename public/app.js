@@ -49,7 +49,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "3.2.0",
+  version: "4.0.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -358,14 +358,14 @@ function renderAllyRoleAssignments() {
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "role-build-action";
-    buildButton.textContent = "Runes & Boots";
+    buildButton.textContent = "Build";
     buildButton.disabled = Boolean(helperText);
-    buildButton.title = helperText || `Open matchup runes and boots for ${ally.name}`;
+    buildButton.title = helperText || `Open build recommendation for ${ally.name}`;
     buildButton.setAttribute(
       "aria-label",
       helperText
-        ? `Runes and boots for ${ally.name}. ${helperText}`
-        : `Open matchup runes and boots for ${ally.name}`,
+        ? `Build recommendation for ${ally.name}. ${helperText}`
+        : `Open build recommendation for ${ally.name}`,
     );
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
     controls.appendChild(buildButton);
@@ -458,7 +458,7 @@ async function handleOpenBuildSuggestions(allyId) {
     });
     const payload = await parseJsonSafely(response);
     if (!response.ok) {
-      throw new Error(payload.error || "Failed to load rune and boots suggestions.");
+      throw new Error(payload.error || "Failed to load build recommendations.");
     }
 
     state.buildSuggestionCache[cacheKey] = payload;
@@ -478,7 +478,7 @@ async function handleOpenBuildSuggestions(allyId) {
     ) {
       state.buildSuggestionModal.loading = false;
       state.buildSuggestionModal.error =
-        error.message || "Failed to load rune and boots suggestions.";
+        error.message || "Failed to load build recommendations.";
       renderBuildSuggestionModal();
     }
   }
@@ -914,7 +914,7 @@ function renderBuildSuggestionModal() {
     buildSuggestionChampionIcon.classList.add("hidden");
     buildSuggestionChampionIcon.src = "";
     buildSuggestionChampionIcon.alt = "";
-    buildSuggestionTitle.textContent = "Rune and boots suggestions";
+    buildSuggestionTitle.textContent = "Build Recommendation";
     buildSuggestionMeta.textContent = "";
     buildSuggestionTabs.innerHTML = "";
     buildSuggestionErrors.innerHTML = "";
@@ -933,8 +933,10 @@ function renderBuildSuggestionModal() {
   }
 
   buildSuggestionTitle.textContent = ally
-    ? `${ally.name} ${ally.role ? getRoleLabel(ally.role) : ""} runes & boots`
-    : "Rune and boots suggestions";
+    ? [ally.name, ally.role ? getRoleLabel(ally.role) : "", "Build Recommendation"]
+        .filter(Boolean)
+        .join(" ")
+    : "Build Recommendation";
   buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(ally, payload);
   const shouldShowBuildSuggestionTabs = BUILD_SUGGESTION_TABS.length > 1;
   buildSuggestionTabs.classList.toggle("hidden", !shouldShowBuildSuggestionTabs);
@@ -965,9 +967,9 @@ function renderBuildSuggestionModal() {
   }
   buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
   buildSuggestionBody.innerHTML = modalState.loading
-    ? '<div class="build-empty-state">Fetching matchup build data from Lolalytics...</div>'
+    ? '<div class="build-empty-state">Fetching matchup build recommendations from Lolalytics...</div>'
     : modalState.error
-      ? '<div class="build-empty-state">The build suggestion request failed.</div>'
+      ? '<div class="build-empty-state">The build recommendation request failed.</div>'
       : renderBuildSuggestionBody(payload, modalState.activeTab);
 }
 

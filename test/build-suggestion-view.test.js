@@ -208,6 +208,106 @@ function createPayload() {
         notes: ["No locked page met the prior threshold."],
       },
     },
+    items: {
+      highestWinBuild: {
+        selections: [
+          {
+            itemId: 6655,
+            icon: "6655.webp",
+            name: "Luden's Companion",
+            slotIndex: 1,
+            winRate: 56.5,
+            pickRate: 28.4,
+            purchaseMinute: 11,
+          },
+          {
+            itemId: 3157,
+            icon: "3157.webp",
+            name: "Zhonya's Hourglass",
+            slotIndex: 2,
+            winRate: 54.8,
+            pickRate: 17.6,
+            purchaseMinute: 15,
+          },
+          {
+            itemId: 3100,
+            icon: "3100.webp",
+            name: "Lich Bane",
+            slotIndex: 3,
+            winRate: 58.1,
+            pickRate: 14.2,
+            purchaseMinute: 21,
+          },
+          {
+            itemId: 3089,
+            icon: "3089.webp",
+            name: "Rabadon's Deathcap",
+            slotIndex: 4,
+            winRate: 61.3,
+            pickRate: 33.9,
+            purchaseMinute: 28,
+          },
+          {
+            itemId: 3135,
+            icon: "3135.webp",
+            name: "Void Staff",
+            slotIndex: 6,
+            winRate: 63.0,
+            pickRate: 18.4,
+            purchaseMinute: 33,
+          },
+        ],
+      },
+      mostPickedBuild: {
+        selections: [
+          {
+            itemId: 3118,
+            icon: "3118.webp",
+            name: "Malignance",
+            slotIndex: 1,
+            winRate: 52.4,
+            pickRate: 71.8,
+            purchaseMinute: 11,
+          },
+          {
+            itemId: 4645,
+            icon: "4645.webp",
+            name: "Shadowflame",
+            slotIndex: 3,
+            winRate: 54.6,
+            pickRate: 48.4,
+            purchaseMinute: 21,
+          },
+          {
+            itemId: 3089,
+            icon: "3089.webp",
+            name: "Rabadon's Deathcap",
+            slotIndex: 4,
+            winRate: 59.2,
+            pickRate: 51.9,
+            purchaseMinute: 27,
+          },
+          {
+            itemId: 3135,
+            icon: "3135.webp",
+            name: "Void Staff",
+            slotIndex: 5,
+            winRate: 57.8,
+            pickRate: 41.2,
+            purchaseMinute: 31,
+          },
+          {
+            itemId: 3041,
+            icon: "3041.webp",
+            name: "Mejai's Soulstealer",
+            slotIndex: 6,
+            winRate: 66.7,
+            pickRate: 8.9,
+            purchaseMinute: 33,
+          },
+        ],
+      },
+    },
     boots: {
       options: [
         {
@@ -233,15 +333,21 @@ test("build suggestion tabs expose only the summary layout", () => {
   assert.equal(DEFAULT_BUILD_SUGGESTION_TAB, "summary");
 });
 
-test("renderBuildSuggestionBody renders named, ordered runes with win and pick rates", () => {
+test("renderBuildSuggestionBody renders named, ordered runes and items with their stats", () => {
   const html = renderBuildSuggestionBody(createPayload());
 
   assert.match(html, /Highest Win/);
   assert.match(html, /Most Picked/);
   assert.match(html, /Boots/);
+  assert.match(html, /Items/);
   assert.match(html, /Precision \+ Sorcery/);
   assert.match(html, /Precision \+ Resolve/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves/);
+  assert.match(html, /Luden(?:&#39;|')?s Companion/);
+  assert.match(html, /Malignance/);
+  assert.match(html, /Void Staff/);
+  assert.match(html, /11 min/);
+  assert.match(html, /33 min/);
   assert.match(html, /No locked page met the prior threshold\./);
   assert.match(html, /Lethal Tempo/);
   assert.match(html, /Gathering Storm/);
@@ -252,6 +358,8 @@ test("renderBuildSuggestionBody renders named, ordered runes with win and pick r
   assert.match(html, /Gathering Storm[\s\S]*47\.2% win[\s\S]*8\.7% pick/);
   assert.match(html, /Lethal Tempo[\s\S]*Triumph[\s\S]*Legend: Bloodline[\s\S]*Coup de Grace/);
   assert.match(html, /Nimbus Cloak[\s\S]*Gathering Storm/);
+  assert.match(html, /Malignance[\s\S]*52\.4% win[\s\S]*71\.8% pick[\s\S]*11 min/);
+  assert.match(html, /Luden(?:&#39;|')?s Companion[\s\S]*56\.5% win[\s\S]*28\.4% pick[\s\S]*11 min/);
   assert.doesNotMatch(html, /Primary Tree/);
   assert.doesNotMatch(html, /Secondary Tree/);
   assert.doesNotMatch(html, /Highest Win page/);
@@ -262,5 +370,5 @@ test("renderBuildSuggestionBody renders named, ordered runes with win and pick r
 test("renderBuildSuggestionBody returns an empty state when payload is missing", () => {
   const html = renderBuildSuggestionBody(null);
 
-  assert.match(html, /Select an ally with a role/);
+  assert.match(html, /build recommendations/i);
 });

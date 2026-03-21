@@ -14,6 +14,7 @@ function createMatchupBuild({
   secondarySlotOptions,
   statOptions,
   pageCandidates,
+  itemSlotOptions = [[], [], [], [], [], []],
   boots,
 }) {
   return {
@@ -26,6 +27,9 @@ function createMatchupBuild({
       secondarySlotOptions,
       statOptions,
       pageCandidates,
+    },
+    items: {
+      slotOptions: itemSlotOptions,
     },
     boots,
   };
@@ -53,7 +57,24 @@ function createPageCandidate({
   };
 }
 
-test("buildBuildSuggestionResults aggregates overview groups, exact pages, and boots", () => {
+function createItemOption({
+  itemId,
+  name,
+  games,
+  wins,
+  purchaseMinute,
+}) {
+  return {
+    itemId,
+    icon: `${itemId}.webp`,
+    name,
+    games,
+    wins,
+    purchaseMinute,
+  };
+}
+
+test("buildBuildSuggestionResults aggregates overview groups, exact pages, items, and boots", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
       createMatchupBuild({
@@ -96,6 +117,33 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, and b
             secondaryRuneIds: [8304, 8347],
             modifierIds: [5005, 5008, 5011],
           }),
+        ],
+        itemSlotOptions: [
+          [
+            createItemOption({ itemId: 3118, name: "Malignance", games: 80, wins: 44, purchaseMinute: 12 }),
+            createItemOption({ itemId: 2503, name: "Blackfire Torch", games: 20, wins: 12, purchaseMinute: 11 }),
+          ],
+          [
+            createItemOption({ itemId: 3006, name: "Berserker's Greaves", games: 70, wins: 40, purchaseMinute: 14 }),
+            createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 30, wins: 19, purchaseMinute: 13 }),
+          ],
+          [
+            createItemOption({ itemId: 4645, name: "Shadowflame", games: 70, wins: 41, purchaseMinute: 21 }),
+            createItemOption({ itemId: 6655, name: "Luden's Companion", games: 30, wins: 16, purchaseMinute: 20 }),
+          ],
+          [
+            createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 50, wins: 31, purchaseMinute: 27 }),
+            createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 50, wins: 30, purchaseMinute: 28 }),
+          ],
+          [
+            createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 60, wins: 37, purchaseMinute: 31 }),
+            createItemOption({ itemId: 3135, name: "Void Staff", games: 40, wins: 26, purchaseMinute: 32 }),
+          ],
+          [
+            createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 55, wins: 36, purchaseMinute: 35 }),
+            createItemOption({ itemId: 3135, name: "Void Staff", games: 45, wins: 31, purchaseMinute: 34 }),
+            createItemOption({ itemId: 3041, name: "Mejai's Soulstealer", games: 15, wins: 11, purchaseMinute: 33 }),
+          ],
         ],
         boots: [
           { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 70, wins: 40 },
@@ -141,6 +189,32 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, and b
             modifierIds: [5008, 5011],
           }),
         ],
+        itemSlotOptions: [
+          [
+            createItemOption({ itemId: 3118, name: "Malignance", games: 60, wins: 34, purchaseMinute: 11 }),
+            createItemOption({ itemId: 6655, name: "Luden's Companion", games: 40, wins: 25, purchaseMinute: 12 }),
+          ],
+          [
+            createItemOption({ itemId: 3158, name: "Ionian Boots of Lucidity", games: 80, wins: 48, purchaseMinute: 13 }),
+            createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 20, wins: 13, purchaseMinute: 15 }),
+          ],
+          [
+            createItemOption({ itemId: 4645, name: "Shadowflame", games: 60, wins: 36, purchaseMinute: 22 }),
+            createItemOption({ itemId: 3100, name: "Lich Bane", games: 40, wins: 26, purchaseMinute: 20 }),
+          ],
+          [
+            createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 60, wins: 38, purchaseMinute: 27 }),
+            createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 40, wins: 25, purchaseMinute: 28 }),
+          ],
+          [
+            createItemOption({ itemId: 3135, name: "Void Staff", games: 60, wins: 39, purchaseMinute: 31 }),
+            createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 40, wins: 25, purchaseMinute: 30 }),
+          ],
+          [
+            createItemOption({ itemId: 3135, name: "Void Staff", games: 50, wins: 34, purchaseMinute: 34 }),
+            createItemOption({ itemId: 3041, name: "Mejai's Soulstealer", games: 50, wins: 40, purchaseMinute: 32 }),
+          ],
+        ],
         boots: [
           { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 20, wins: 10 },
           { itemId: 3158, icon: "3158.webp", name: "Ionian Boots of Lucidity", games: 60, wins: 39 },
@@ -169,6 +243,17 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, and b
   );
   assert.equal(bootsById.get(3158).isMostPicked, true);
   assert.equal(bootsById.get(3158).isHighestWin, true);
+
+  assert.deepEqual(
+    aggregated.items.mostPickedBuild.selections.map((selection) => selection.itemId),
+    [3118, 4645, 3089, 3135, 3041],
+  );
+  assert.deepEqual(
+    aggregated.items.highestWinBuild.selections.map((selection) => selection.itemId),
+    [6655, 3157, 3100, 3089, 3135],
+  );
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].purchaseMinute, 12);
+  assert.equal(aggregated.items.mostPickedBuild.selections[4].purchaseMinute, 32);
 });
 
 test("buildBuildSuggestionResults reports when no page crosses the highest-win threshold", () => {

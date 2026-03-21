@@ -245,7 +245,7 @@ app.post("/build-suggestions", async (request, response) =>
       if (matchupBuilds.length === 0) {
         return response.status(502).json({
           error:
-            "No rune or boots data was returned from Lolalytics for the selected ally, role, and enemies.",
+            "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
           summary: {
             enemyCount: normalizedRequest.enemies.length,
             sourceMatchups: 0,
@@ -268,7 +268,7 @@ app.post("/build-suggestions", async (request, response) =>
       if (!hasUsableBuildSuggestions(payload)) {
         return response.status(502).json({
           error:
-            "Lolalytics returned matchup data, but it did not include usable rune or boots suggestions.",
+            "Lolalytics returned matchup data, but it did not include usable build recommendations.",
           request: payload.request,
           summary: payload.summary,
         });

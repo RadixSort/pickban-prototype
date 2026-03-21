@@ -338,6 +338,10 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       isMostPicked: true,
     },
   ]);
+  assert.deepEqual(
+    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
+    [3118, 3157, 3089, 3135, 4645],
+  );
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",

@@ -13,7 +13,7 @@ test("isCompletedBootItem filters unfinished and rune-granted boots", () => {
   assert.equal(isCompletedBootItem(2422, "Slightly Magical Footwear"), false);
 });
 
-test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, and completed boots", () => {
+test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, items, and completed boots", () => {
   const parsed = parseLolalyticsMatchupBuildData(
     {
       header: {
@@ -80,6 +80,27 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
           },
         },
       },
+      item1: [
+        [3118, 54, 65, 65, 10],
+        [2503, 58, 35, 35, 11],
+      ],
+      item2: [
+        [3006, 54, 70, 70, 13],
+        [3157, 60, 30, 30, 14],
+      ],
+      item3: [
+        [4645, 57, 55, 55, 21],
+        [6655, 52, 45, 45, 20],
+      ],
+      item4: [
+        [3089, 59, 50, 50, 27],
+      ],
+      item5: [
+        [3135, 61, 40, 40, 31],
+      ],
+      item6: [
+        [3041, 64, 25, 25, 34],
+      ],
       boots: [
         [3006, 54, 70, 70, 0],
         [1001, 50, 20, 20, 0],
@@ -107,8 +128,16 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
       items: {
         1001: "Boots",
         2422: "Slightly Magical Footwear",
+        2503: "Blackfire Torch",
         3006: "Berserker's Greaves",
+        3041: "Mejai's Soulstealer",
+        3089: "Rabadon's Deathcap",
+        3118: "Malignance",
+        3135: "Void Staff",
         3158: "Ionian Boots of Lucidity",
+        3157: "Zhonya's Hourglass",
+        4645: "Shadowflame",
+        6655: "Luden's Companion",
       },
     },
     {
@@ -139,6 +168,32 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
   assert.deepEqual(
     parsed.runes.pageCandidates[0].primaryRuneIds,
     [8008, 9111, 9103, 8014],
+  );
+  assert.deepEqual(
+    parsed.items.slotOptions.map((slotOptions) =>
+      slotOptions.map((option) => ({
+        itemId: option.itemId,
+        games: option.games,
+        purchaseMinute: option.purchaseMinute,
+      })),
+    ),
+    [
+      [
+        { itemId: 3118, games: 65, purchaseMinute: 10 },
+        { itemId: 2503, games: 35, purchaseMinute: 11 },
+      ],
+      [
+        { itemId: 3006, games: 70, purchaseMinute: 13 },
+        { itemId: 3157, games: 30, purchaseMinute: 14 },
+      ],
+      [
+        { itemId: 4645, games: 55, purchaseMinute: 21 },
+        { itemId: 6655, games: 45, purchaseMinute: 20 },
+      ],
+      [{ itemId: 3089, games: 50, purchaseMinute: 27 }],
+      [{ itemId: 3135, games: 40, purchaseMinute: 31 }],
+      [{ itemId: 3041, games: 25, purchaseMinute: 34 }],
+    ],
   );
   assert.deepEqual(
     parsed.boots.map((option) => ({
