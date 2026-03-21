@@ -51,6 +51,7 @@ test("POST /suggest rejects champions that appear on both sides before live fetc
   assert.match(payload.error, /cannot appear on both allied and enemy sides/i);
   assert.deepEqual(payload.requestStats, {
     lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 0,
   });
 
   await stopServer(child);

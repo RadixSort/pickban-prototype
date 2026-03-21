@@ -71,6 +71,7 @@ test("POST /suggest rejects an empty draft before any upstream fetch", async (t)
     error: "Choose at least one allied or enemy champion before fetching suggestions.",
     requestStats: {
       lolalyticsLiveAccessCount: 0,
+      lolalyticsLifetimeAccessCount: 0,
     },
   });
   assert.equal(mockServer.countRequests(), 0);
@@ -97,6 +98,7 @@ test("POST /suggest rejects a fully assigned allied draft before any upstream fe
       "All five allied roles are already assigned. Remove one ally or clear a role to fetch suggestions.",
     requestStats: {
       lolalyticsLiveAccessCount: 0,
+      lolalyticsLifetimeAccessCount: 0,
     },
   });
   assert.equal(mockServer.countRequests(), 0);
@@ -176,10 +178,69 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   assert.deepEqual(response.body.meta, response.body.metaByRole.support);
   assert.deepEqual(response.body.requestStats, {
     lolalyticsLiveAccessCount: 3,
+    lolalyticsLifetimeAccessCount: 3,
   });
   assert.equal(mockServer.countRequests("/lol/tierlist/"), 1);
   assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(mockServer.countRequests("/lol/leona/build/q-data.json"), 1);
+});
+
+test("POST /suggest preserves the lifetime Lolalytics hit count across later zero-hit requests", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/lol/tierlist/") {
+      return textResponse(
+        buildTierListHtml([
+          {
+            slug: "nautilus",
+            name: "Nautilus",
+            lanePercent: 82.1,
+            winRate: 51.1,
+            pickRate: 4.4,
+          },
+        ]),
+      );
+    }
+
+    if (url.pathname === "/mega/") {
+      return jsonResponse({
+        team: {
+          support: [[111, 53, 0, 60]],
+        },
+      });
+    }
+
+    if (url.pathname === "/lol/leona/build/q-data.json") {
+      return jsonResponse(
+        createRoleBuildQData({
+          support: [[111, 47, 48]],
+        }),
+      );
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const successfulResponse = await postJson(baseUrl, "/suggest", {
+    rankFilter: "emerald_plus",
+    role: "support",
+    allies: [{ champion: "Ahri", role: "mid" }],
+    enemies: ["Leona"],
+  });
+
+  assert.equal(successfulResponse.status, 200);
+  assert.deepEqual(successfulResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 3,
+    lolalyticsLifetimeAccessCount: 3,
+  });
+
+  const emptyDraftResponse = await postJson(baseUrl, "/suggest", {});
+
+  assert.equal(emptyDraftResponse.status, 400);
+  assert.deepEqual(emptyDraftResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 3,
+  });
+  assert.equal(mockServer.countRequests(), 3);
 });
 
 test("POST /suggest preserves per-role failures while deduplicating shared upstream requests", async (t) => {
@@ -267,10 +328,251 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
   );
   assert.deepEqual(response.body.requestStats, {
     lolalyticsLiveAccessCount: 6,
+    lolalyticsLifetimeAccessCount: 6,
   });
   assert.equal(mockServer.countRequests("/lol/tierlist/"), 2);
   assert.equal(mockServer.countRequests("/mega/"), 2);
   assert.equal(mockServer.countRequests("/lol/leona/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
+});
+
+test("POST /draft-outlook returns projected team win rates and caches identical drafts across enemy order", async (t) => {
+  const allySynergyRowsByChampionSlug = {
+    darius: {
+      jungle: [[59, 54, 0, 10]],
+      middle: [[103, 54, 0, 10]],
+      bottom: [[21, 54, 0, 10]],
+      support: [[89, 54, 0, 10]],
+    },
+    jarvaniv: {
+      top: [[122, 54, 0, 10]],
+      middle: [[103, 54, 0, 10]],
+      bottom: [[21, 54, 0, 10]],
+      support: [[89, 54, 0, 10]],
+    },
+    ahri: {
+      top: [[122, 54, 0, 10]],
+      jungle: [[59, 54, 0, 10]],
+      bottom: [[21, 54, 0, 10]],
+      support: [[89, 54, 0, 10]],
+    },
+    missfortune: {
+      top: [[122, 54, 0, 10]],
+      jungle: [[59, 54, 0, 10]],
+      middle: [[103, 54, 0, 10]],
+      support: [[89, 54, 0, 10]],
+    },
+    leona: {
+      top: [[122, 54, 0, 10]],
+      jungle: [[59, 54, 0, 10]],
+      middle: [[103, 54, 0, 10]],
+      bottom: [[21, 54, 0, 10]],
+    },
+  };
+  const enemyCounterRows = {
+    top: [[122, 46, 7]],
+    jungle: [[59, 46, 7]],
+    middle: [[103, 46, 7]],
+    bottom: [[21, 46, 7]],
+    support: [[89, 46, 7]],
+  };
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/") {
+      return jsonResponse({
+        team: allySynergyRowsByChampionSlug[url.searchParams.get("c")] || {},
+      });
+    }
+
+    if (url.pathname === "/lol/leona/build/q-data.json") {
+      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    }
+
+    if (url.pathname === "/lol/lux/build/q-data.json") {
+      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    }
+
+    if (url.pathname === "/lol/jinx/build/q-data.json") {
+      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const firstResponse = await postJson(baseUrl, "/draft-outlook", {
+    rankFilter: "emerald_plus",
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+    enemies: ["Leona", "Jinx"],
+  });
+
+  assert.equal(firstResponse.status, 400);
+  assert.match(firstResponse.body.error, /cannot appear on both allied and enemy sides/i);
+
+  const validResponse = await postJson(baseUrl, "/draft-outlook", {
+    rankFilter: "emerald_plus",
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+    enemies: ["Jinx", "Lux"],
+  });
+
+  assert.equal(validResponse.status, 200);
+  assert.deepEqual(validResponse.body.request, {
+    allies: [
+      { champion: "Darius", championKey: "122", role: "top" },
+      { champion: "Jarvan IV", championKey: "59", role: "jungle" },
+      { champion: "Ahri", championKey: "103", role: "middle" },
+      { champion: "Miss Fortune", championKey: "21", role: "bottom" },
+      { champion: "Leona", championKey: "89", role: "support" },
+    ],
+    enemies: ["Jinx", "Lux"],
+    rankFilter: "emerald_plus",
+  });
+  assert.deepEqual(validResponse.body.summary, {
+    allyCount: 5,
+    enemyCount: 2,
+    synergyMatchupCount: 20,
+    counterMatchupCount: 10,
+    sourceMatchups: 30,
+    projectedWinRateMatchupCount: 30,
+    partialFailures: [],
+  });
+  assert.equal(validResponse.body.projection.allyWinRate, 54);
+  assert.equal(validResponse.body.projection.enemyWinRate, 46);
+  assert.equal(validResponse.body.projection.synergyScore, 10);
+  assert.equal(validResponse.body.projection.counterScore, -7);
+  assert.equal(validResponse.body.projection.projectedAgency, 1.5);
+  assert.deepEqual(validResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 7,
+    lolalyticsLifetimeAccessCount: 7,
+  });
+  assert.equal(mockServer.countRequests("/mega/"), 5);
+  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/lol/lux/build/q-data.json"), 1);
+
+  const secondResponse = await postJson(baseUrl, "/draft-outlook", {
+    rankFilter: "emerald_plus",
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+    enemies: ["Lux", "Jinx"],
+  });
+
+  assert.equal(secondResponse.status, 200);
+  assert.deepEqual(
+    {
+      ...secondResponse.body,
+      requestStats: validResponse.body.requestStats,
+    },
+    validResponse.body,
+  );
+  assert.deepEqual(secondResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 7,
+  });
+  assert.equal(mockServer.countRequests("/mega/"), 5);
+  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/lol/lux/build/q-data.json"), 1);
+});
+
+test("POST /draft-outlook rejects projections that have no usable win-rate inputs", async (t) => {
+  const allySynergyRowsByChampionSlug = {
+    darius: {
+      jungle: [[59, null, 0, 10]],
+      middle: [[103, null, 0, 10]],
+      bottom: [[21, null, 0, 10]],
+      support: [[89, null, 0, 10]],
+    },
+    jarvaniv: {
+      top: [[122, null, 0, 10]],
+      middle: [[103, null, 0, 10]],
+      bottom: [[21, null, 0, 10]],
+      support: [[89, null, 0, 10]],
+    },
+    ahri: {
+      top: [[122, null, 0, 10]],
+      jungle: [[59, null, 0, 10]],
+      bottom: [[21, null, 0, 10]],
+      support: [[89, null, 0, 10]],
+    },
+    missfortune: {
+      top: [[122, null, 0, 10]],
+      jungle: [[59, null, 0, 10]],
+      middle: [[103, null, 0, 10]],
+      support: [[89, null, 0, 10]],
+    },
+    leona: {
+      top: [[122, null, 0, 10]],
+      jungle: [[59, null, 0, 10]],
+      middle: [[103, null, 0, 10]],
+      bottom: [[21, null, 0, 10]],
+    },
+  };
+  const enemyCounterRows = {
+    top: [[122, null, 7]],
+    jungle: [[59, null, 7]],
+    middle: [[103, null, 7]],
+    bottom: [[21, null, 7]],
+    support: [[89, null, 7]],
+  };
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/") {
+      return jsonResponse({
+        team: allySynergyRowsByChampionSlug[url.searchParams.get("c")] || {},
+      });
+    }
+
+    if (url.pathname === "/lol/jinx/build/q-data.json") {
+      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/draft-outlook", {
+    rankFilter: "emerald_plus",
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+    enemies: ["Jinx"],
+  });
+
+  assert.equal(response.status, 502);
+  assert.equal(
+    response.body.error,
+    "No projected draft win-rate data was returned from Lolalytics for the selected team compositions.",
+  );
+  assert.deepEqual(response.body.summary, {
+    allyCount: 5,
+    enemyCount: 1,
+    synergyMatchupCount: 20,
+    counterMatchupCount: 5,
+    sourceMatchups: 25,
+    projectedWinRateMatchupCount: 0,
+    partialFailures: [],
+  });
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 6,
+    lolalyticsLifetimeAccessCount: 6,
+  });
+  assert.equal(mockServer.countRequests("/mega/"), 5);
   assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
 });
 
@@ -354,6 +656,49 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
 
   assert.equal(secondResponse.status, 200);
   assert.deepEqual(secondResponse.body, firstResponse.body);
+  assert.equal(mockServer.countRequests("/lol/ahri/vs/leona/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/lol/ahri/vs/jinx/build/q-data.json"), 1);
+});
+
+test("POST /build-suggestions returns a 502 summary when every matchup fetch fails", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/lol/ahri/vs/leona/build/q-data.json") {
+      return textResponse("Service unavailable.", 503);
+    }
+
+    if (url.pathname === "/lol/ahri/vs/jinx/build/q-data.json") {
+      return textResponse("Gateway timeout.", 504);
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: ["Leona", "Jinx"],
+  });
+
+  assert.equal(response.status, 502);
+  assert.equal(
+    response.body.error,
+    "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
+  );
+  assert.equal(response.body.summary.enemyCount, 2);
+  assert.equal(response.body.summary.sourceMatchups, 0);
+  assert.equal(Number.isFinite(Date.parse(response.body.summary.lastUpdatedAt)), true);
+  assert.equal(response.body.summary.partialFailures.length, 2);
+  assert.match(
+    response.body.summary.partialFailures[0],
+    /Leona: .*ahri vs leona middle build q-data .*status 503/i,
+  );
+  assert.match(
+    response.body.summary.partialFailures[1],
+    /Jinx: .*ahri vs jinx middle build q-data .*status 504/i,
+  );
   assert.equal(mockServer.countRequests("/lol/ahri/vs/leona/build/q-data.json"), 1);
   assert.equal(mockServer.countRequests("/lol/ahri/vs/jinx/build/q-data.json"), 1);
 });

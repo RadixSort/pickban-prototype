@@ -74,9 +74,39 @@
     }));
   }
 
+  function getAutoAssignableAllyRole(allies = [], { requireFullTeam = true } = {}) {
+    if (!Array.isArray(allies) || allies.length === 0) {
+      return null;
+    }
+
+    if (requireFullTeam && allies.length !== ROLE_OPTIONS.length) {
+      return null;
+    }
+
+    const unassignedAllies = allies
+      .map((ally, index) => ({
+        ally,
+        index,
+        role: normalizeRole(ally?.role ?? ally?.lane ?? null),
+      }))
+      .filter((entry) => !entry.role);
+    const unassignedRoleOptions = getUnassignedTargetRoleOptions(allies);
+
+    if (unassignedAllies.length !== 1 || unassignedRoleOptions.length !== 1) {
+      return null;
+    }
+
+    return {
+      ally: unassignedAllies[0].ally,
+      allyIndex: unassignedAllies[0].index,
+      role: unassignedRoleOptions[0].value,
+    };
+  }
+
   return {
     DEFAULT_TARGET_ROLE,
     ROLE_OPTIONS,
+    getAutoAssignableAllyRole,
     getAssignableAllyRoleOptions,
     getRoleLabel,
     getTargetRoleOptions,

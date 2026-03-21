@@ -368,3 +368,41 @@ test("buildBuildSuggestionResults sorts boot options by descending win rate", ()
     [3006, 3158, 3047],
   );
 });
+
+test("buildBuildSuggestionResults falls back to current time and unfiltered item options", (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-03-20T12:00:00.000Z"),
+  });
+
+  const aggregated = buildBuildSuggestionResults({
+    highestWinItemThresholdPct: 50,
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 100,
+        fetchedAt: "not-a-date",
+        primaryStyleOptions: [],
+        secondaryStyleOptions: [],
+        primarySlotOptions: [[], [], [], []],
+        secondarySlotOptions: [[], [], [], []],
+        statOptions: [],
+        pageCandidates: [],
+        itemSlotOptions: [
+          [createItemOption({ itemId: 3118, name: "Malignance", games: 10, wins: 6, purchaseMinute: 10 })],
+          [createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 10, wins: 6, purchaseMinute: 18 })],
+          [createItemOption({ itemId: 3089, name: "Rabadon's Deathcap", games: 10, wins: 6, purchaseMinute: 24 })],
+          [createItemOption({ itemId: 3135, name: "Void Staff", games: 10, wins: 6, purchaseMinute: 29 })],
+          [createItemOption({ itemId: 4645, name: "Shadowflame", games: 10, wins: 6, purchaseMinute: 33 })],
+          [createItemOption({ itemId: 3041, name: "Mejai's Soulstealer", games: 10, wins: 6, purchaseMinute: 36 })],
+        ],
+        boots: [],
+      }),
+    ],
+  });
+
+  assert.equal(aggregated.lastUpdatedAt, "2026-03-20T12:00:00.000Z");
+  assert.deepEqual(
+    aggregated.items.highestWinBuild.selections.map((selection) => selection.itemId),
+    [3118, 3157, 3089, 3135, 4645],
+  );
+});

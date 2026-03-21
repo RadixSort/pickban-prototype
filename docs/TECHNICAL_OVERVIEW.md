@@ -14,6 +14,16 @@ Only one npm dependency is installed: `express`.
 
 There is no bundler, database, auth layer, server-side rendering, or deployment config in this repository.
 
+## Start Here
+
+If you are onboarding to the codebase, read these files in order:
+
+- `server.js`: the full HTTP surface plus live fetch/caching behavior
+- `public/app.js`: the browser controller and UI-state transitions
+- `lib/request-normalization.js`: request validation rules
+- `lib/server-route-helpers.js`: public response shaping
+- `test/server-api.test.js`: route contracts with mocked Lolalytics responses
+
 ## Entry Points And Commands
 
 Runtime entry points:
@@ -43,6 +53,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - static file serving
   - `GET /app-config`
   - `POST /suggest`
+  - `POST /draft-outlook`
   - `POST /build-suggestions`
   - `POST /shutdown`
   - Lolalytics fetch/caching helpers
@@ -53,7 +64,8 @@ That means shared business rules often live in `public/`, not `lib/`.
   - champion search and selection
   - ally role assignment
   - role-results rendering
-  - runes/boots modal flow
+  - draft projection fetch and rendering
+  - build recommendation modal flow
 
 - `public/roles.js`
   - role aliases
@@ -77,10 +89,10 @@ That means shared business rules often live in `public/`, not `lib/`.
   - frontend role-result cache key
 
 - `public/build-suggestion-cache.js`
-  - frontend runes/boots cache key
+  - frontend build-recommendation cache key
 
 - `public/build-suggestion-view.js`
-  - summary HTML for highest-win page, most-picked page, and boots
+  - summary HTML for runes, ordered item paths, and boots
 
 - `public/rune-metadata.js`
   - local rune style and icon metadata used by the build parser and modal renderer
@@ -90,6 +102,7 @@ That means shared business rules often live in `public/`, not `lib/`.
 - `lib/request-normalization.js`
   - champion normalization
   - ally/enemy request validation
+  - draft-projection request validation
   - build-suggestion request validation
 
 - `lib/requested-target-roles.js`
@@ -118,10 +131,14 @@ That means shared business rules often live in `public/`, not `lib/`.
   - flip enemy-facing matchup win rates back to the candidate pick perspective
 
 - `lib/lolalytics-build-parser.js`
-  - normalize matchup `q-data.json` into rune pages, slot options, and completed boots
+  - normalize matchup `q-data.json` into rune pages, item slot options, and completed boots
 
 - `lib/build-suggestion-results.js`
-  - merge matchup build data across enemies into one summary payload
+  - merge matchup build data across enemies into one summary payload for runes, items, and boots
+
+- `lib/draft-projection.js`
+  - aggregate full-draft ally synergy and enemy counter matchups
+  - reject projections that have no usable win-rate samples
 
 ## Request Flows
 
@@ -173,15 +190,54 @@ Current validation rules enforced by code:
 - champion names must exist in `public/champions.json`
 - duplicate champions in the same list are ignored
 - the same champion cannot appear on both allied and enemy sides
-- maximum 4 unique allies
+- maximum 5 unique allies
 - maximum 5 unique enemies
 - at least one champion must be present overall
 - duplicate ally role assignments are rejected
 - explicitly requested target roles cannot overlap with already-assigned ally roles
 
+## `POST /draft-outlook`
+
+Used by the full-team projection flow after every allied role is assigned.
+
+Minimal request example:
+
+```json
+{
+  "rankFilter": "emerald_plus",
+  "allies": [
+    { "champion": "Darius", "role": "top" },
+    { "champion": "Jarvan IV", "role": "jungle" },
+    { "champion": "Ahri", "role": "middle" },
+    { "champion": "Miss Fortune", "role": "bottom" },
+    { "champion": "Leona", "role": "support" }
+  ],
+  "enemies": ["Jinx", "Lux"]
+}
+```
+
+Flow:
+
+1. `normalizeDraftProjectionRequest(...)` requires exactly five allied champions with unique assigned roles.
+2. The server fetches ally-synergy rows for every ordered allied pairing.
+3. The server fetches enemy counter rows for each ally role and each selected enemy champion.
+4. `buildDraftProjection(...)` aggregates those rows into one full-draft projection.
+5. `buildDraftProjectionPayload(...)` shapes the response into:
+   - `request`
+   - `summary`
+   - `projection`
+   - `requestStats`
+
+Important behavioral details:
+
+- the route accepts `0` to `5` enemies, but always requires five allied champions with roles
+- the response exposes `summary.projectedWinRateMatchupCount` so callers can distinguish fetched rows from rows that actually contributed win-rate data
+- if every fetched row is missing a usable win-rate value, the route returns an HTTP error instead of reporting a misleading `0%` ally win rate
+- the frontend only exposes this route when the full allied team is selected and fully assigned
+
 ## `POST /build-suggestions`
 
-Used by the matchup-specific runes and boots modal.
+Used by the matchup-specific build recommendation modal.
 
 Minimal request example:
 
@@ -201,15 +257,17 @@ Flow:
    - rune style totals
    - rune slot options
    - exact page candidates
+   - ordered item slot options
    - completed boots
 4. `buildBuildSuggestionResults(...)` merges those matchup records into one summary response.
 5. The response returns:
    - `request`
    - `summary`
    - `runes`
+   - `items`
    - `boots`
 
-The current browser only exposes this route when the selected ally already has a role and the draft contains at least one enemy champion.
+The current browser only exposes this route from the `Build` button when the selected ally already has a role and the draft contains at least one enemy champion.
 
 ## Scoring, Filtering, And Ranking
 
@@ -266,6 +324,10 @@ Backend caches:
   - key: rank filter + ally champion + ally role + enemies
   - TTL: 5 minutes
 
+- aggregated draft-projection response cache
+  - key: rank filter + allies + ally roles + enemies
+  - TTL: 5 minutes
+
 - resolved Qwik payload caches
   - stored in `WeakMap`s
   - tied to the payload object lifetime rather than a fixed TTL
@@ -274,14 +336,17 @@ Frontend caches:
 
 - role suggestions are cached for the current browser session by rank filter + allies + ally roles + enemies
 - build suggestions are cached for the current browser session by rank filter + ally + ally role + enemies
+- draft outlook responses are cached for the current browser session under the same draft key as role suggestions
 
 Failure behavior:
 
 - remote requests time out after 15 seconds
 - role suggestion fetches use `Promise.allSettled(...)`, so one failed synergy/counter source does not automatically discard the rest of the role
 - role-specific failures are exposed in `metaByRole[role].partialFailures`
+- draft-projection failures are exposed in `summary.partialFailures`
 - build-suggestion fetches also use `Promise.allSettled(...)`, and enemy-specific failures are exposed in `summary.partialFailures`
 - if every requested role fails, `/suggest` returns an HTTP error payload
+- if a draft projection has no usable win-rate samples, `/draft-outlook` returns an HTTP error payload
 - if every matchup build fetch fails, `/build-suggestions` returns an HTTP error payload
 
 ## External Assumptions

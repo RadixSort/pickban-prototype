@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   normalizeAllySelections,
   normalizeBuildSuggestionRequest,
+  normalizeDraftProjectionRequest,
   normalizeChampionSelections,
   normalizeRequestedRankFilter,
   validateAllyRoleAssignments,
@@ -16,8 +17,11 @@ const {
 const { normalizeRole } = require("../public/roles.js");
 
 const championByName = new Map([
+  ["darius", { key: "122", id: "darius", name: "Darius" }],
   ["ahri", { key: "103", id: "ahri", name: "Ahri" }],
   ["jarvaniv", { key: "59", id: "jarvaniv", name: "Jarvan IV" }],
+  ["leona", { key: "89", id: "leona", name: "Leona" }],
+  ["jinx", { key: "222", id: "jinx", name: "Jinx" }],
   ["missfortune", { key: "21", id: "missfortune", name: "Miss Fortune" }],
 ]);
 
@@ -193,5 +197,74 @@ test("normalizeBuildSuggestionRequest rejects missing ally role and empty enemie
         },
       ),
     /cannot appear on both allied and enemy sides/i,
+  );
+});
+
+test("normalizeDraftProjectionRequest requires five allies with assigned roles", () => {
+  const request = normalizeDraftProjectionRequest(
+    {
+      rankFilter: "emerald_plus",
+      allies: [
+        { champion: "Darius", role: "top" },
+        { champion: "Jarvan IV", role: "jungle" },
+        { champion: "Ahri", role: "mid" },
+        { champion: "Miss Fortune", role: "bot" },
+        { champion: "Leona", role: "support" },
+      ],
+      enemies: ["Jinx"],
+    },
+    {
+      championByName,
+      defaultRankFilter: DEFAULT_RANK_FILTER,
+      normalizeRankFilter,
+      normalizeRole,
+    },
+  );
+
+  assert.equal(request.rankFilter, "emerald_plus");
+  assert.equal(request.allies.length, 5);
+  assert.equal(request.enemies.length, 1);
+
+  assert.throws(
+    () =>
+      normalizeDraftProjectionRequest(
+        {
+          allies: [
+            { champion: "Darius", role: "top" },
+            { champion: "Jarvan IV", role: "jungle" },
+            { champion: "Ahri", role: "mid" },
+            { champion: "Miss Fortune", role: "bot" },
+          ],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /exactly 5 allied champions/i,
+  );
+
+  assert.throws(
+    () =>
+      normalizeDraftProjectionRequest(
+        {
+          allies: [
+            { champion: "Darius", role: "top" },
+            { champion: "Jarvan IV", role: "jungle" },
+            { champion: "Ahri", role: "mid" },
+            { champion: "Miss Fortune", role: "bot" },
+            { champion: "Leona" },
+          ],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /assign all five allied roles/i,
   );
 });
