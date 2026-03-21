@@ -76,6 +76,32 @@ test("POST /suggest rejects an empty draft before any upstream fetch", async (t)
   assert.equal(mockServer.countRequests(), 0);
 });
 
+test("POST /suggest rejects a fully assigned allied draft before any upstream fetch", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, () => {
+    throw new Error("Unexpected upstream request.");
+  });
+
+  const response = await postJson(baseUrl, "/suggest", {
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(response.body, {
+    error:
+      "All five allied roles are already assigned. Remove one ally or clear a role to fetch suggestions.",
+    requestStats: {
+      lolalyticsLiveAccessCount: 0,
+    },
+  });
+  assert.equal(mockServer.countRequests(), 0);
+});
+
 test("POST /suggest returns single-role results and legacy compatibility fields", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/lol/tierlist/") {

@@ -49,7 +49,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "3.1.0",
+  version: "3.2.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -59,7 +59,7 @@ const state = {
 };
 
 const limits = {
-  allies: 4,
+  allies: 5,
   enemies: 5,
 };
 
@@ -214,6 +214,10 @@ function getAvailableResultRoleOptions() {
   return getUnassignedTargetRoleOptions(state.allies);
 }
 
+function getNoAvailableResultRolesMessage() {
+  return "All five allied roles are assigned. Remove one ally or clear a role to fetch more suggestions.";
+}
+
 function getSelectedResultRole() {
   const availableRoleValues = getAvailableResultRoleOptions().map((option) => option.value);
   if (availableRoleValues.length === 0) {
@@ -266,7 +270,8 @@ function renderControls() {
   resultsRoleSelect.disabled = isInteractionLocked() || availableRoleOptions.length === 0;
 
   allyRoleTitle.textContent = "Assign known roles";
-  resultsTitle.textContent = `${getRoleLabel(selectedRole)} recommendations`;
+  resultsTitle.textContent =
+    availableRoleOptions.length === 0 ? "Draft complete" : `${getRoleLabel(selectedRole)} recommendations`;
 }
 
 function renderAll() {
@@ -601,6 +606,73 @@ function removeChampion(side, championId) {
   renderAll();
 }
 
+function findChampionForResult(result) {
+  const resultKey = String(getResultKey(result) || "");
+  const resultName = normalizeText(getResultName(result));
+
+  return (
+    state.champions.find((champion) => String(champion.key) === resultKey) ||
+    state.champions.find((champion) => normalizeText(champion.name) === resultName) ||
+    null
+  );
+}
+
+function getSelectResultForDraftHelperText(targetRole, result) {
+  if (state.loading) {
+    return "Unavailable while role suggestions are loading.";
+  }
+
+  if (state.shuttingDown) {
+    return "Unavailable while the app is stopping.";
+  }
+
+  const normalizedRole = normalizeRole(targetRole);
+  if (!normalizedRole) {
+    return "This recommendation is missing a target role.";
+  }
+
+  if (state.allies.length >= limits.allies) {
+    return "The allied draft is already full.";
+  }
+
+  if (state.allies.some((ally) => ally.role === normalizedRole)) {
+    return `${getRoleLabel(normalizedRole)} is already assigned to an allied champion.`;
+  }
+
+  const resultKey = String(getResultKey(result) || "");
+  if (resultKey && getSelectedChampionKeys().has(resultKey)) {
+    return `${getResultName(result)} is already in the current draft.`;
+  }
+
+  if (!findChampionForResult(result)) {
+    return "Champion metadata is unavailable for this recommendation.";
+  }
+
+  return "";
+}
+
+function handleSelectResultForDraft(targetRole, result) {
+  const helperText = getSelectResultForDraftHelperText(targetRole, result);
+  if (helperText) {
+    setError(helperText);
+    return;
+  }
+
+  const champion = findChampionForResult(result);
+  const normalizedRole = normalizeRole(targetRole);
+  if (!champion || !normalizedRole) {
+    return;
+  }
+
+  state.allies.push({
+    ...createSelectedChampion(champion, "allies"),
+    role: normalizedRole,
+  });
+  closeBuildSuggestionModal();
+  clearStatus();
+  renderAll();
+}
+
 function buildRoleOptionsMarkup(championId) {
   const takenRoles = new Set(
     state.allies
@@ -659,6 +731,11 @@ async function handleFetchSuggestions() {
   const cacheKey = getCurrentSuggestionCacheKey();
   const availableRoleOptions = getAvailableResultRoleOptions();
   const availableRoleValues = availableRoleOptions.map((option) => option.value);
+
+  if (availableRoleValues.length === 0) {
+    setError(getNoAvailableResultRolesMessage());
+    return;
+  }
 
   setLoading(true);
   clearStatus();
@@ -1053,6 +1130,11 @@ function renderResults() {
       topOptionTone === "overlap" ? "overlap" : "agency",
     );
     const overlapBadgeMarkup = getOverlapBadgeMarkup(topOptionTone);
+    const selectForDraftHelperText = getSelectResultForDraftHelperText(selectedRole, result);
+    const selectForDraftDescription = selectForDraftHelperText
+      ? selectForDraftHelperText
+      : `Add ${resultName} to the allied draft as ${getRoleLabel(selectedRole)}.`;
+    const selectForDraftDisabled = Boolean(selectForDraftHelperText);
     row.innerHTML = `
       <td class="rank-cell">${index + 1}</td>
       <td>
@@ -1068,8 +1150,28 @@ function renderResults() {
       <td class="${projectedWinRateClassName}">${formatRate(projectedWinRate)}</td>
       <td>${formatScore(result.synergyScore)}</td>
       <td>${formatScore(result.counterScore)}</td>
-      <td class="${projectedAgencyClassName}">${formatScore(getProjectedAgency(result))}</td>
+      <td class="${projectedAgencyClassName}">
+        <div class="result-agency-cell">
+          <span class="result-agency-score">${formatScore(getProjectedAgency(result))}</span>
+          <button
+            type="button"
+            class="result-draft-action"
+            data-action="select-for-draft"
+            title="${escapeHtml(selectForDraftDescription)}"
+            aria-label="${escapeHtml(selectForDraftDescription)}"
+            ${selectForDraftDisabled ? "disabled" : ""}
+          >
+            +
+          </button>
+        </div>
+      </td>
     `;
+    const selectForDraftButton = row.querySelector('[data-action="select-for-draft"]');
+    if (selectForDraftButton) {
+      selectForDraftButton.addEventListener("click", () =>
+        handleSelectResultForDraft(selectedRole, result),
+      );
+    }
     resultsBody.appendChild(row);
   });
 
@@ -1124,11 +1226,17 @@ function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT
 }
 
 function getPendingResultsMessage() {
+  const availableRoleOptions = getAvailableResultRoleOptions();
+
   if (state.allies.length === 0 && state.enemies.length === 0) {
     return "Select some champions, optionally assign known ally roles, then fetch suggestions to load every remaining role.";
   }
 
-  return `Fetch suggestions to load ${formatRoleLabels(getAvailableResultRoleOptions())} for the current draft.`;
+  if (availableRoleOptions.length === 0) {
+    return getNoAvailableResultRolesMessage();
+  }
+
+  return `Fetch suggestions to load ${formatRoleLabels(availableRoleOptions)} for the current draft.`;
 }
 
 function formatRoleLabels(roles = []) {
@@ -1304,10 +1412,11 @@ function clearStatus() {
 }
 
 function renderActionState() {
+  const availableRoleCount = getAvailableResultRoleOptions().length;
+
   rankFilterSelect.disabled = state.loading || state.shuttingDown;
-  resultsRoleSelect.disabled =
-    state.loading || state.shuttingDown || getAvailableResultRoleOptions().length === 0;
-  fetchButton.disabled = state.loading || state.shuttingDown;
+  resultsRoleSelect.disabled = state.loading || state.shuttingDown || availableRoleCount === 0;
+  fetchButton.disabled = state.loading || state.shuttingDown || availableRoleCount === 0;
   fetchButton.textContent = state.loading ? "Fetching..." : "Fetch Suggestions";
 
   resetButton.disabled = state.loading || state.shuttingDown;

@@ -45,3 +45,18 @@ test("resolveRequestedTargetRoles supports explicit multi-role requests", () => 
     ["top", "middle", "bottom"],
   );
 });
+
+test("resolveRequestedTargetRoles returns no roles when every allied role is assigned", () => {
+  assert.deepEqual(
+    resolveRequestedTargetRoles({
+      allies: [
+        { champion: "Darius", role: "top" },
+        { champion: "Jarvan IV", role: "jungle" },
+        { champion: "Ahri", role: "middle" },
+        { champion: "Miss Fortune", role: "bottom" },
+        { champion: "Leona", role: "support" },
+      ],
+    }),
+    [],
+  );
+});

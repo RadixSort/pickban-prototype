@@ -141,6 +141,14 @@ app.post("/suggest", async (request, response) =>
         });
       }
 
+      if (targetRoles.length === 0) {
+        return response.status(400).json({
+          error:
+            "All five allied roles are already assigned. Remove one ally or clear a role to fetch suggestions.",
+          requestStats: buildLolalyticsRequestStats(),
+        });
+      }
+
       const roleSuggestions = await Promise.allSettled(
         targetRoles.map((targetRole) =>
           buildSuggestionsForRole({

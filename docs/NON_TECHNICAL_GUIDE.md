@@ -90,8 +90,9 @@ Leave that terminal window open while you use the app.
 3. If you know some ally roles already, assign them in the middle panel.
 4. Click **Fetch Suggestions**.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
-6. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-7. If one ally already has a role and you have picked at least one enemy, click **Runes & Boots** on that ally row to open matchup build suggestions.
+6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
+7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
+8. If one ally already has a role and you have picked at least one enemy, click **Runes & Boots** on that ally row to open matchup build suggestions.
 
 ## What The Scores Mean
 
@@ -102,7 +103,7 @@ Leave that terminal window open while you use the app.
 
 ## Limits
 
-- Up to 4 allied champions
+- Up to 5 allied champions
 - Up to 5 enemy champions
 - At least 1 champion must be selected before fetching
 - A champion can only appear once across both teams
