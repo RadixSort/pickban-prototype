@@ -47,6 +47,7 @@ const app = express();
 const publicDir = path.join(__dirname, "public");
 const champions = require(path.join(publicDir, "champions.json"));
 const {
+  ROLE_OPTIONS,
   getRoleLabel,
   normalizeRole,
 } = require(path.join(publicDir, "roles.js"));
@@ -86,7 +87,9 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
+const tierListRowsCache = new Map();
 const eligibleTierStatsCache = new Map();
+const allyRoleLikelihoodsCache = new Map();
 const normalizedMatchupBuildCache = new Map();
 const buildSuggestionQueryCache = new Map();
 const draftProjectionQueryCache = new Map();
@@ -126,8 +129,31 @@ app.get("/app-config", (_request, response) => {
     version: appVersion,
     canShutdown: true,
     shutdownToken,
+    requestStats: buildLolalyticsRequestStats(),
   });
 });
+
+app.get("/ally-role-likelihoods", async (request, response) =>
+  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
+    try {
+      const rankFilter = normalizeRankFilter(request.query?.rankFilter) || DEFAULT_RANK_FILTER;
+      const championRoleLikelihoods = await fetchAllyRoleLikelihoods(rankFilter);
+
+      response.set("Cache-Control", "no-store");
+      response.json({
+        rankFilter,
+        championRoleLikelihoods,
+        requestStats: buildLolalyticsRequestStats(),
+      });
+    } catch (error) {
+      const statusCode = error.statusCode || 500;
+      response.status(statusCode).json({
+        error: error.message || "Unexpected server error.",
+        requestStats: buildLolalyticsRequestStats(),
+      });
+    }
+  }),
+);
 
 app.post("/suggest", async (request, response) =>
   lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
@@ -320,25 +346,40 @@ app.post("/build-suggestions", async (request, response) =>
         return response.json(cachedPayload);
       }
 
-      const matchupResults = await Promise.allSettled(
-        normalizedRequest.enemies.map((enemyChampion) =>
-          fetchNormalizedMatchupBuildData({
+      const isGenericBuildLookup = normalizedRequest.enemies.length === 0;
+      let matchupBuilds = [];
+      let partialFailures = [];
+
+      if (isGenericBuildLookup) {
+        matchupBuilds = [
+          await fetchNormalizedChampionBuildData({
             allyChampion: normalizedRequest.ally.champion,
-            enemyChampion,
             rankFilter: normalizedRequest.rankFilter,
             role: normalizedRequest.ally.role,
           }),
-        ),
-      );
-      const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
-        matchupResults,
-        normalizedRequest.enemies,
-      );
+        ];
+      } else {
+        const matchupResults = await Promise.allSettled(
+          normalizedRequest.enemies.map((enemyChampion) =>
+            fetchNormalizedMatchupBuildData({
+              allyChampion: normalizedRequest.ally.champion,
+              enemyChampion,
+              rankFilter: normalizedRequest.rankFilter,
+              role: normalizedRequest.ally.role,
+            }),
+          ),
+        );
+        ({ matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
+          matchupResults,
+          normalizedRequest.enemies,
+        ));
+      }
 
       if (matchupBuilds.length === 0) {
         return response.status(502).json({
-          error:
-            "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
+          error: isGenericBuildLookup
+            ? "No build recommendation data was returned from Lolalytics for the selected ally and role."
+            : "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
           summary: {
             enemyCount: normalizedRequest.enemies.length,
             sourceMatchups: 0,
@@ -712,12 +753,7 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     return cachedEligibleRoleTierStats;
   }
 
-  const html = await fetchLolalyticsText(tierListUrl, `${roleLabel} tier list`);
-  const rows = extractTierListRows(html);
-  if (rows.length === 0) {
-    throw createHttpError(502, `Lolalytics ${roleLabel} tier list was missing champion rows.`);
-  }
-
+  const rows = await fetchTierListRows(targetRole, rankFilter);
   const eligibleRoleTierStats = buildEligibleTierStats(
     rows,
     championBySlug,
@@ -734,6 +770,62 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
 
   setCachedData(eligibleTierStatsCache, tierListUrl, eligibleRoleTierStats);
   return eligibleRoleTierStats;
+}
+
+async function fetchTierListRows(targetRole, rankFilter) {
+  const roleLabel = getRoleLabel(targetRole).toLowerCase();
+  const tierListUrl = buildTierListUrl(targetRole, rankFilter);
+  const cachedRows = getCachedData(tierListRowsCache, tierListUrl);
+  if (cachedRows) {
+    return cachedRows;
+  }
+
+  const html = await fetchLolalyticsText(tierListUrl, `${roleLabel} tier list`);
+  const rows = extractTierListRows(html);
+  if (rows.length === 0) {
+    throw createHttpError(502, `Lolalytics ${roleLabel} tier list was missing champion rows.`);
+  }
+
+  setCachedData(tierListRowsCache, tierListUrl, rows);
+  return rows;
+}
+
+async function fetchAllyRoleLikelihoods(rankFilter) {
+  const normalizedRankFilter = normalizeRankFilter(rankFilter) || DEFAULT_RANK_FILTER;
+  const cachedLikelihoods = getCachedData(allyRoleLikelihoodsCache, normalizedRankFilter);
+  if (cachedLikelihoods) {
+    return cachedLikelihoods;
+  }
+
+  const rowsByRole = await Promise.all(
+    ROLE_OPTIONS.map(async (option) => ({
+      role: option.value,
+      rows: await fetchTierListRows(option.value, normalizedRankFilter),
+    })),
+  );
+  const championRoleLikelihoods = {};
+
+  for (const entry of rowsByRole) {
+    for (const row of entry.rows) {
+      const champion =
+        championBySlug.get(row.slug) ||
+        championByName.get(normalizeChampionName(row.name));
+      if (!champion) {
+        continue;
+      }
+
+      const championKey = String(champion.key);
+      championRoleLikelihoods[championKey] ||= {};
+      championRoleLikelihoods[championKey][entry.role] = {
+        lanePercent: row.lanePercent,
+        pickRate: row.pickRate,
+        winRate: row.winRate,
+      };
+    }
+  }
+
+  setCachedData(allyRoleLikelihoodsCache, normalizedRankFilter, championRoleLikelihoods);
+  return championRoleLikelihoods;
 }
 
 async function fetchLolalyticsBuildData(slug, rankFilter) {
@@ -799,6 +891,42 @@ async function fetchNormalizedMatchupBuildData({
   return parsedBuildData;
 }
 
+async function fetchNormalizedChampionBuildData({
+  allyChampion,
+  rankFilter,
+  role,
+}) {
+  const payload = await fetchLolalyticsChampionBuildPayload(
+    allyChampion.id,
+    role,
+    rankFilter,
+  );
+  const {
+    buildLoader,
+    metadataLoader,
+  } = extractLolalyticsChampionBuildLoaders(payload, allyChampion.name);
+
+  return parseLolalyticsMatchupBuildData(buildLoader, metadataLoader, {
+    fetchedAt: new Date().toISOString(),
+  });
+}
+
+async function fetchLolalyticsChampionBuildPayload(allySlug, role, rankFilter) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      lane: role,
+      patch: PATCH_WINDOW,
+    },
+    rankFilter,
+    { includeDefaultTier: true },
+  );
+
+  return fetchLolalyticsJson(
+    `${LOLALYTICS_BASE_URL}/lol/${allySlug}/build/q-data.json?${searchParams.toString()}`,
+    `${allySlug} ${role || "all"} build q-data`,
+  );
+}
+
 async function fetchLolalyticsMatchupBuildPayload(allySlug, enemySlug, role, rankFilter) {
   const searchParams = buildLolalyticsSearchParams(
     {
@@ -813,6 +941,24 @@ async function fetchLolalyticsMatchupBuildPayload(allySlug, enemySlug, role, ran
     `${LOLALYTICS_BASE_URL}/lol/${allySlug}/vs/${enemySlug}/build/q-data.json?${searchParams.toString()}`,
     `${allySlug} vs ${enemySlug} ${role} build q-data`,
   );
+}
+
+function extractLolalyticsChampionBuildLoaders(payload, allyName) {
+  const root = resolveQwikPayload(payload);
+  const buildLoader = findLoader(root.loaders, isMatchupBuildLoader);
+  const metadataLoader = findLoader(root.loaders, isMatchupMetadataLoader);
+
+  if (!buildLoader || !metadataLoader) {
+    throw createHttpError(
+      502,
+      `Lolalytics build data for ${allyName} was missing rune or item metadata.`,
+    );
+  }
+
+  return {
+    buildLoader,
+    metadataLoader,
+  };
 }
 
 function extractLolalyticsMatchupBuildLoaders(payload, allyName, enemyName) {

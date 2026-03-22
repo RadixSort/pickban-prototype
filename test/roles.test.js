@@ -6,6 +6,7 @@ const {
   getAutoAssignableAllyRole,
   getAssignableAllyRoleOptions,
   getRoleLabel,
+  getSuggestedAllyRole,
   getUnassignedTargetRoleOptions,
   normalizeRole,
 } = require("../public/roles.js");
@@ -44,6 +45,70 @@ test("getUnassignedTargetRoleOptions excludes ally-assigned roles", () => {
       { champion: "Smolder", role: "" },
     ]).map((option) => option.value),
     ["top", "middle", "bottom"],
+  );
+});
+
+test("getSuggestedAllyRole assigns the first remaining role for the selected ally", () => {
+  assert.equal(
+    getSuggestedAllyRole(
+      [
+        { id: "1", champion: "Darius", role: "top" },
+        { id: "2", champion: "Jarvan IV", role: "jungle" },
+        { id: "3", champion: "Ahri", role: "" },
+      ],
+      "3",
+    ),
+    "middle",
+  );
+});
+
+test("getSuggestedAllyRole ignores other unassigned allies when suggesting a new pick", () => {
+  assert.equal(
+    getSuggestedAllyRole(
+      [
+        { id: "1", champion: "Darius", role: "" },
+        { id: "2", champion: "Jarvan IV", role: "jungle" },
+        { id: "3", champion: "Ahri", role: "" },
+        { id: "4", champion: "Leona", role: "support" },
+      ],
+      "3",
+    ),
+    "top",
+  );
+});
+
+test("getSuggestedAllyRole prefers the highest remaining Lolalytics lane share", () => {
+  assert.equal(
+    getSuggestedAllyRole(
+      [
+        { id: "1", champion: "Darius", role: "top" },
+        { id: "2", champion: "Ahri", role: "" },
+      ],
+      "2",
+      {
+        middle: { lanePercent: 78.4, pickRate: 9.2, winRate: 51.3 },
+        support: { lanePercent: 8.1, pickRate: 1.1, winRate: 49.7 },
+      },
+    ),
+    "middle",
+  );
+});
+
+test("getSuggestedAllyRole skips taken roles even when they are the most likely lane", () => {
+  assert.equal(
+    getSuggestedAllyRole(
+      [
+        { id: "1", champion: "Jarvan IV", role: "jungle" },
+        { id: "2", champion: "Ahri", role: "" },
+      ],
+      "2",
+      {
+        jungle: { lanePercent: 89.4, pickRate: 12.7, winRate: 52.1 },
+        middle: { lanePercent: 71.2, pickRate: 10.5, winRate: 51.6 },
+        support: { lanePercent: 6.4, pickRate: 0.8, winRate: 48.9 },
+      },
+    ),
+    "middle",
   );
 });
 

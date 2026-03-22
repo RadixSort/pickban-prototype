@@ -119,6 +119,97 @@ function createRoleBuildQData(enemyRowsByRole) {
   });
 }
 
+function createGenericBuildQData({
+  allyChampionKey = "103",
+  role = "middle",
+  totalGames = 60,
+  winRate = 55,
+  bootItemId = 3006,
+  bootName = "Berserker's Greaves",
+} = {}) {
+  return createQwikPayload({
+    build: {
+      header: {
+        cid: Number(allyChampionKey),
+        lane: role,
+        n: totalGames,
+      },
+      runes: {
+        stats: {
+          8008: [[totalGames, winRate, totalGames]],
+          9111: [[totalGames, winRate, totalGames]],
+          9103: [[totalGames, winRate, totalGames]],
+          8014: [[totalGames, winRate, totalGames]],
+          8304: [
+            [0, 0, 0],
+            [totalGames, winRate, totalGames],
+          ],
+          8347: [
+            [0, 0, 0],
+            [totalGames, winRate, totalGames],
+          ],
+          5005: [[totalGames, winRate, totalGames]],
+          5008: [[totalGames, winRate, totalGames]],
+          5011: [[totalGames, winRate, totalGames]],
+        },
+      },
+      summary: {
+        pick: {
+          runes: {
+            wr: winRate,
+            n: totalGames,
+            set: {
+              pri: [8008, 9111, 9103, 8014],
+              sec: [8304, 8347],
+              mod: [5005, 5008, 5011],
+            },
+          },
+        },
+        win: {
+          runes: {
+            wr: winRate,
+            n: totalGames,
+            set: {
+              pri: [8008, 9111, 9103, 8014],
+              sec: [8304, 8347],
+              mod: [5005, 5008, 5011],
+            },
+          },
+        },
+      },
+      item1: [[3118, winRate, totalGames, totalGames, 10]],
+      item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
+      item3: [[3157, winRate, totalGames, totalGames, 21]],
+      item4: [[3089, winRate, totalGames, totalGames, 27]],
+      item5: [[3135, winRate, totalGames, totalGames, 31]],
+      item6: [[4645, winRate, totalGames, totalGames, 34]],
+      boots: [[bootItemId, winRate, totalGames, totalGames, 0]],
+    },
+    metadata: {
+      champions: {},
+      items: {
+        [bootItemId]: bootName,
+        3118: "Malignance",
+        3135: "Void Staff",
+        3157: "Zhonya's Hourglass",
+        3089: "Rabadon's Deathcap",
+        4645: "Shadowflame",
+      },
+      runes: {
+        5005: "Attack Speed",
+        5008: "Adaptive Force",
+        5011: "Health",
+        8008: "Lethal Tempo",
+        8014: "Coup de Grace",
+        8304: "Magical Footwear",
+        8347: "Cosmic Insight",
+        9103: "Legend: Bloodline",
+        9111: "Triumph",
+      },
+    },
+  });
+}
+
 function createMatchupBuildQData({
   allyChampionKey = "103",
   enemyChampionKey = "89",
@@ -263,6 +354,7 @@ function waitForCloseTimeout(timeoutMs = 100) {
 
 module.exports = {
   buildTierListHtml,
+  createGenericBuildQData,
   createMatchupBuildQData,
   createRoleBuildQData,
   jsonResponse,

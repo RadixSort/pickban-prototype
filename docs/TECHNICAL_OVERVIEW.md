@@ -251,8 +251,8 @@ Minimal request example:
 
 Flow:
 
-1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, at least one enemy, and no ally/enemy overlap.
-2. The server fetches one Lolalytics matchup build payload per enemy champion.
+1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, an optional enemy list, and no ally/enemy overlap.
+2. If enemies are selected, the server fetches one Lolalytics matchup build payload per enemy champion. Otherwise it fetches the generic champion build payload for the assigned role.
 3. `parseLolalyticsMatchupBuildData(...)` converts each payload into:
    - rune style totals
    - rune slot options
@@ -267,7 +267,7 @@ Flow:
    - `items`
    - `boots`
 
-The current browser only exposes this route from the `Build` button when the selected ally already has a role and the draft contains at least one enemy champion.
+The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it fetches matchup build data; when no enemies are selected it fetches the generic champion build data for the assigned role and renders it in the same modal.
 
 ## Scoring, Filtering, And Ranking
 

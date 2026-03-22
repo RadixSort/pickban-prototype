@@ -139,7 +139,34 @@ test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank fil
   });
 });
 
-test("normalizeBuildSuggestionRequest rejects missing ally role and empty enemies", () => {
+test("normalizeBuildSuggestionRequest allows an empty enemy list for generic build lookups", () => {
+  const request = normalizeBuildSuggestionRequest(
+    {
+      ally: {
+        champion: "Ahri",
+        role: "mid",
+      },
+      enemies: [],
+    },
+    {
+      championByName,
+      defaultRankFilter: DEFAULT_RANK_FILTER,
+      normalizeRankFilter,
+      normalizeRole,
+    },
+  );
+
+  assert.deepEqual(request, {
+    rankFilter: DEFAULT_RANK_FILTER,
+    ally: {
+      champion: championByName.get("ahri"),
+      role: "middle",
+    },
+    enemies: [],
+  });
+});
+
+test("normalizeBuildSuggestionRequest rejects missing ally role and opposing picks", () => {
   assert.throws(
     () =>
       normalizeBuildSuggestionRequest(
@@ -157,26 +184,6 @@ test("normalizeBuildSuggestionRequest rejects missing ally role and empty enemie
         },
       ),
     /ally\.role/i,
-  );
-
-  assert.throws(
-    () =>
-      normalizeBuildSuggestionRequest(
-        {
-          ally: {
-            champion: "Ahri",
-            role: "mid",
-          },
-          enemies: [],
-        },
-        {
-          championByName,
-          defaultRankFilter: DEFAULT_RANK_FILTER,
-          normalizeRankFilter,
-          normalizeRole,
-        },
-      ),
-    /at least one champion/i,
   );
 
   assert.throws(

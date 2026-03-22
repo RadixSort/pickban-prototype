@@ -53,7 +53,7 @@ There is no build, lint, or bundling command in this repo.
 3. Optionally assign known ally roles. The app will fetch every remaining role.
 4. Use `Fetch Suggestions` for role recommendations.
 5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
-6. Use `Build` on an ally row after that ally has a role and at least one enemy is selected.
+6. Use `Build` on an ally row after that ally has a role. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
 
 Change feedback loops:
 
@@ -124,11 +124,11 @@ The three main request flows are:
 
 ### Build Recommendations
 
-1. The UI enables `Build` only when an ally role is assigned and at least one enemy exists.
-2. `POST /build-suggestions` validates the ally-role request.
-3. The server fetches Lolalytics matchup build payloads for each enemy.
+1. The UI enables `Build` when an ally role is assigned.
+2. If enemies are selected, `POST /build-suggestions` fetches one Lolalytics matchup build payload per enemy.
+3. If no enemies are selected, the same route fetches the generic champion build payload for the assigned ally role.
 4. `lib/lolalytics-build-parser.js` normalizes those payloads.
-5. `lib/build-suggestion-results.js` merges the matchup data into one summary that includes runes, ordered item paths, and completed boots.
+5. `lib/build-suggestion-results.js` merges the data into one summary that includes runes, ordered item paths, and completed boots.
 
 Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
 
@@ -211,8 +211,9 @@ That means all five allied champions are selected and all five allied roles are 
 The current UI only enables that flow when:
 
 - the ally has an assigned role
-- at least one enemy champion is selected
 - the app is not already loading role suggestions or shutting down
+
+With enemies selected it opens matchup build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
 
 ### Requests fail immediately before any live fetches
 

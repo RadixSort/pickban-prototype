@@ -97,7 +97,7 @@ Leave that terminal window open while you use the app.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
 6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-8. If one ally already has a role and you have picked at least one enemy, click **Build** on that ally row to open matchup build suggestions.
+8. If one ally already has a role, click **Build** on that ally row. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
 9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
 
 ## What The Scores Mean
@@ -114,7 +114,7 @@ Leave that terminal window open while you use the app.
 - At least 1 champion must be selected before fetching
 - A champion can only appear once across both teams
 - Ally role assignment is optional
-- Build recommendations need 1 ally with an assigned role and at least 1 enemy champion
+- Build lookup needs 1 ally with an assigned role
 - Full-draft projection needs all 5 allies plus 5 unique ally roles
 
 ## The Next Time You Use It
@@ -156,10 +156,9 @@ The app needs internet access and working Lolalytics responses. Wait a moment an
 
 ### The `Build` button is disabled
 
-That button only works after:
+That button only works after the ally has an assigned role.
 
-- at least one enemy champion is selected
-- the ally has an assigned role
+With enemies selected it opens matchup build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
 
 ### I expected one role, but the app shows others
 

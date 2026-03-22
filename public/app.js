@@ -40,6 +40,7 @@ const {
   DEFAULT_TARGET_ROLE,
   getAutoAssignableAllyRole,
   getRoleLabel,
+  getSuggestedAllyRole,
   getTargetRoleOptions,
   getUnassignedTargetRoleOptions,
   normalizeRole,
@@ -48,18 +49,21 @@ const {
 const state = {
   champions: [],
   allies: [],
+  allyRoleLikelihoodsByRank: {},
+  allyRoleLikelihoodRequestsByRank: {},
   enemies: [],
   loading: false,
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "5.0.0",
+  version: "5.1.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
   buildSuggestionCache: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
+  lolalyticsLifetimeAccessCount: 0,
 };
 
 const limits = {
@@ -164,6 +168,7 @@ async function loadAppConfig() {
     state.version = typeof config.version === "string" ? config.version : state.version;
     state.canShutdown = Boolean(config.canShutdown);
     state.shutdownToken = typeof config.shutdownToken === "string" ? config.shutdownToken : "";
+    updateLolalyticsRequestStats(config?.requestStats);
   } catch (_error) {
     state.canShutdown = false;
     state.shutdownToken = "";
@@ -302,6 +307,7 @@ function renderAll() {
   renderPicker("allies");
   renderPicker("enemies");
   renderAllyRoleAssignments();
+  renderResultsRequestStat();
   renderResults();
   renderActionState();
   renderBuildSuggestionModal();
@@ -372,23 +378,21 @@ function renderAllyRoleAssignments() {
     select.value = ally.role || "";
     select.addEventListener("change", (event) => assignAllyRole(ally.id, event.target.value));
 
-    const helperText = getBuildSuggestionHelperText(ally);
+    const buildAction = getBuildSuggestionAction(ally);
 
     const controls = document.createElement("div");
     controls.className = "role-row-controls";
-    controls.title = helperText;
+    controls.title = buildAction.tooltipText;
 
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "role-build-action";
     buildButton.textContent = "Build";
-    buildButton.disabled = Boolean(helperText);
-    buildButton.title = helperText || `Open build recommendation for ${ally.name}`;
+    buildButton.disabled = Boolean(buildAction.disabledReason);
+    buildButton.title = buildAction.tooltipText;
     buildButton.setAttribute(
       "aria-label",
-      helperText
-        ? `Build recommendation for ${ally.name}. ${helperText}`
-        : `Open build recommendation for ${ally.name}`,
+      buildAction.ariaLabel,
     );
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
     controls.appendChild(buildButton);
@@ -413,27 +417,59 @@ function createInitialBuildSuggestionModalState() {
 }
 
 function canOpenBuildSuggestionsForAlly(ally) {
-  return Boolean(ally?.role) && state.enemies.length > 0 && !isInteractionLocked();
+  return Boolean(ally?.role) && !isInteractionLocked();
 }
 
-function getBuildSuggestionHelperText(ally) {
+function getBuildSuggestionAction(ally) {
   if (state.loading) {
-    return "Unavailable while role suggestions are loading.";
+    return buildBuildActionState(
+      ally,
+      "Unavailable while role suggestions are loading.",
+      "Unavailable while role suggestions are loading.",
+    );
   }
 
   if (state.shuttingDown) {
-    return "Unavailable while the app is stopping.";
+    return buildBuildActionState(
+      ally,
+      "Unavailable while the app is stopping.",
+      "Unavailable while the app is stopping.",
+    );
   }
 
   if (!ally?.role) {
-    return "Assign a role to unlock build suggestions.";
+    return buildBuildActionState(
+      ally,
+      "Assign a role to unlock build suggestions.",
+      "Assign a role to unlock build suggestions.",
+    );
   }
 
   if (state.enemies.length === 0) {
-    return "Add at least one enemy champion.";
+    return buildBuildActionState(
+      ally,
+      "",
+      `Open generic build recommendation for ${ally.name}.`,
+    );
   }
 
-  return "";
+  return buildBuildActionState(
+    ally,
+    "",
+    `Open matchup build recommendation for ${ally.name}.`,
+  );
+}
+
+function buildBuildActionState(ally, disabledReason, tooltipText) {
+  const championName = ally?.name || "this champion";
+
+  return {
+    disabledReason,
+    tooltipText,
+    ariaLabel: disabledReason
+      ? `Build recommendation for ${championName}. ${disabledReason}`
+      : tooltipText,
+  };
 }
 
 async function handleOpenBuildSuggestions(allyId) {
@@ -480,6 +516,7 @@ async function handleOpenBuildSuggestions(allyId) {
       }),
     });
     const payload = await parseJsonSafely(response);
+    updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(payload.error || "Failed to load build recommendations.");
     }
@@ -578,7 +615,7 @@ function scoreChampionMatch(champion, query) {
   return Number.NEGATIVE_INFINITY;
 }
 
-function addChampion(side, championId) {
+async function addChampion(side, championId) {
   if (isInteractionLocked() || state[side].length >= limits[side]) {
     return;
   }
@@ -596,8 +633,13 @@ function addChampion(side, championId) {
     return;
   }
 
-  state[side].push(createSelectedChampion(champion, side));
+  const selectedChampion = createSelectedChampion(champion, side);
+  state[side].push(selectedChampion);
+
+  let allyRoleLikelihoodsByRole = null;
   if (side === "allies") {
+    allyRoleLikelihoodsByRole = await loadAllyRoleLikelihoodsForChampion(selectedChampion);
+    applySuggestedAllyRole(champion.id, allyRoleLikelihoodsByRole);
     applyAutoAssignedLastAllyRole();
   }
   pickers[side].input.value = "";
@@ -748,6 +790,86 @@ function assignAllyRole(championId, role) {
   renderAll();
 }
 
+function applySuggestedAllyRole(championId, roleLikelihoodsByRole = null) {
+  const suggestedRole = getSuggestedAllyRole(state.allies, championId, roleLikelihoodsByRole);
+  if (!suggestedRole) {
+    return false;
+  }
+
+  state.allies = state.allies.map((ally) =>
+    ally.id === championId
+      ? {
+          ...ally,
+          role: suggestedRole,
+        }
+      : ally,
+  );
+
+  return true;
+}
+
+async function loadAllyRoleLikelihoodsForChampion(champion) {
+  const normalizedRankFilter = normalizeRankFilter(state.rankFilter) || DEFAULT_RANK_FILTER;
+  const cachedLikelihoodsByRank = state.allyRoleLikelihoodsByRank[normalizedRankFilter];
+  if (cachedLikelihoodsByRank) {
+    return cachedLikelihoodsByRank[String(champion.key)] || null;
+  }
+
+  setLoading(true);
+
+  try {
+    const likelihoodsByChampionKey = await ensureAllyRoleLikelihoodsLoaded(normalizedRankFilter);
+    return likelihoodsByChampionKey[String(champion.key)] || null;
+  } catch (_error) {
+    return null;
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function ensureAllyRoleLikelihoodsLoaded(rankFilter) {
+  const normalizedRankFilter = normalizeRankFilter(rankFilter) || DEFAULT_RANK_FILTER;
+  const cachedLikelihoodsByRank = state.allyRoleLikelihoodsByRank[normalizedRankFilter];
+  if (cachedLikelihoodsByRank) {
+    return cachedLikelihoodsByRank;
+  }
+
+  const pendingRequest = state.allyRoleLikelihoodRequestsByRank[normalizedRankFilter];
+  if (pendingRequest) {
+    return pendingRequest;
+  }
+
+  const requestPromise = (async () => {
+    const response = await fetch(
+      `/ally-role-likelihoods?rankFilter=${encodeURIComponent(normalizedRankFilter)}`,
+      {
+        cache: "no-store",
+      },
+    );
+    const payload = await parseJsonSafely(response);
+    updateLolalyticsRequestStats(payload?.requestStats);
+
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to load ally role likelihoods.");
+    }
+
+    const likelihoodsByChampionKey =
+      payload?.championRoleLikelihoods && typeof payload.championRoleLikelihoods === "object"
+        ? payload.championRoleLikelihoods
+        : {};
+    state.allyRoleLikelihoodsByRank[normalizedRankFilter] = likelihoodsByChampionKey;
+    return likelihoodsByChampionKey;
+  })();
+
+  state.allyRoleLikelihoodRequestsByRank[normalizedRankFilter] = requestPromise;
+
+  try {
+    return await requestPromise;
+  } finally {
+    delete state.allyRoleLikelihoodRequestsByRank[normalizedRankFilter];
+  }
+}
+
 function applyAutoAssignedLastAllyRole() {
   const autoAssignment = getAutoAssignableAllyRole(state.allies);
   if (!autoAssignment) {
@@ -820,6 +942,7 @@ async function handleFetchSuggestions() {
     });
 
     const payload = await response.json();
+    updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(
         payload.error ||
@@ -878,6 +1001,7 @@ async function handleFetchDraftProjection(cacheKey = getCurrentSuggestionCacheKe
       }),
     });
     const payload = await parseJsonSafely(response);
+    updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(payload.error || "Failed to project the current draft win rates.");
     }
@@ -1061,7 +1185,7 @@ function renderBuildSuggestionModal() {
   }
   buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
   buildSuggestionBody.innerHTML = modalState.loading
-    ? '<div class="build-empty-state">Fetching matchup build recommendations from Lolalytics...</div>'
+    ? '<div class="build-empty-state">Fetching build recommendations from Lolalytics...</div>'
     : modalState.error
       ? '<div class="build-empty-state">The build recommendation request failed.</div>'
       : renderBuildSuggestionBody(payload, modalState.activeTab);
@@ -1085,8 +1209,17 @@ function buildBuildSuggestionMetaText(ally, payload) {
   }
 
   if (payload?.summary?.sourceMatchups) {
+    const isGenericBuild = Number(payload?.summary?.enemyCount || 0) === 0;
     parts.push(
-      `${payload.summary.sourceMatchups} ${payload.summary.sourceMatchups === 1 ? "matchup" : "matchups"}`,
+      `${payload.summary.sourceMatchups} ${
+        isGenericBuild
+          ? payload.summary.sourceMatchups === 1
+            ? "generic build"
+            : "generic builds"
+          : payload.summary.sourceMatchups === 1
+            ? "matchup"
+            : "matchups"
+      }`,
     );
   }
 
@@ -1152,8 +1285,6 @@ function renderResults() {
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
   draftProjectionWrap.innerHTML = "";
-  resultsRequestStat.textContent = "";
-  resultsRequestStat.classList.add("hidden");
   sortSelect.value = state.sortMode;
   sortSelect.disabled =
     state.loading ||
@@ -1170,11 +1301,6 @@ function renderResults() {
     resultsMeta.textContent = "";
     return;
   }
-
-  resultsRequestStat.textContent = formatDisplayMessage(
-    formatLolalyticsAccessStat(getLolalyticsLifetimeAccessCount(currentBundle)),
-  );
-  resultsRequestStat.classList.remove("hidden");
 
   if (isDraftProjectionBundle) {
     const projectionPayload = currentBundle.payload || {};
@@ -1396,8 +1522,12 @@ function getLolalyticsLiveAccessCount(resultsBundle = null) {
   return Number(resultsBundle?.requestStats?.lolalyticsLiveAccessCount || 0);
 }
 
-function getLolalyticsLifetimeAccessCount(resultsBundle = null) {
-  return Number(resultsBundle?.requestStats?.lolalyticsLifetimeAccessCount || 0);
+function updateLolalyticsRequestStats(requestStats = null) {
+  const lifetimeAccessCount = Number(requestStats?.lolalyticsLifetimeAccessCount);
+  if (Number.isFinite(lifetimeAccessCount)) {
+    state.lolalyticsLifetimeAccessCount = Math.max(0, lifetimeAccessCount);
+    renderResultsRequestStat();
+  }
 }
 
 function formatLolalyticsAccessStatus(accessCount) {
@@ -1410,6 +1540,12 @@ function formatLolalyticsAccessStatus(accessCount) {
 
 function formatLolalyticsAccessStat(accessCount) {
   return `Total Lolalytics live hits since server start: ${Math.max(0, accessCount)}.`;
+}
+
+function renderResultsRequestStat() {
+  resultsRequestStat.textContent = formatDisplayMessage(
+    formatLolalyticsAccessStat(state.lolalyticsLifetimeAccessCount),
+  );
 }
 
 function formatScore(value) {

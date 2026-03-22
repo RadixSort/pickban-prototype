@@ -34,6 +34,10 @@ test("GET /app-config returns the local app metadata", async (t) => {
   assert.equal(payload.canShutdown, true);
   assert.equal(typeof payload.shutdownToken, "string");
   assert.equal(payload.shutdownToken.length, 48);
+  assert.deepEqual(payload.requestStats, {
+    lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 0,
+  });
 
   await stopServer(child);
 });

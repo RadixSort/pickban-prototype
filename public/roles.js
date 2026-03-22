@@ -52,6 +52,82 @@
     return ROLE_OPTIONS.map((option) => ({ ...option }));
   }
 
+  function getSuggestedAllyRole(allies = [], allyId = null, roleLikelihoodsByRole = null) {
+    if (!Array.isArray(allies) || allies.length === 0 || allyId == null) {
+      return null;
+    }
+
+    const targetIndex = allies.findIndex((ally) => ally?.id === allyId);
+    if (targetIndex === -1) {
+      return null;
+    }
+
+    const assignedRoles = new Set();
+    for (let index = 0; index < allies.length; index += 1) {
+      if (index === targetIndex) {
+        continue;
+      }
+
+      const normalizedRole = normalizeRole(allies[index]?.role ?? allies[index]?.lane ?? null);
+      if (normalizedRole) {
+        assignedRoles.add(normalizedRole);
+      }
+    }
+
+    const currentRole = normalizeRole(allies[targetIndex]?.role ?? allies[targetIndex]?.lane ?? null);
+    if (currentRole && !assignedRoles.has(currentRole)) {
+      return currentRole;
+    }
+
+    const availableRoleOptions = ROLE_OPTIONS.filter((option) => !assignedRoles.has(option.value));
+    const roleFromLikelihoods = getMostLikelyAvailableRole(
+      availableRoleOptions,
+      roleLikelihoodsByRole,
+    );
+
+    return roleFromLikelihoods || availableRoleOptions[0]?.value || null;
+  }
+
+  function getMostLikelyAvailableRole(availableRoleOptions, roleLikelihoodsByRole) {
+    if (!Array.isArray(availableRoleOptions) || availableRoleOptions.length === 0) {
+      return null;
+    }
+
+    if (!roleLikelihoodsByRole || typeof roleLikelihoodsByRole !== "object") {
+      return null;
+    }
+
+    const rankedOptions = availableRoleOptions
+      .map((option, index) => {
+        const likelihood = roleLikelihoodsByRole[option.value];
+        const lanePercent = Number(likelihood?.lanePercent);
+        const pickRate = Number(likelihood?.pickRate);
+        const winRate = Number(likelihood?.winRate);
+
+        if (!Number.isFinite(lanePercent)) {
+          return null;
+        }
+
+        return {
+          value: option.value,
+          index,
+          lanePercent,
+          pickRate: Number.isFinite(pickRate) ? pickRate : Number.NEGATIVE_INFINITY,
+          winRate: Number.isFinite(winRate) ? winRate : Number.NEGATIVE_INFINITY,
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (left, right) =>
+          right.lanePercent - left.lanePercent ||
+          right.pickRate - left.pickRate ||
+          right.winRate - left.winRate ||
+          left.index - right.index,
+      );
+
+    return rankedOptions[0]?.value || null;
+  }
+
   function getUnassignedTargetRoleOptions(allies = []) {
     const assignedRoles = new Set();
 
@@ -109,6 +185,7 @@
     getAutoAssignableAllyRole,
     getAssignableAllyRoleOptions,
     getRoleLabel,
+    getSuggestedAllyRole,
     getTargetRoleOptions,
     getUnassignedTargetRoleOptions,
     normalizeRole,

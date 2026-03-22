@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const {
   buildTierListHtml,
+  createGenericBuildQData,
   createMatchupBuildQData,
   createRoleBuildQData,
   jsonResponse,
@@ -51,6 +52,19 @@ async function postJson(baseUrl, endpoint, payload) {
       connection: "close",
     },
     body: JSON.stringify(payload),
+  });
+
+  return {
+    status: response.status,
+    body: await response.json(),
+  };
+}
+
+async function getJson(baseUrl, endpoint) {
+  const response = await fetch(`${baseUrl}${endpoint}`, {
+    headers: {
+      connection: "close",
+    },
   });
 
   return {
@@ -183,6 +197,125 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   assert.equal(mockServer.countRequests("/lol/tierlist/"), 1);
   assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(mockServer.countRequests("/lol/leona/build/q-data.json"), 1);
+});
+
+test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the cache", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname !== "/lol/tierlist/") {
+      return textResponse("Not found.", 404);
+    }
+
+    const lane = url.searchParams.get("lane");
+    const rowsByLane = {
+      top: [
+        {
+          slug: "aatrox",
+          name: "Aatrox",
+          lanePercent: 91.2,
+          winRate: 50.8,
+          pickRate: 8.4,
+        },
+        {
+          slug: "ahri",
+          name: "Ahri",
+          lanePercent: 6.1,
+          winRate: 47.3,
+          pickRate: 0.3,
+        },
+      ],
+      jungle: [
+        {
+          slug: "ahri",
+          name: "Ahri",
+          lanePercent: 9.6,
+          winRate: 48.1,
+          pickRate: 0.7,
+        },
+      ],
+      middle: [
+        {
+          slug: "ahri",
+          name: "Ahri",
+          lanePercent: 83.4,
+          winRate: 51.9,
+          pickRate: 9.9,
+        },
+      ],
+      bottom: [
+        {
+          slug: "ahri",
+          name: "Ahri",
+          lanePercent: 1.7,
+          winRate: 45.5,
+          pickRate: 0.1,
+        },
+      ],
+      support: [
+        {
+          slug: "ahri",
+          name: "Ahri",
+          lanePercent: 4.2,
+          winRate: 48.7,
+          pickRate: 0.4,
+        },
+      ],
+    };
+
+    return textResponse(buildTierListHtml(rowsByLane[lane] || []));
+  });
+
+  const firstResponse = await getJson(baseUrl, "/ally-role-likelihoods?rankFilter=emerald_plus");
+
+  assert.equal(firstResponse.status, 200);
+  assert.equal(firstResponse.body.rankFilter, "emerald_plus");
+  assert.deepEqual(firstResponse.body.championRoleLikelihoods["103"], {
+    top: {
+      lanePercent: 6.1,
+      winRate: 47.3,
+      pickRate: 0.3,
+    },
+    jungle: {
+      lanePercent: 9.6,
+      winRate: 48.1,
+      pickRate: 0.7,
+    },
+    middle: {
+      lanePercent: 83.4,
+      winRate: 51.9,
+      pickRate: 9.9,
+    },
+    bottom: {
+      lanePercent: 1.7,
+      winRate: 45.5,
+      pickRate: 0.1,
+    },
+    support: {
+      lanePercent: 4.2,
+      winRate: 48.7,
+      pickRate: 0.4,
+    },
+  });
+  assert.deepEqual(firstResponse.body.championRoleLikelihoods["266"], {
+    top: {
+      lanePercent: 91.2,
+      winRate: 50.8,
+      pickRate: 8.4,
+    },
+  });
+  assert.deepEqual(firstResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 5,
+    lolalyticsLifetimeAccessCount: 5,
+  });
+  assert.equal(mockServer.countRequests("/lol/tierlist/"), 5);
+
+  const secondResponse = await getJson(baseUrl, "/ally-role-likelihoods?rankFilter=emerald_plus");
+
+  assert.equal(secondResponse.status, 200);
+  assert.deepEqual(secondResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 5,
+  });
+  assert.equal(mockServer.countRequests("/lol/tierlist/"), 5);
 });
 
 test("POST /suggest preserves the lifetime Lolalytics hit count across later zero-hit requests", async (t) => {
@@ -658,6 +791,80 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
   assert.deepEqual(secondResponse.body, firstResponse.body);
   assert.equal(mockServer.countRequests("/lol/ahri/vs/leona/build/q-data.json"), 1);
   assert.equal(mockServer.countRequests("/lol/ahri/vs/jinx/build/q-data.json"), 1);
+});
+
+test("POST /build-suggestions returns generic build data when no enemy is selected", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/lol/ahri/build/q-data.json") {
+      return jsonResponse(
+        createGenericBuildQData({
+          allyChampionKey: "103",
+          role: "middle",
+          totalGames: 75,
+          winRate: 54,
+        }),
+      );
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const firstResponse = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: [],
+  });
+
+  assert.equal(firstResponse.status, 200);
+  assert.deepEqual(firstResponse.body.request, {
+    ally: {
+      champion: "Ahri",
+      championKey: "103",
+      role: "middle",
+    },
+    enemies: [],
+    rankFilter: "emerald_plus",
+  });
+  assert.deepEqual(firstResponse.body.summary, {
+    enemyCount: 0,
+    sourceMatchups: 1,
+    lastUpdatedAt: firstResponse.body.summary.lastUpdatedAt,
+    partialFailures: [],
+  });
+  assert.equal(Number.isFinite(Date.parse(firstResponse.body.summary.lastUpdatedAt)), true);
+  assert.equal(firstResponse.body.runes.overview.slotGroups.length > 0, true);
+  assert.equal(
+    firstResponse.body.runes.mostPickedPage.pageKey,
+    "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
+  );
+  assert.deepEqual(
+    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
+    [3118, 3157, 3089, 3135, 4645],
+  );
+  assert.deepEqual(firstResponse.body.boots.options.map((option) => option.itemId), [3006]);
+
+  const secondResponse = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: [],
+  });
+
+  assert.equal(secondResponse.status, 200);
+  assert.deepEqual(secondResponse.body, firstResponse.body);
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/lol/ahri/build/q-data.json" &&
+        /(?:^|&)lane=middle(?:&|$)/.test(entry.search.slice(1)),
+    ),
+    1,
+  );
 });
 
 test("POST /build-suggestions returns a 502 summary when every matchup fetch fails", async (t) => {

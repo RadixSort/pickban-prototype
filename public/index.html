@@ -10,7 +10,7 @@
     <main class="app-shell">
       <header class="hero">
         <div class="hero-topbar">
-          <h1>Pick the dream draft. Fill the meta role.</h1>
+          <h1>Pick the meta draft.</h1>
           <div class="hero-toolbar">
             <select id="rank-filter" class="hero-rank-filter" aria-label="Rank filter"></select>
             <button
@@ -29,7 +29,9 @@
           Powered by live data from
           <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>.
           Built independently with appreciation for their matchup and tier-list work.
-          <span id="results-request-stat" class="results-request-stat hidden"></span>
+          <span id="results-request-stat" class="results-request-stat"
+            >Total Lolalytics live hits since server start: 0.</span
+          >
         </p>
       </header>
 
@@ -191,7 +193,7 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v5.0</span>
+      <span id="app-version">v5.1</span>
     </div>
 
     <script src="/roles.js" defer></script>
