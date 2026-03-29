@@ -762,6 +762,8 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
+  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 12]);
+  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
   assert.deepEqual(firstResponse.body.boots.options.map((option) => ({
     itemId: option.itemId,
     isHighestWin: option.isHighestWin,
@@ -840,6 +842,8 @@ test("POST /build-suggestions returns generic build data when no enemy is select
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
+  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 12]);
+  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
   assert.deepEqual(
     firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
     [3118, 3157, 3089, 3135, 4645],

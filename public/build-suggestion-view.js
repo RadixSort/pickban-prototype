@@ -25,14 +25,19 @@
       return renderEmptyState("Select an ally with a role, then load build recommendations.");
     }
 
-    const notes = Array.isArray(payload?.runes?.highlighting?.notes)
+    const runeNotes = Array.isArray(payload?.runes?.highlighting?.notes)
       ? payload.runes.highlighting.notes
+      : [];
+    const spellNotes = Array.isArray(payload?.spells?.highlighting?.notes)
+      ? payload.spells.highlighting.notes
       : [];
     const slotGroups = Array.isArray(payload?.runes?.overview?.slotGroups)
       ? payload.runes.overview.slotGroups
       : [];
     const highestWinPage = payload?.runes?.highestWinPage || null;
     const mostPickedPage = payload?.runes?.mostPickedPage || null;
+    const highestWinSpellSet = payload?.spells?.highestWinSet || null;
+    const mostPickedSpellSet = payload?.spells?.mostPickedSet || null;
     const highestWinItemBuild = payload?.items?.highestWinBuild || null;
     const mostPickedItemBuild = payload?.items?.mostPickedBuild || null;
     const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
@@ -40,10 +45,12 @@
     return renderSummaryPanel({
       highestWinPage,
       mostPickedPage,
+      highestWinSpellSet,
+      mostPickedSpellSet,
       highestWinItemBuild,
       mostPickedItemBuild,
       boots,
-      notes,
+      notes: [...runeNotes, ...spellNotes],
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
   }
@@ -51,18 +58,26 @@
   function renderSummaryPanel({
     highestWinPage,
     mostPickedPage,
+    highestWinSpellSet,
+    mostPickedSpellSet,
     highestWinItemBuild,
     mostPickedItemBuild,
     boots,
     notes,
     slotGroupMap,
   }) {
+    const runeRecommendations = buildRecommendedRunePages(highestWinPage, mostPickedPage);
+    const spellRecommendations = buildRecommendedSpellSets(
+      highestWinSpellSet,
+      mostPickedSpellSet,
+    );
+    const highlightedBoots = getHighlightedOptions(boots, "itemId");
     const hasAnyContent =
-      highestWinPage ||
-      mostPickedPage ||
+      runeRecommendations.length > 0 ||
+      spellRecommendations.length > 0 ||
       highestWinItemBuild ||
       mostPickedItemBuild ||
-      boots.length > 0;
+      highlightedBoots.length > 0;
 
     if (!hasAnyContent) {
       return `
@@ -76,23 +91,14 @@
     return `
       <div class="build-view build-view--summary">
         ${renderInlineNotes(notes)}
-        <section class="build-summary-board" aria-label="Top build recommendation summary">
-          ${renderSummaryPageColumn({
-            title: "Highest Win",
-            tone: "highest-win",
-            page: highestWinPage,
-            slotGroupMap,
-            emptyMessage: "No locked page crossed the current highest-win sample threshold.",
-          })}
-          ${renderSummaryPageColumn({
-            title: "Most Picked",
-            tone: "most-picked",
-            page: mostPickedPage,
-            slotGroupMap,
-            emptyMessage: "No locked most-picked page was available.",
-          })}
-          ${renderSummaryBootsColumn(boots)}
-        </section>
+        ${renderBuildSummaryGlobalNote()}
+        <div class="build-summary-top-grid">
+          ${renderRuneRecommendationsSection(runeRecommendations, slotGroupMap)}
+          <div class="build-summary-side-stack">
+            ${renderSpellRecommendationsSection(spellRecommendations)}
+            ${renderBootsSection(highlightedBoots)}
+          </div>
+        </div>
         ${renderItemsSection({
           highestWinBuild: highestWinItemBuild,
           mostPickedBuild: mostPickedItemBuild,
@@ -146,13 +152,82 @@
     `;
   }
 
-  function renderSummaryBootsColumn(boots) {
+  function renderRuneRecommendationsSection(recommendations, slotGroupMap) {
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return `
+        <section class="build-items-panel" aria-label="Recommended runes">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
+              <h3>Runes</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">
+            No locked rune page recommendations were available.
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-items-panel" aria-label="Recommended runes">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <h3>Runes</h3>
+          </div>
+        </header>
+        <div class="build-summary-board${recommendations.length === 1 ? " build-summary-board--single" : ""}">
+          ${recommendations
+            .map((page) =>
+              renderSummaryPageColumn({
+                title: getRecommendationTitle(page),
+                tone: getRecommendationTone(page),
+                page,
+                slotGroupMap,
+                emptyMessage: "",
+              }),
+            )
+            .join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSpellRecommendationsSection(recommendations) {
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return `
+        <section class="build-items-panel" aria-label="Recommended summoner spells">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
+              <h3>Summoner Spells</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">
+            No summoner spell recommendations were available.
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-items-panel" aria-label="Recommended summoner spells">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <h3>Summoner Spells</h3>
+          </div>
+        </header>
+        <div class="build-spell-card-list">
+          ${recommendations.map((spellSet) => renderSpellSetCard(spellSet)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderBootsSection(boots) {
     if (!Array.isArray(boots) || boots.length === 0) {
       return `
-        <section class="build-summary-column build-summary-column--boots">
-          <header class="build-summary-column-header">
-            <div class="build-summary-column-heading">
-              <span class="build-summary-kicker">Boots</span>
+        <section class="build-items-panel" aria-label="Recommended boots">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
               <h3>Boots</h3>
             </div>
           </header>
@@ -162,10 +237,10 @@
     }
 
     return `
-      <section class="build-summary-column build-summary-column--boots">
-        <header class="build-summary-column-header">
-          <div class="build-summary-column-heading">
-            <span class="build-summary-kicker">Boots</span>
+      <section class="build-items-panel" aria-label="Recommended boots">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <h3>Boots</h3>
           </div>
         </header>
         <div class="build-summary-boot-list">
@@ -184,7 +259,6 @@
         <section class="build-items-panel" aria-label="Recommended items">
           <header class="build-items-panel-header">
             <div class="build-items-panel-heading">
-              <span class="build-summary-kicker">Items</span>
               <h3>Items</h3>
             </div>
             <p class="build-summary-caption">Five non-boot purchases in order.</p>
@@ -198,7 +272,6 @@
       <section class="build-items-panel" aria-label="Recommended items">
         <header class="build-items-panel-header">
           <div class="build-items-panel-heading">
-            <span class="build-summary-kicker">Items</span>
             <h3>Items</h3>
           </div>
           <p class="build-summary-caption">Five non-boot purchases in order.</p>
@@ -443,6 +516,45 @@
     `;
   }
 
+  function renderSpellSetCard(spellSet) {
+    const selections = Array.isArray(spellSet?.selections)
+      ? spellSet.selections.filter((selection) => selection && (selection.icon || selection.name))
+      : [];
+
+    return `
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", spellSet)}">
+        <div class="build-spell-card-top">
+          <div class="build-spell-card-icons">
+            ${selections.map((selection) => renderSpellSelection(selection)).join("")}
+          </div>
+          <div class="build-spell-card-copy">
+            <h4>${escapeHtml(getSpellSetTitle(spellSet))}</h4>
+            ${renderHighlightLegend(spellSet)}
+          </div>
+        </div>
+        <div class="build-summary-metric-grid">
+          ${renderSummaryMetric("Win", formatPercent(spellSet?.winRate), "win")}
+          ${renderSummaryMetric("Pick", formatPercent(spellSet?.pickRate), "pick")}
+          ${renderSummaryMetric("Games", formatCount(spellSet?.games), "games")}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderSpellSelection(selection) {
+    return `
+      <article class="build-spell-chip" title="${escapeAttribute(selection?.name || "Spell")}">
+        <img
+          src="${escapeAttribute(selection?.icon || "")}"
+          alt="${escapeAttribute(selection?.name || "Spell")}"
+          width="38"
+          height="38"
+        />
+        <span class="sr-only">${escapeHtml(selection?.name || "Unknown")}</span>
+      </article>
+    `;
+  }
+
   function getPageTitle(page) {
     const parts = [page?.primaryStyle?.name, page?.secondaryStyle?.name].filter(Boolean);
 
@@ -451,6 +563,14 @@
     }
 
     return parts.join(" + ");
+  }
+
+  function getSpellSetTitle(spellSet) {
+    const spellNames = Array.isArray(spellSet?.selections)
+      ? spellSet.selections.map((selection) => selection?.name).filter(Boolean)
+      : [];
+
+    return spellNames.length > 0 ? spellNames.join(" + ") : "Summoner spells";
   }
 
   function renderSummaryMetric(label, value, tone) {
@@ -494,6 +614,201 @@
     return "";
   }
 
+  function buildRecommendedRunePages(highestWinPage, mostPickedPage) {
+    const pagesByKey = new Map();
+
+    [
+      { page: highestWinPage, isHighestWin: true, isMostPicked: false },
+      { page: mostPickedPage, isHighestWin: false, isMostPicked: true },
+    ].forEach(({ page, isHighestWin, isMostPicked }) => {
+      const recommendationKey = getRecommendationPageKey(page);
+      if (!recommendationKey) {
+        return;
+      }
+
+      const existing = pagesByKey.get(recommendationKey);
+      if (existing) {
+        existing.isHighestWin = existing.isHighestWin || isHighestWin;
+        existing.isMostPicked = existing.isMostPicked || isMostPicked;
+        return;
+      }
+
+      pagesByKey.set(recommendationKey, {
+        ...page,
+        isHighestWin,
+        isMostPicked,
+      });
+    });
+
+    return [...pagesByKey.values()].sort(compareHighlightedOptions);
+  }
+
+  function buildRecommendedSpellSets(highestWinSet, mostPickedSet) {
+    const setsByKey = new Map();
+
+    [
+      { option: highestWinSet, isHighestWin: true, isMostPicked: false },
+      { option: mostPickedSet, isHighestWin: false, isMostPicked: true },
+    ].forEach(({ option, isHighestWin, isMostPicked }) => {
+      const recommendationKey = getRecommendationSpellSetKey(option);
+      if (!recommendationKey) {
+        return;
+      }
+
+      const existing = setsByKey.get(recommendationKey);
+      if (existing) {
+        existing.isHighestWin = existing.isHighestWin || isHighestWin;
+        existing.isMostPicked = existing.isMostPicked || isMostPicked;
+        return;
+      }
+
+      setsByKey.set(recommendationKey, {
+        ...option,
+        isHighestWin,
+        isMostPicked,
+      });
+    });
+
+    return [...setsByKey.values()].sort(compareHighlightedOptions);
+  }
+
+  function getHighlightedOptions(options, keyField) {
+    if (!Array.isArray(options)) {
+      return [];
+    }
+
+    const optionsByKey = new Map();
+
+    options.forEach((option) => {
+      if (!option?.isHighestWin && !option?.isMostPicked) {
+        return;
+      }
+
+      const optionKey = option?.[keyField];
+      if (optionKey == null) {
+        return;
+      }
+
+      const existing = optionsByKey.get(optionKey);
+      if (existing) {
+        existing.isHighestWin = existing.isHighestWin || option.isHighestWin;
+        existing.isMostPicked = existing.isMostPicked || option.isMostPicked;
+        return;
+      }
+
+      optionsByKey.set(optionKey, { ...option });
+    });
+
+    return [...optionsByKey.values()].sort(compareHighlightedOptions);
+  }
+
+  function getRecommendationPageKey(page) {
+    if (!page || typeof page !== "object") {
+      return null;
+    }
+
+    if (page.pageKey) {
+      return String(page.pageKey);
+    }
+
+    const primaryIds = getSelectionIds(page?.selections?.primary);
+    const secondaryIds = getSelectionIds(page?.selections?.secondary);
+    const modifierIds = getSelectionIds(page?.selections?.modifiers);
+
+    return [
+      page?.primaryStyle?.styleId ?? "",
+      page?.secondaryStyle?.styleId ?? "",
+      primaryIds.join(","),
+      secondaryIds.join(","),
+      modifierIds.join(","),
+    ].join("|");
+  }
+
+  function getRecommendationSpellSetKey(spellSet) {
+    if (!spellSet || typeof spellSet !== "object") {
+      return null;
+    }
+
+    if (spellSet.setKey) {
+      return String(spellSet.setKey);
+    }
+
+    return getSelectionIds(spellSet?.selections).join("|");
+  }
+
+  function getSelectionIds(selections) {
+    if (!Array.isArray(selections)) {
+      return [];
+    }
+
+    return selections
+      .map((selection) => selection?.id)
+      .filter((selectionId) => selectionId != null)
+      .map((selectionId) => String(selectionId));
+  }
+
+  function compareHighlightedOptions(left, right) {
+    const priorityDifference = getHighlightPriority(left) - getHighlightPriority(right);
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    const gamesDifference = Number(right?.games || 0) - Number(left?.games || 0);
+    if (gamesDifference !== 0) {
+      return gamesDifference;
+    }
+
+    return Number(right?.winRate || 0) - Number(left?.winRate || 0);
+  }
+
+  function getHighlightPriority(option) {
+    if (option?.isHighestWin && option?.isMostPicked) {
+      return 0;
+    }
+
+    if (option?.isHighestWin) {
+      return 1;
+    }
+
+    if (option?.isMostPicked) {
+      return 2;
+    }
+
+    return 3;
+  }
+
+  function getRecommendationTitle(option) {
+    if (option?.isHighestWin && option?.isMostPicked) {
+      return "Highest Win + Most Picked";
+    }
+
+    if (option?.isHighestWin) {
+      return "Highest Win";
+    }
+
+    if (option?.isMostPicked) {
+      return "Most Picked";
+    }
+
+    return "Recommendation";
+  }
+
+  function getRecommendationTone(option) {
+    if (option?.isHighestWin && option?.isMostPicked) {
+      return "both";
+    }
+
+    if (option?.isHighestWin) {
+      return "highest-win";
+    }
+
+    if (option?.isMostPicked) {
+      return "most-picked";
+    }
+
+    return "boots";
+  }
+
   function renderInlineNotes(notes) {
     if (!Array.isArray(notes) || notes.length === 0) {
       return "";
@@ -503,6 +818,14 @@
       <div class="build-inline-notes">
         ${notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("")}
       </div>
+    `;
+  }
+
+  function renderBuildSummaryGlobalNote() {
+    return `
+      <p class="build-summary-global-note">
+        Most picked and highest win build options are shown below when available.
+      </p>
     `;
   }
 

@@ -155,6 +155,11 @@ function createGenericBuildQData({
       },
       summary: {
         pick: {
+          sums: {
+            ids: [4, 12],
+            n: totalGames,
+            wr: winRate,
+          },
           runes: {
             wr: winRate,
             n: totalGames,
@@ -166,6 +171,11 @@ function createGenericBuildQData({
           },
         },
         win: {
+          sums: {
+            ids: [4, 14],
+            n: Math.max(1, Math.round(totalGames * 0.6)),
+            wr: winRate + 2,
+          },
           runes: {
             wr: winRate,
             n: totalGames,
@@ -177,6 +187,10 @@ function createGenericBuildQData({
           },
         },
       },
+      spells: [
+        ["4_12", winRate, 100, totalGames],
+        ["4_14", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
+      ],
       item1: [[3118, winRate, totalGames, totalGames, 10]],
       item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
       item3: [[3157, winRate, totalGames, totalGames, 21]],
@@ -194,6 +208,11 @@ function createGenericBuildQData({
         3157: "Zhonya's Hourglass",
         3089: "Rabadon's Deathcap",
         4645: "Shadowflame",
+      },
+      spells: {
+        4: "Flash",
+        12: "Teleport",
+        14: "Ignite",
       },
       runes: {
         5005: "Attack Speed",
@@ -250,6 +269,11 @@ function createMatchupBuildQData({
       },
       summary: {
         pick: {
+          sums: {
+            ids: [4, 12],
+            n: totalGames,
+            wr: winRate,
+          },
           runes: {
             wr: winRate,
             n: totalGames,
@@ -261,6 +285,11 @@ function createMatchupBuildQData({
           },
         },
         win: {
+          sums: {
+            ids: [4, 14],
+            n: Math.max(1, Math.round(totalGames * 0.6)),
+            wr: winRate + 2,
+          },
           runes: {
             wr: winRate,
             n: totalGames,
@@ -272,6 +301,10 @@ function createMatchupBuildQData({
           },
         },
       },
+      spells: [
+        ["4_12", winRate, 100, totalGames],
+        ["4_14", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
+      ],
       item1: [[3118, winRate, totalGames, totalGames, 10]],
       item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
       item3: [[3157, winRate, totalGames, totalGames, 21]],
@@ -289,6 +322,11 @@ function createMatchupBuildQData({
         3157: "Zhonya's Hourglass",
         3089: "Rabadon's Deathcap",
         4645: "Shadowflame",
+      },
+      spells: {
+        4: "Flash",
+        12: "Teleport",
+        14: "Ignite",
       },
       runes: {
         5005: "Attack Speed",

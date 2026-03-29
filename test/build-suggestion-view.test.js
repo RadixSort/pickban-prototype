@@ -208,6 +208,33 @@ function createPayload() {
         notes: ["No locked page met the prior threshold."],
       },
     },
+    spells: {
+      highestWinSet: {
+        setKey: "4-14",
+        spellIds: [4, 14],
+        winRate: 53.6,
+        pickRate: 42.1,
+        games: 1197,
+        selections: [
+          { id: 4, icon: "flash.png", name: "Flash" },
+          { id: 14, icon: "ignite.png", name: "Ignite" },
+        ],
+      },
+      mostPickedSet: {
+        setKey: "4-12",
+        spellIds: [4, 12],
+        winRate: 51.6,
+        pickRate: 56.4,
+        games: 1604,
+        selections: [
+          { id: 4, icon: "flash.png", name: "Flash" },
+          { id: 12, icon: "teleport.png", name: "Teleport" },
+        ],
+      },
+      highlighting: {
+        notes: [],
+      },
+    },
     items: {
       highestWinBuild: {
         selections: [
@@ -317,12 +344,36 @@ function createPayload() {
           winRate: 50.1,
           pickRate: 62.1,
           games: 1022,
-          isHighestWin: true,
+          isHighestWin: false,
           isMostPicked: true,
+        },
+        {
+          itemId: 3158,
+          icon: "3158.webp",
+          name: "Ionian Boots of Lucidity",
+          winRate: 53.4,
+          pickRate: 18.4,
+          games: 304,
+          isHighestWin: true,
+          isMostPicked: false,
+        },
+        {
+          itemId: 3111,
+          icon: "3111.webp",
+          name: "Mercury's Treads",
+          winRate: 51.7,
+          pickRate: 14.8,
+          games: 241,
+          isHighestWin: false,
+          isMostPicked: false,
         },
       ],
     },
   };
+}
+
+function countMatches(value, pattern) {
+  return [...String(value).matchAll(pattern)].length;
 }
 
 test("build suggestion tabs expose only the summary layout", () => {
@@ -338,11 +389,18 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
 
   assert.match(html, /Highest Win/);
   assert.match(html, /Most Picked/);
+  assert.match(html, /Runes/);
+  assert.match(html, /Summoner Spells/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
+  assert.match(html, /Most picked and highest win build options are shown below when available\./);
   assert.match(html, /Precision \+ Sorcery/);
   assert.match(html, /Precision \+ Resolve/);
+  assert.match(html, /Flash \+ Ignite/);
+  assert.match(html, /Flash \+ Teleport/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves/);
+  assert.match(html, /Ionian Boots of Lucidity/);
+  assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
   assert.match(html, /Luden(?:&#39;|')?s Companion/);
   assert.match(html, /Malignance/);
   assert.match(html, /Void Staff/);
@@ -358,6 +416,30 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Gathering Storm[\s\S]*47\.2% win[\s\S]*8\.7% pick/);
   assert.match(html, /Lethal Tempo[\s\S]*Triumph[\s\S]*Legend: Bloodline[\s\S]*Coup de Grace/);
   assert.match(html, /Nimbus Cloak[\s\S]*Gathering Storm/);
+  assert.match(
+    html,
+    /Runes[\s\S]*Precision \+ Sorcery[\s\S]*Precision \+ Resolve[\s\S]*Summoner Spells[\s\S]*Flash \+ Ignite[\s\S]*Flash \+ Teleport[\s\S]*Boots/,
+  );
+  assert.match(html, /Summoner Spells[\s\S]*Boots[\s\S]*Items/);
+  assert.match(html, /build-summary-side-stack/);
+  assert.equal(
+    countMatches(
+      html,
+      /Most picked and highest win build options are shown below when available\./g,
+    ),
+    1,
+  );
+  assert.doesNotMatch(html, /Most picked and highest win locked pages\./);
+  assert.doesNotMatch(html, /Most picked and highest win spell sets\./);
+  assert.doesNotMatch(html, /Most picked and highest win completed boots\./);
+  assert.doesNotMatch(html, /<span class="build-summary-kicker">Runes<\/span>/);
+  assert.doesNotMatch(html, /<span class="build-summary-kicker">Summoner Spells<\/span>/);
+  assert.doesNotMatch(html, /<span class="build-summary-kicker">Boots<\/span>/);
+  assert.doesNotMatch(html, /<span class="build-summary-kicker">Items<\/span>/);
+  assert.match(html, /Flash \+ Ignite[\s\S]*53\.6%[\s\S]*42\.1%[\s\S]*1,197/);
+  assert.match(html, /Flash \+ Teleport[\s\S]*51\.6%[\s\S]*56\.4%[\s\S]*1,604/);
+  assert.match(html, /Berserker(?:&#39;|')s Greaves[\s\S]*Most Picked/);
+  assert.match(html, /Ionian Boots of Lucidity[\s\S]*Highest Win/);
   assert.match(html, /Malignance[\s\S]*52\.4% win[\s\S]*71\.8% pick[\s\S]*11 min/);
   assert.match(html, /Luden(?:&#39;|')?s Companion[\s\S]*56\.5% win[\s\S]*28\.4% pick[\s\S]*11 min/);
   assert.doesNotMatch(html, /Primary Tree/);
@@ -365,6 +447,43 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Highest Win page/);
   assert.doesNotMatch(html, /Most Picked page/);
   assert.doesNotMatch(html, /Overview/);
+});
+
+test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and boot highlights", () => {
+  const payload = createPayload();
+  payload.runes.mostPickedPage = payload.runes.highestWinPage;
+  payload.spells.mostPickedSet = payload.spells.highestWinSet;
+  payload.boots.options = [
+    {
+      itemId: 3020,
+      icon: "3020.webp",
+      name: "Sorcerer's Shoes",
+      winRate: 54.2,
+      pickRate: 49.6,
+      games: 812,
+      isHighestWin: true,
+      isMostPicked: true,
+    },
+    {
+      itemId: 3111,
+      icon: "3111.webp",
+      name: "Mercury's Treads",
+      winRate: 51.7,
+      pickRate: 14.8,
+      games: 241,
+      isHighestWin: false,
+      isMostPicked: false,
+    },
+  ];
+
+  const html = renderBuildSuggestionBody(payload);
+
+  assert.match(html, /build-summary-board--single/);
+  assert.equal(countMatches(html, /Precision \+ Sorcery/g), 1);
+  assert.equal(countMatches(html, /Flash \+ Ignite/g), 1);
+  assert.equal(countMatches(html, /Sorcerer(?:&#39;|')s Shoes/g), 2);
+  assert.match(html, /Highest Win \+ Most Picked/);
+  assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
 });
 
 test("renderBuildSuggestionBody returns an empty state when payload is missing", () => {

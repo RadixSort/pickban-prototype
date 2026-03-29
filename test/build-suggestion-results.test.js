@@ -14,6 +14,7 @@ function createMatchupBuild({
   secondarySlotOptions,
   statOptions,
   pageCandidates,
+  spellOptions = [],
   itemSlotOptions = [[], [], [], [], [], []],
   boots,
 }) {
@@ -27,6 +28,9 @@ function createMatchupBuild({
       secondarySlotOptions,
       statOptions,
       pageCandidates,
+    },
+    spells: {
+      options: spellOptions,
     },
     items: {
       slotOptions: itemSlotOptions,
@@ -74,6 +78,25 @@ function createItemOption({
   };
 }
 
+function createSpellSetOption({
+  spellIds,
+  games,
+  wins,
+}) {
+  const normalizedSpellIds = [...spellIds].sort((left, right) => left - right);
+  return {
+    setKey: normalizedSpellIds.join("-"),
+    spellIds: normalizedSpellIds,
+    selections: normalizedSpellIds.map((id) => ({
+      id,
+      icon: `${id}.png`,
+      name: `Spell ${id}`,
+    })),
+    games,
+    wins,
+  };
+}
+
 test("buildBuildSuggestionResults aggregates overview groups, exact pages, items, and boots", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
@@ -117,6 +140,10 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
             secondaryRuneIds: [8304, 8347],
             modifierIds: [5005, 5008, 5011],
           }),
+        ],
+        spellOptions: [
+          createSpellSetOption({ spellIds: [4, 12], games: 80, wins: 44 }),
+          createSpellSetOption({ spellIds: [4, 14], games: 20, wins: 12 }),
         ],
         itemSlotOptions: [
           [
@@ -189,6 +216,10 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
             modifierIds: [5008, 5011],
           }),
         ],
+        spellOptions: [
+          createSpellSetOption({ spellIds: [4, 12], games: 20, wins: 10 }),
+          createSpellSetOption({ spellIds: [4, 14], games: 60, wins: 36 }),
+        ],
         itemSlotOptions: [
           [
             createItemOption({ itemId: 3118, name: "Malignance", games: 60, wins: 34, purchaseMinute: 11 }),
@@ -226,6 +257,8 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
   assert.equal(aggregated.lastUpdatedAt, "2026-03-19T20:30:00.000Z");
   assert.equal(aggregated.runes.mostPickedPage.pageKey, "page-a");
   assert.equal(aggregated.runes.highestWinPage.pageKey, "page-c");
+  assert.deepEqual(aggregated.spells.mostPickedSet.spellIds, [4, 12]);
+  assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 14]);
 
   const primaryStyleGroup = aggregated.runes.overview.slotGroups.find(
     (group) => group.key === "primary-style",
@@ -243,6 +276,8 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
   );
   assert.equal(bootsById.get(3158).isMostPicked, true);
   assert.equal(bootsById.get(3158).isHighestWin, true);
+  assert.equal(aggregated.spells.options.find((option) => option.setKey === "4-12")?.isMostPicked, true);
+  assert.equal(aggregated.spells.options.find((option) => option.setKey === "4-14")?.isHighestWin, true);
 
   assert.deepEqual(
     aggregated.items.mostPickedBuild.selections.map((selection) => selection.itemId),
@@ -280,6 +315,7 @@ test("buildBuildSuggestionResults reports when no page crosses the highest-win t
             modifierIds: [5005, 5008, 5011],
           }),
         ],
+        spellOptions: [createSpellSetOption({ spellIds: [4, 12], games: 40, wins: 24 })],
         boots: [],
       }),
     ],
@@ -289,7 +325,7 @@ test("buildBuildSuggestionResults reports when no page crosses the highest-win t
   assert.match(aggregated.runes.highlighting.notes[0], /60%/i);
 });
 
-test("buildBuildSuggestionResults uses a 1% default threshold for highest-win page and boots", () => {
+test("buildBuildSuggestionResults uses a 1% default threshold for highest-win page, spells, and boots", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
       createMatchupBuild({
@@ -322,6 +358,11 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win pa
             modifierIds: [5005, 5008, 5011],
           }),
         ],
+        spellOptions: [
+          createSpellSetOption({ spellIds: [4, 12], games: 15, wins: 12 }),
+          createSpellSetOption({ spellIds: [4, 14], games: 9, wins: 9 }),
+          createSpellSetOption({ spellIds: [3, 4], games: 976, wins: 400 }),
+        ],
         boots: [
           { itemId: 3158, icon: "3158.webp", name: "Ionian Boots of Lucidity", games: 15, wins: 12 },
           { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 9, wins: 9 },
@@ -332,6 +373,7 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win pa
   });
 
   assert.equal(aggregated.runes.highestWinPage.pageKey, "page-over-threshold");
+  assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 12]);
   assert.equal(
     aggregated.boots.options.find((option) => option.itemId === 3158)?.isHighestWin,
     true,
@@ -354,6 +396,7 @@ test("buildBuildSuggestionResults sorts boot options by descending win rate", ()
         secondarySlotOptions: [[], [], [], []],
         statOptions: [],
         pageCandidates: [],
+        spellOptions: [],
         boots: [
           { itemId: 3158, icon: "3158.webp", name: "Ionian Boots of Lucidity", games: 15, wins: 12 },
           { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 9, wins: 9 },
@@ -387,6 +430,7 @@ test("buildBuildSuggestionResults falls back to current time and unfiltered item
         secondarySlotOptions: [[], [], [], []],
         statOptions: [],
         pageCandidates: [],
+        spellOptions: [],
         itemSlotOptions: [
           [createItemOption({ itemId: 3118, name: "Malignance", games: 10, wins: 6, purchaseMinute: 10 })],
           [createItemOption({ itemId: 3157, name: "Zhonya's Hourglass", games: 10, wins: 6, purchaseMinute: 18 })],

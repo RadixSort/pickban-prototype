@@ -1034,11 +1034,28 @@ select {
   gap: 10px;
 }
 
+.build-summary-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.build-summary-side-stack {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
 .build-summary-board {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 0.95fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-items: stretch;
+}
+
+.build-summary-board--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .build-summary-column {
@@ -1060,6 +1077,12 @@ select {
 .build-summary-column--most-picked {
   background:
     linear-gradient(180deg, rgba(36, 57, 105, 0.16), transparent 24%),
+    rgba(11, 16, 25, 0.86);
+}
+
+.build-summary-column--both {
+  background:
+    linear-gradient(180deg, rgba(45, 97, 104, 0.18), transparent 24%),
     rgba(11, 16, 25, 0.86);
 }
 
@@ -1098,6 +1121,17 @@ select {
   color: rgba(235, 243, 249, 0.76);
   font-size: 0.78rem;
   line-height: 1.3;
+}
+
+.build-summary-global-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(11, 16, 25, 0.68);
+  color: rgba(235, 243, 249, 0.76);
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .build-summary-metric-grid {
@@ -1226,6 +1260,11 @@ select {
   gap: 8px;
   min-height: 0;
   align-content: start;
+}
+
+.build-spell-card-list {
+  display: grid;
+  gap: 8px;
 }
 
 .build-items-panel {
@@ -1415,6 +1454,73 @@ select {
 .build-compact-boot-card-copy h4 {
   margin: 0;
   font-size: 0.9rem;
+}
+
+.build-spell-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(9, 13, 20, 0.88);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.build-spell-card--highest-win {
+  border-color: rgba(88, 198, 121, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(88, 198, 121, 0.15);
+}
+
+.build-spell-card--most-picked {
+  border-color: rgba(113, 142, 238, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(113, 142, 238, 0.16);
+}
+
+.build-spell-card--both {
+  border-color: rgba(96, 203, 200, 0.46);
+  box-shadow: inset 0 0 0 1px rgba(96, 203, 200, 0.18);
+}
+
+.build-spell-card-top {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+
+.build-spell-card-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.build-spell-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.build-spell-card-copy h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.build-spell-chip {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(11, 16, 25, 0.92);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.build-spell-chip img {
+  display: block;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
 }
 
 .build-detail-layout {
@@ -1708,6 +1814,8 @@ select {
     max-height: calc(100vh - 196px);
   }
 
+  .build-summary-top-grid,
+  .build-summary-side-stack,
   .build-summary-board,
   .build-items-grid,
   .build-detail-layout {

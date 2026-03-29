@@ -58,6 +58,11 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
       },
       summary: {
         pick: {
+          sums: {
+            ids: [4, 12],
+            n: 70,
+            wr: 54,
+          },
           runes: {
             wr: 55,
             n: 60,
@@ -69,6 +74,11 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
           },
         },
         win: {
+          sums: {
+            ids: [4, 14],
+            n: 30,
+            wr: 60,
+          },
           runes: {
             wr: 55,
             n: 60,
@@ -80,6 +90,10 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
           },
         },
       },
+      spells: [
+        ["4_12", 54, 70, 70],
+        ["4_14", 60, 30, 30],
+      ],
       item1: [
         [3118, 54, 65, 65, 10],
         [2503, 58, 35, 35, 11],
@@ -109,6 +123,11 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
       ],
     },
     {
+      spells: {
+        4: "Flash",
+        12: "Teleport",
+        14: "Ignite",
+      },
       runes: {
         5005: "Attack Speed",
         5008: "Adaptive Force",
@@ -168,6 +187,17 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
   assert.deepEqual(
     parsed.runes.pageCandidates[0].primaryRuneIds,
     [8008, 9111, 9103, 8014],
+  );
+  assert.deepEqual(
+    parsed.spells.options.map((option) => ({
+      setKey: option.setKey,
+      games: option.games,
+      spellNames: option.selections.map((selection) => selection.name),
+    })),
+    [
+      { setKey: "4-12", games: 70, spellNames: ["Flash", "Teleport"] },
+      { setKey: "4-14", games: 30, spellNames: ["Flash", "Ignite"] },
+    ],
   );
   assert.deepEqual(
     parsed.items.slotOptions.map((slotOptions) =>

@@ -220,6 +220,13 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         },
         mostPickedPage: null,
       },
+      spells: {
+        mostPickedSet: {
+          setKey: "4-12",
+          spellIds: [4, 12],
+        },
+        highestWinSet: null,
+      },
       items: {
         highestWinBuild: null,
         mostPickedBuild: {
@@ -255,6 +262,13 @@ test("build suggestion helper payloads preserve request and summary fields", () 
       selections: [{ itemId: 3118 }],
     },
   });
+  assert.deepEqual(payload.spells, {
+    mostPickedSet: {
+      setKey: "4-12",
+      spellIds: [4, 12],
+    },
+    highestWinSet: null,
+  });
   assert.equal(hasUsableBuildSuggestions(payload), true);
 
   const emptyPayload = buildBuildSuggestionsPayload({
@@ -273,6 +287,10 @@ test("build suggestion helper payloads preserve request and summary fields", () 
           slotGroups: [],
         },
         mostPickedPage: null,
+      },
+      spells: {
+        mostPickedSet: null,
+        highestWinSet: null,
       },
       items: {
         highestWinBuild: null,
