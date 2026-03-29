@@ -9,6 +9,7 @@ const {
   getSuggestedAllyRole,
   getUnassignedTargetRoleOptions,
   normalizeRole,
+  resolveAllyRoleAssignment,
 } = require("../public/roles.js");
 
 test("normalizeRole supports frontend labels and backend aliases", () => {
@@ -109,6 +110,52 @@ test("getSuggestedAllyRole skips taken roles even when they are the most likely 
       },
     ),
     "middle",
+  );
+});
+
+test("resolveAllyRoleAssignment swaps roles when a taken lane is selected", () => {
+  assert.deepEqual(
+    resolveAllyRoleAssignment(
+      [
+        { id: "1", champion: "Darius", role: "top" },
+        { id: "2", champion: "Jarvan IV", role: "jungle" },
+        { id: "3", champion: "Ahri", role: "middle" },
+      ],
+      "3",
+      "top",
+    ).map((ally) => ({ id: ally.id, role: ally.role })),
+    [
+      { id: "1", role: "middle" },
+      { id: "2", role: "jungle" },
+      { id: "3", role: "top" },
+    ],
+  );
+});
+
+test("resolveAllyRoleAssignment reassigns a displaced ally to an open lane", () => {
+  assert.deepEqual(
+    resolveAllyRoleAssignment(
+      [
+        { id: "1", key: "122", champion: "Darius", role: "top" },
+        { id: "2", key: "59", champion: "Jarvan IV", role: "jungle" },
+        { id: "3", key: "103", champion: "Ahri", role: "" },
+        { id: "4", key: "89", champion: "Leona", role: "support" },
+      ],
+      "3",
+      "top",
+      {
+        122: {
+          bottom: { lanePercent: 72.1, pickRate: 3.4, winRate: 52.7 },
+          middle: { lanePercent: 18.8, pickRate: 1.1, winRate: 49.2 },
+        },
+      },
+    ).map((ally) => ({ id: ally.id, role: ally.role })),
+    [
+      { id: "1", role: "bottom" },
+      { id: "2", role: "jungle" },
+      { id: "3", role: "top" },
+      { id: "4", role: "support" },
+    ],
   );
 });
 

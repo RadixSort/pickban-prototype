@@ -44,6 +44,7 @@ const {
   getTargetRoleOptions,
   getUnassignedTargetRoleOptions,
   normalizeRole,
+  resolveAllyRoleAssignment,
 } = globalThis.roles;
 
 const state = {
@@ -56,7 +57,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "5.2.0",
+  version: "5.3.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -374,7 +375,7 @@ function renderAllyRoleAssignments() {
     select.className = "lane-select";
     select.disabled = isInteractionLocked();
     select.setAttribute("aria-label", `Assign role for ${ally.name}`);
-    select.innerHTML = buildRoleOptionsMarkup(ally.id);
+    select.innerHTML = buildRoleOptionsMarkup();
     select.value = ally.role || "";
     select.addEventListener("change", (event) => assignAllyRole(ally.id, event.target.value));
 
@@ -742,19 +743,9 @@ function handleSelectResultForDraft(targetRole, result) {
   renderAll();
 }
 
-function buildRoleOptionsMarkup(championId) {
-  const takenRoles = new Set(
-    state.allies
-      .filter((ally) => ally.id !== championId && ally.role)
-      .map((ally) => ally.role),
-  );
-
-  const options = ['<option value="">Unassigned</option>'];
+function buildRoleOptionsMarkup() {
+  const options = [];
   for (const option of getTargetRoleOptions()) {
-    if (takenRoles.has(option.value)) {
-      continue;
-    }
-
     options.push(`<option value="${option.value}">${option.label}</option>`);
   }
 
@@ -766,22 +757,14 @@ function assignAllyRole(championId, role) {
     return;
   }
 
-  if (
-    role &&
-    state.allies.some((ally) => ally.id !== championId && ally.role === role)
-  ) {
-    return;
-  }
-
-  state.allies = state.allies.map((ally) =>
-    ally.id === championId
-      ? {
-          ...ally,
-          role,
-        }
-      : ally,
+  state.allies = resolveAllyRoleAssignment(
+    state.allies,
+    championId,
+    role,
+    getCachedAllyRoleLikelihoodsByChampionKey(),
   );
-  if (role) {
+
+  if (normalizeRole(role)) {
     applyAutoAssignedLastAllyRole();
   }
 
@@ -806,6 +789,11 @@ function applySuggestedAllyRole(championId, roleLikelihoodsByRole = null) {
   );
 
   return true;
+}
+
+function getCachedAllyRoleLikelihoodsByChampionKey() {
+  const normalizedRankFilter = normalizeRankFilter(state.rankFilter) || DEFAULT_RANK_FILTER;
+  return state.allyRoleLikelihoodsByRank[normalizedRankFilter] || null;
 }
 
 async function loadAllyRoleLikelihoodsForChampion(champion) {

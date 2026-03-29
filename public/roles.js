@@ -88,6 +88,94 @@
     return roleFromLikelihoods || availableRoleOptions[0]?.value || null;
   }
 
+  function resolveAllyRoleAssignment(
+    allies = [],
+    allyId = null,
+    nextRole = null,
+    roleLikelihoodsByChampionKey = null,
+  ) {
+    if (!Array.isArray(allies)) {
+      return [];
+    }
+
+    const updatedAllies = allies.map((ally) => ({ ...ally }));
+    if (updatedAllies.length === 0 || allyId == null) {
+      return updatedAllies;
+    }
+
+    const targetIndex = updatedAllies.findIndex((ally) => ally?.id === allyId);
+    if (targetIndex === -1) {
+      return updatedAllies;
+    }
+
+    const normalizedNextRole = normalizeRole(nextRole);
+    if (!normalizedNextRole) {
+      updatedAllies[targetIndex].role = "";
+      return updatedAllies;
+    }
+
+    const currentRole = normalizeRole(
+      updatedAllies[targetIndex]?.role ?? updatedAllies[targetIndex]?.lane ?? null,
+    );
+
+    if (currentRole === normalizedNextRole) {
+      updatedAllies[targetIndex].role = normalizedNextRole;
+      return updatedAllies;
+    }
+
+    const displacedIndex = updatedAllies.findIndex(
+      (ally, index) =>
+        index !== targetIndex &&
+        normalizeRole(ally?.role ?? ally?.lane ?? null) === normalizedNextRole,
+    );
+
+    updatedAllies[targetIndex].role = normalizedNextRole;
+
+    if (displacedIndex === -1) {
+      return updatedAllies;
+    }
+
+    const fallbackRole =
+      currentRole && currentRole !== normalizedNextRole
+        ? currentRole
+        : getDisplacedAllyRoleSuggestion(
+            updatedAllies,
+            displacedIndex,
+            roleLikelihoodsByChampionKey,
+          );
+
+    updatedAllies[displacedIndex].role = fallbackRole || "";
+    return updatedAllies;
+  }
+
+  function getDisplacedAllyRoleSuggestion(
+    allies = [],
+    displacedIndex = -1,
+    roleLikelihoodsByChampionKey = null,
+  ) {
+    const displacedAlly = allies[displacedIndex];
+    if (!displacedAlly?.id) {
+      return null;
+    }
+
+    const roleLikelihoodsByRole =
+      roleLikelihoodsByChampionKey &&
+      typeof roleLikelihoodsByChampionKey === "object" &&
+      displacedAlly.key != null
+        ? roleLikelihoodsByChampionKey[String(displacedAlly.key)] || null
+        : null;
+    const projectedAllies = allies.map((ally, index) =>
+      index === displacedIndex
+        ? {
+            ...ally,
+            role: "",
+          }
+        : ally,
+    );
+
+    return getSuggestedAllyRole(projectedAllies, displacedAlly.id, roleLikelihoodsByRole);
+  }
+
   function getMostLikelyAvailableRole(availableRoleOptions, roleLikelihoodsByRole) {
     if (!Array.isArray(availableRoleOptions) || availableRoleOptions.length === 0) {
       return null;
@@ -189,5 +277,6 @@
     getTargetRoleOptions,
     getUnassignedTargetRoleOptions,
     normalizeRole,
+    resolveAllyRoleAssignment,
   };
 });
