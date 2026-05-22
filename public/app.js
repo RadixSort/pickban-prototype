@@ -62,10 +62,13 @@ const state = {
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
+  autoImport: createInitialAutoImportState(),
   buildSuggestionCache: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
   lolalyticsLifetimeAccessCount: 0,
 };
+
+const AUTO_IMPORT_POLL_INTERVAL_MS = 3000;
 
 const limits = {
   allies: 5,
@@ -89,6 +92,8 @@ const pickers = {
 
 const rankFilterSelect = document.getElementById("rank-filter");
 const fetchButton = document.getElementById("fetch-button");
+const autoImportButton = document.getElementById("auto-import-button");
+const autoImportBanner = document.getElementById("auto-import-banner");
 const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
 const allyRolePanel = document.getElementById("ally-role-panel");
@@ -143,6 +148,7 @@ async function initialize() {
   rankFilterSelect.addEventListener("change", handleRankFilterChange);
   resultsRoleSelect.addEventListener("change", handleResultsRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
+  autoImportButton.addEventListener("click", handleStartAutoImport);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
   sortSelect.addEventListener("change", handleSortModeChange);
@@ -227,6 +233,16 @@ function getAvailableResultRoleOptions() {
   return getUnassignedTargetRoleOptions(state.allies);
 }
 
+function getAutoImportSuggestedRole() {
+  const assignedRole = normalizeRole(state.autoImport.assignedRole);
+  if (!state.autoImport.active || !assignedRole) {
+    return null;
+  }
+
+  const availableRoleValues = getAvailableResultRoleOptions().map((option) => option.value);
+  return availableRoleValues.includes(assignedRole) ? assignedRole : null;
+}
+
 function getNoAvailableResultRolesMessage() {
   return "All five allied roles are assigned. Remove one ally or clear a role to fetch more suggestions.";
 }
@@ -250,7 +266,12 @@ function getSelectedResultRole() {
   }
 
   const currentBundle = getCurrentResultsBundle();
-  const candidates = [currentBundle?.selectedRole, state.selectedResultRole, DEFAULT_TARGET_ROLE];
+  const candidates = [
+    getAutoImportSuggestedRole(),
+    currentBundle?.selectedRole,
+    state.selectedResultRole,
+    DEFAULT_TARGET_ROLE,
+  ];
 
   for (const candidate of candidates) {
     if (candidate && availableRoleValues.includes(candidate)) {
@@ -311,6 +332,7 @@ function renderAll() {
   renderResultsRequestStat();
   renderResults();
   renderActionState();
+  renderAutoImportBanner();
   renderBuildSuggestionModal();
   renderVersion();
 }
@@ -414,6 +436,21 @@ function createInitialBuildSuggestionModalState() {
     payload: null,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+  };
+}
+
+function createInitialAutoImportState() {
+  return {
+    active: false,
+    assignedRole: "",
+    lastAppliedSignature: "",
+    lastUpdatedAt: "",
+    message: "",
+    polling: false,
+    queueDescription: "",
+    requested: false,
+    status: "idle",
+    timerId: null,
   };
 }
 
@@ -649,7 +686,7 @@ async function addChampion(side, championId) {
   renderAll();
 }
 
-function createSelectedChampion(champion, side) {
+function createSelectedChampion(champion, side, options = {}) {
   const selected = {
     id: champion.id,
     key: champion.key,
@@ -659,6 +696,14 @@ function createSelectedChampion(champion, side) {
 
   if (side === "allies") {
     selected.role = "";
+  }
+
+  if (options.liveCellId != null) {
+    selected.liveCellId = options.liveCellId;
+  }
+
+  if (options.autoImported) {
+    selected.autoImported = true;
   }
 
   return selected;
@@ -876,6 +921,268 @@ function applyAutoAssignedLastAllyRole() {
   return true;
 }
 
+async function handleStartAutoImport() {
+  if (state.loading || state.shuttingDown || state.autoImport.polling) {
+    return;
+  }
+
+  stopAutoImportPolling();
+  state.autoImport.requested = true;
+  state.autoImport.active = false;
+  state.autoImport.status = "connecting";
+  state.autoImport.message = "Looking for an active League pick/ban phase...";
+  renderActionState();
+  renderAutoImportBanner();
+
+  await pollLiveDraftImport();
+}
+
+async function pollLiveDraftImport() {
+  if (!state.autoImport.requested || state.autoImport.polling || state.shuttingDown) {
+    return;
+  }
+
+  state.autoImport.polling = true;
+  renderActionState();
+  renderAutoImportBanner();
+
+  try {
+    const response = await fetch("/live-draft", {
+      cache: "no-store",
+    });
+    const payload = await parseJsonSafely(response);
+
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || "Failed to connect to the League Client.");
+    }
+
+    handleLiveDraftImportPayload(payload);
+  } catch (error) {
+    disableAutoImport(
+      "connection_lost",
+      error.message || "Auto champion import is disabled: the League Client connection was lost.",
+    );
+  } finally {
+    state.autoImport.polling = false;
+    renderAll();
+    scheduleAutoImportPoll();
+  }
+}
+
+function handleLiveDraftImportPayload(payload) {
+  if (!payload || payload.status !== "active") {
+    disableAutoImport(
+      payload?.reason || "unavailable",
+      payload?.message || "Auto champion import is disabled: no live draft data was found.",
+    );
+    return;
+  }
+
+  state.autoImport.requested = true;
+  state.autoImport.active = true;
+  state.autoImport.status = "active";
+  state.autoImport.message =
+    payload.message || "Champion picks are automatically being imported from the League Client.";
+  state.autoImport.assignedRole = normalizeRole(payload.assignedRole) || "";
+  state.autoImport.queueDescription =
+    typeof payload?.queue?.description === "string" ? payload.queue.description : "";
+  state.autoImport.lastUpdatedAt =
+    typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString();
+
+  const nextSignature = buildLiveDraftSignature(payload);
+  if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
+    applyLiveDraftImport(payload);
+    state.autoImport.lastAppliedSignature = nextSignature;
+  }
+
+  const assignedRole = getAutoImportSuggestedRole();
+  if (assignedRole) {
+    state.selectedResultRole = assignedRole;
+    const currentBundle = getCurrentResultsBundle();
+    if (currentBundle?.roles?.includes(assignedRole)) {
+      currentBundle.selectedRole = assignedRole;
+    }
+  }
+}
+
+function applyLiveDraftImport(payload) {
+  const liveAllies = normalizeLiveDraftSelections(payload.allies, "allies");
+  const liveEnemies = normalizeLiveDraftSelections(payload.enemies, "enemies");
+  const liveAllyKeys = new Set(liveAllies.map((ally) => String(ally.key)));
+  const liveEnemyKeys = new Set(liveEnemies.map((enemy) => String(enemy.key)));
+
+  state.enemies = state.enemies.filter((enemy) => !liveAllyKeys.has(String(enemy.key)));
+  state.allies = state.allies.filter((ally) => !liveEnemyKeys.has(String(ally.key)));
+
+  liveAllies.forEach((liveAlly) => upsertLiveDraftSelection("allies", liveAlly, liveAllyKeys));
+  liveEnemies.forEach((liveEnemy) => upsertLiveDraftSelection("enemies", liveEnemy, liveEnemyKeys));
+
+  state.allies = trimLiveDraftSelectionsToLimit(state.allies, limits.allies);
+  state.enemies = trimLiveDraftSelectionsToLimit(state.enemies, limits.enemies);
+  clearManualRolesConflictingWithLiveRoles();
+  closeBuildSuggestionModal();
+}
+
+function normalizeLiveDraftSelections(entries = [], side) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  const seenChampionKeys = new Set();
+  const selections = [];
+
+  for (const entry of entries) {
+    const championKey = String(entry?.championKey || "");
+    if (!championKey || seenChampionKeys.has(championKey)) {
+      continue;
+    }
+
+    const champion = state.champions.find((candidate) => String(candidate.key) === championKey);
+    if (!champion) {
+      continue;
+    }
+
+    const selection = createSelectedChampion(champion, side, {
+      autoImported: true,
+      liveCellId: Number.isInteger(Number(entry.cellId)) ? Number(entry.cellId) : null,
+    });
+    if (side === "allies") {
+      selection.role = normalizeRole(entry.role) || "";
+    }
+
+    seenChampionKeys.add(championKey);
+    selections.push(selection);
+  }
+
+  return selections;
+}
+
+function upsertLiveDraftSelection(side, liveSelection, liveChampionKeys) {
+  const selections = state[side];
+  const existingIndex = selections.findIndex((selection) =>
+    liveSelection.liveCellId != null
+      ? selection.liveCellId === liveSelection.liveCellId
+      : String(selection.key) === String(liveSelection.key),
+  );
+  const matchingChampionIndex = selections.findIndex(
+    (selection) => String(selection.key) === String(liveSelection.key),
+  );
+  const targetIndex = existingIndex === -1 ? matchingChampionIndex : existingIndex;
+
+  if (targetIndex !== -1) {
+    const nextSelection = {
+      ...selections[targetIndex],
+      ...liveSelection,
+    };
+    if (side === "allies") {
+      nextSelection.role = liveSelection.role || selections[targetIndex].role || "";
+    } else {
+      delete nextSelection.role;
+    }
+
+    selections[targetIndex] = nextSelection;
+    return;
+  }
+
+  if (selections.length < limits[side]) {
+    selections.push(liveSelection);
+    return;
+  }
+
+  const replaceIndex = selections.findIndex(
+    (selection) => !liveChampionKeys.has(String(selection.key)),
+  );
+  if (replaceIndex !== -1) {
+    selections[replaceIndex] = liveSelection;
+  }
+}
+
+function trimLiveDraftSelectionsToLimit(selections, maxCount) {
+  if (selections.length <= maxCount) {
+    return selections;
+  }
+
+  const liveSelections = selections.filter((selection) => selection.autoImported);
+  const manualSelections = selections.filter((selection) => !selection.autoImported);
+  return [...liveSelections, ...manualSelections].slice(0, maxCount);
+}
+
+function clearManualRolesConflictingWithLiveRoles() {
+  const liveRoles = new Set(
+    state.allies
+      .filter((ally) => ally.autoImported)
+      .map((ally) => normalizeRole(ally.role))
+      .filter(Boolean),
+  );
+
+  if (liveRoles.size === 0) {
+    return;
+  }
+
+  state.allies = state.allies.map((ally) => {
+    const role = normalizeRole(ally.role);
+    if (ally.autoImported || !role || !liveRoles.has(role)) {
+      return ally;
+    }
+
+    return {
+      ...ally,
+      role: "",
+    };
+  });
+}
+
+function buildLiveDraftSignature(payload) {
+  const normalizeEntries = (entries = []) =>
+    (Array.isArray(entries) ? entries : [])
+      .map((entry) => [
+        Number.isInteger(Number(entry?.cellId)) ? Number(entry.cellId) : "",
+        String(entry?.championKey || ""),
+        normalizeRole(entry?.role) || "",
+      ])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0])));
+
+  return JSON.stringify({
+    assignedRole: normalizeRole(payload.assignedRole) || "",
+    allies: normalizeEntries(payload.allies),
+    enemies: normalizeEntries(payload.enemies),
+    queueId: payload?.queue?.id ?? "",
+  });
+}
+
+function disableAutoImport(reason, message) {
+  stopAutoImportPolling();
+  state.autoImport.requested = false;
+  state.autoImport.active = false;
+  state.autoImport.status = "disabled";
+  state.autoImport.message = formatDisplayMessage(message);
+  state.autoImport.assignedRole = "";
+  state.autoImport.queueDescription = "";
+  state.autoImport.lastUpdatedAt = new Date().toISOString();
+  state.autoImport.reason = reason;
+}
+
+function scheduleAutoImportPoll() {
+  stopAutoImportPolling();
+  if (!state.autoImport.requested || state.autoImport.status !== "active" || state.shuttingDown) {
+    return;
+  }
+
+  state.autoImport.timerId = window.setTimeout(
+    pollLiveDraftImport,
+    AUTO_IMPORT_POLL_INTERVAL_MS,
+  );
+}
+
+function stopAutoImportPolling() {
+  if (!state.autoImport.timerId) {
+    return;
+  }
+
+  window.clearTimeout(state.autoImport.timerId);
+  state.autoImport.timerId = null;
+}
+
 async function handleFetchSuggestions() {
   if (isInteractionLocked()) {
     return;
@@ -1016,6 +1323,7 @@ function handleResetDraft() {
   state.allies = [];
   state.enemies = [];
   state.selectedResultRole = DEFAULT_TARGET_ROLE;
+  state.autoImport.lastAppliedSignature = "";
   pickers.allies.input.value = "";
   pickers.enemies.input.value = "";
   closeBuildSuggestionModal();
@@ -1536,6 +1844,35 @@ function renderResultsRequestStat() {
   );
 }
 
+function renderAutoImportBanner() {
+  if (state.autoImport.status === "idle") {
+    autoImportBanner.className = "auto-import-banner hidden";
+    autoImportBanner.textContent = "";
+    return;
+  }
+
+  const tone = state.autoImport.status === "active" ? "active" : "disabled";
+  autoImportBanner.className = `auto-import-banner auto-import-banner--${tone}`;
+  autoImportBanner.textContent = buildAutoImportBannerMessage();
+}
+
+function buildAutoImportBannerMessage() {
+  const parts = [state.autoImport.message].filter(Boolean);
+
+  if (state.autoImport.status === "active") {
+    if (state.autoImport.queueDescription) {
+      parts.push(`${state.autoImport.queueDescription}.`);
+    }
+
+    const assignedRole = normalizeRole(state.autoImport.assignedRole);
+    if (assignedRole && getAutoImportSuggestedRole()) {
+      parts.push(`Showing ${getRoleLabel(assignedRole)} suggestions.`);
+    }
+  }
+
+  return formatDisplayMessage(parts.join(" "));
+}
+
 function formatScore(value) {
   return Number(value || 0).toFixed(2);
 }
@@ -1677,6 +2014,7 @@ function clearStatus() {
 function renderActionState() {
   const availableRoleCount = getAvailableResultRoleOptions().length;
   const isDraftProjectionMode = isDraftProjectionModeActive();
+  const autoImportBusy = state.autoImport.polling || state.autoImport.status === "connecting";
 
   rankFilterSelect.disabled = state.loading || state.shuttingDown;
   resultsRoleSelect.disabled =
@@ -1686,6 +2024,8 @@ function renderActionState() {
   fetchButton.textContent =
     state.loading ? "Fetching..." : isDraftProjectionMode ? "Who will win?" : "Fetch Suggestions";
 
+  autoImportButton.disabled = state.loading || state.shuttingDown || autoImportBusy;
+  autoImportButton.textContent = getAutoImportButtonText();
   resetButton.disabled = state.loading || state.shuttingDown;
   closeButton.hidden = !state.canShutdown;
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;
@@ -1697,6 +2037,22 @@ function renderActionState() {
     isDraftProjectionMode ||
     (getCurrentResultsBundle()?.resultsByRole?.[getSelectedResultRole()] || []).length === 0 ||
     Boolean(getCurrentResultsBundle()?.metaByRole?.[getSelectedResultRole()]?.error);
+}
+
+function getAutoImportButtonText() {
+  if (state.autoImport.polling || state.autoImport.status === "connecting") {
+    return "Connecting...";
+  }
+
+  if (state.autoImport.status === "active") {
+    return "Importing";
+  }
+
+  if (state.autoImport.status === "disabled") {
+    return "Retry Auto Import";
+  }
+
+  return "Auto Import";
 }
 
 function isInteractionLocked() {

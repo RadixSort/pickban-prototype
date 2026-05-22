@@ -12,6 +12,7 @@ It also has:
 
 - a full-draft win-rate projection once all five allied roles are assigned
 - a matchup-specific build view for one ally, including runes, item path, and boots
+- an optional Windows auto import for League pick/ban in Normal Draft and Ranked games
 
 You choose:
 
@@ -99,6 +100,15 @@ Leave that terminal window open while you use the app.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
 8. If one ally already has a role, click **Build** on that ally row. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
 9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
+10. On Windows, after League pick/ban starts, click **Auto Import** to let the app fill visible champion picks and ally roles from the League Client.
+
+## Auto Import
+
+Auto Import works only while the League Client is running on the same Windows computer and the current pick/ban is Normal Draft or Ranked.
+
+If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app will leave those edits alone unless the League Client later reveals conflicting live pick data.
+
+If it cannot find a supported live draft, loses the connection, or sees another game mode, the banner says auto champion import is disabled and your current selections stay as they are.
 
 ## What The Scores Mean
 
@@ -116,6 +126,7 @@ Leave that terminal window open while you use the app.
 - Ally role assignment is optional
 - Build lookup needs 1 ally with an assigned role
 - Full-draft projection needs all 5 allies plus 5 unique ally roles
+- Auto Import needs the Windows League Client in Normal Draft or Ranked champ select
 
 ## The Next Time You Use It
 
@@ -153,6 +164,10 @@ Node.js is probably missing or was not installed correctly. Reinstall it from [h
 ### The app loads, but data fails to load
 
 The app needs internet access and working Lolalytics responses. Wait a moment and try again.
+
+### Auto Import says it is disabled
+
+Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer. Other modes, no active champ select, or a disconnected League Client will disable import without changing your current picks.
 
 ### The `Build` button is disabled
 

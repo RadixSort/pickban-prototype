@@ -26,6 +26,7 @@
     ["bottom", "bottom"],
     ["adc", "bottom"],
     ["support", "support"],
+    ["utility", "support"],
     ["sup", "support"],
   ]);
 

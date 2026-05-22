@@ -1,10 +1,11 @@
 # PickBan Prototype
 
-PickBan Prototype is a local Node/Express web app for three live Lolalytics-backed workflows:
+PickBan Prototype is a local Node/Express web app for live draft assistance workflows:
 
 - draft pick recommendations for every unassigned allied role
 - full-draft win-rate projection once all five allied roles are assigned
 - matchup-specific build recommendations for an assigned ally role, including runes, item paths, and boots
+- opt-in League Client pick/ban import on Windows for Normal Draft and Ranked queues
 
 It runs as one local process, serves plain browser JavaScript from `public/`, and has no build step, database, auth, or hosted deployment flow.
 
@@ -43,6 +44,7 @@ Supported runtime overrides:
 - `PORT`: override the local listen port
 - `LOLALYTICS_BASE_URL`: override the main Lolalytics origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
+- `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import
 
 There is no build, lint, or bundling command in this repo.
 
@@ -54,6 +56,7 @@ There is no build, lint, or bundling command in this repo.
 4. Use `Fetch Suggestions` for role recommendations.
 5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
 6. Use `Build` on an ally row after that ally has a role. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
+7. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
 
 Change feedback loops:
 
@@ -65,7 +68,7 @@ Change feedback loops:
 
 Entry points:
 
-- `server.js`: Express startup, `GET /app-config`, `POST /suggest`, `POST /draft-outlook`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
+- `server.js`: Express startup, `GET /app-config`, `GET /live-draft`, `POST /suggest`, `POST /draft-outlook`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
 - `public/index.html`: browser entry point
 - `public/app.js`: frontend controller, draft state, fetch flows, modal state, and rendering
 
@@ -86,6 +89,7 @@ High-value files when you are new to the codebase:
 - `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
 - `lib/lolalytics-build-parser.js`: normalizes Lolalytics matchup `q-data.json` payloads into rune, item, and boots data
 - `lib/build-suggestion-results.js`: aggregates matchup build data across enemies into one summary payload
+- `lib/riot-live-draft.js`: reads the local League Client lockfile and normalizes visible champ-select picks
 - `public/result-ranking.js`: shared ranking and top-N helpers
 - `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
 - `public/build-suggestion-view.js`: HTML rendering for the build recommendation modal
@@ -129,6 +133,12 @@ The three main request flows are:
 3. If no enemies are selected, the same route fetches the generic champion build payload for the assigned ally role.
 4. `lib/lolalytics-build-parser.js` normalizes those payloads.
 5. `lib/build-suggestion-results.js` merges the data into one summary that includes runes, ordered item paths, and completed boots.
+
+### Auto Import
+
+`GET /live-draft` supports the `Auto Import` button. It reads the Windows League Client lockfile, checks local gameflow/champ-select state, and only returns active data for Normal Draft (`400`), Ranked Solo/Duo (`420`), or Ranked Flex (`440`).
+
+If no live champ-select data is found, the connection drops, or the queue is unsupported, the UI shows the disabled banner and leaves current selections unchanged. While active, repeated polls preserve manual edits until the League Client exposes a changed live draft signature.
 
 Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
 
@@ -235,8 +245,9 @@ The button is only shown after `GET /app-config` succeeds and the browser receiv
 ## Current Limitations
 
 - live behavior depends on Lolalytics HTML and `q-data.json` staying structurally compatible
+- auto import depends on Riot's local League Client API and the Windows League Client lockfile staying compatible
 - runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`
-- the only supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, and `LOLALYTICS_MEGA_URL`
+- the supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
 - there is no persistence, auth, or deployment story in this repository
 
 ## License

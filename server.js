@@ -26,6 +26,9 @@ const {
   resolveQwikPayload: resolveRawQwikPayload,
 } = require("./lib/qwik-payload.js");
 const {
+  fetchLiveDraftImport,
+} = require("./lib/riot-live-draft.js");
+const {
   buildRoleSuggestionResults,
   buildSuggestionMeta,
 } = require("./lib/role-suggestion-results.js");
@@ -154,6 +157,16 @@ app.get("/ally-role-likelihoods", async (request, response) =>
     }
   }),
 );
+
+app.get("/live-draft", async (_request, response) => {
+  const payload = await fetchLiveDraftImport({
+    championByKey,
+    normalizeRole,
+  });
+
+  response.set("Cache-Control", "no-store");
+  response.json(payload);
+});
 
 app.post("/suggest", async (request, response) =>
   lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {

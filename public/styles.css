@@ -486,10 +486,10 @@ select {
 
 .action-row {
   display: grid;
-  grid-template-columns: minmax(180px, 0.3fr) minmax(0, 0.7fr);
+  grid-template-columns: minmax(150px, 0.24fr) minmax(150px, 0.28fr) minmax(0, 0.48fr);
   align-items: stretch;
   gap: 10px;
-  width: min(640px, 100%);
+  width: min(820px, 100%);
   margin: 0 auto;
 }
 
@@ -548,6 +548,30 @@ select {
 .button-icon {
   font-size: 1.05rem;
   line-height: 1;
+}
+
+.auto-import-banner {
+  width: min(820px, 100%);
+  margin: 6px auto 0;
+  padding: 11px 14px;
+  border: 1px solid rgba(211, 188, 124, 0.24);
+  border-radius: 14px;
+  background: rgba(10, 15, 22, 0.82);
+  color: var(--text);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.auto-import-banner--active {
+  border-color: rgba(144, 241, 195, 0.34);
+  background: rgba(26, 72, 54, 0.38);
+  color: #d9f7e8;
+}
+
+.auto-import-banner--disabled {
+  border-color: var(--danger-border);
+  background: var(--danger-surface);
+  color: var(--danger-text);
 }
 
 .primary-button:disabled,

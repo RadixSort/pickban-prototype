@@ -21,6 +21,7 @@ If you are onboarding to the codebase, read these files in order:
 - `server.js`: the full HTTP surface plus live fetch/caching behavior
 - `public/app.js`: the browser controller and UI-state transitions
 - `lib/request-normalization.js`: request validation rules
+- `lib/riot-live-draft.js`: Windows League Client lockfile access and champ-select normalization
 - `lib/server-route-helpers.js`: public response shaping
 - `test/server-api.test.js`: route contracts with mocked Lolalytics responses
 
@@ -55,6 +56,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - `POST /suggest`
   - `POST /draft-outlook`
   - `POST /build-suggestions`
+  - `GET /live-draft`
   - `POST /shutdown`
   - Lolalytics fetch/caching helpers
   - graceful shutdown
@@ -139,6 +141,12 @@ That means shared business rules often live in `public/`, not `lib/`.
 - `lib/draft-projection.js`
   - aggregate full-draft ally synergy and enemy counter matchups
   - reject projections that have no usable win-rate samples
+
+- `lib/riot-live-draft.js`
+  - find and parse the local League Client lockfile
+  - read League Client champ-select and gameflow state from localhost
+  - allow only Normal Draft (`400`), Ranked Solo/Duo (`420`), and Ranked Flex (`440`)
+  - normalize visible champion IDs and assigned positions into local champion/role metadata
 
 ## Request Flows
 
@@ -269,6 +277,20 @@ Flow:
 
 The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it fetches matchup build data; when no enemies are selected it fetches the generic champion build data for the assigned role and renders it in the same modal.
 
+## `GET /live-draft`
+
+Used by the opt-in Windows auto-import flow during League of Legends pick/ban.
+
+Flow:
+
+1. `lib/riot-live-draft.js` finds the League Client lockfile. Tests and custom setups can override the path with `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`.
+2. The server authenticates to the local League Client API with the lockfile port/password.
+3. It reads `/lol-gameflow/v1/session` for phase and queue data, and `/lol-champ-select/v1/session` for visible picks and assigned positions.
+4. If the phase is not `ChampSelect`, the client is disconnected, or the queue is not Normal Draft/Ranked, the route returns a disabled payload and no draft selections.
+5. If the session is supported, the route returns visible allied picks with roles, visible enemy picks, the local player's assigned role, and queue metadata.
+
+The browser polls this route only after the user clicks `Auto Import`. It applies a changed live-draft signature once, then preserves manual edits until the League Client exposes new conflicting live data.
+
 ## Scoring, Filtering, And Ranking
 
 Role suggestions are computed per target role.
@@ -337,6 +359,7 @@ Frontend caches:
 - role suggestions are cached for the current browser session by rank filter + allies + ally roles + enemies
 - build suggestions are cached for the current browser session by rank filter + ally + ally role + enemies
 - draft outlook responses are cached for the current browser session under the same draft key as role suggestions
+- live-draft responses are not cached; they are short-poll reads from the local League Client after explicit opt-in
 
 Failure behavior:
 
@@ -348,11 +371,14 @@ Failure behavior:
 - if every requested role fails, `/suggest` returns an HTTP error payload
 - if a draft projection has no usable win-rate samples, `/draft-outlook` returns an HTTP error payload
 - if every matchup build fetch fails, `/build-suggestions` returns an HTTP error payload
+- `/live-draft` expected failures return disabled payloads so the UI can show the auto-import banner without changing current selections
 
 ## External Assumptions
 
 The most fragile dependencies are external:
 
+- Riot documents local client APIs but states the League Client API is not officially supported for third-party applications; champ-select import depends on that local API and may change without notice
+- the Windows League Client lockfile must be present and readable while the client is running
 - Lolalytics tier-list pages must continue exposing champion rows in the currently supported HTML structures
 - Lolalytics `q-data.json` payloads must continue exposing the current Qwik `_objs` reference format
 - the relevant sections must remain under the current payload areas used by the parsers
@@ -366,6 +392,7 @@ If the app suddenly stops returning data without a local code change, these assu
   - `PORT`
   - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
+  - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
 - the close button is only shown after `GET /app-config` succeeds
@@ -380,4 +407,5 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-http.test.js` covers local route behavior such as `/app-config` and input rejection before live fetches
 - `test/server-startup.test.js` is a startup/shutdown smoke test for `server.js`
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
+- `test/riot-live-draft.test.js` covers League Client payload normalization
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior

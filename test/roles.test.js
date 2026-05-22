@@ -15,6 +15,7 @@ const {
 test("normalizeRole supports frontend labels and backend aliases", () => {
   assert.equal(normalizeRole("support"), "support");
   assert.equal(normalizeRole("sup"), "support");
+  assert.equal(normalizeRole("utility"), "support");
   assert.equal(normalizeRole("mid"), "middle");
   assert.equal(normalizeRole("adc"), "bottom");
   assert.equal(normalizeRole("unknown"), null);
