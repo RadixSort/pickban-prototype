@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   isCompletedBootItem,
   parseLolalyticsMatchupBuildData,
+  parseLolalyticsRuneBuildData,
 } = require("../lib/lolalytics-build-parser.js");
 
 test("isCompletedBootItem filters unfinished and rune-granted boots", () => {
@@ -234,5 +235,119 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
       { itemId: 3006, games: 70 },
       { itemId: 3158, games: 10 },
     ],
+  );
+});
+
+test("parseLolalyticsRuneBuildData normalizes the current mega rune payload shape", () => {
+  const parsed = parseLolalyticsRuneBuildData(
+    {
+      header: {
+        n: 112627,
+        defaultLane: "middle",
+        lane: "middle",
+      },
+      summary: {
+        runes: {
+          pick: {
+            wr: 51.77,
+            n: 100654,
+            page: {
+              pri: 1,
+              sec: 2,
+            },
+            set: {
+              pri: [8112, 8139, 8140, 8106],
+              sec: [8226, 8210],
+              mod: [5005, 5008, 5001],
+            },
+          },
+          win: {
+            wr: 53.58,
+            n: 8232,
+            page: {
+              pri: 2,
+              sec: 3,
+            },
+            set: {
+              pri: [8112, 8139, 8140, 8106],
+              sec: [8226, 8210],
+              mod: [5005, 5008, 5001],
+            },
+          },
+        },
+        pick: {
+          pri: [
+            [8112, 51.77, 89.37, 100654],
+            [8139, 51.64, 83.79, 94365],
+            [8140, 51.65, 78.33, 88223],
+            [8106, 51.75, 88.5, 99670],
+          ],
+          sec: [
+            [8226, 51.56, 71.01, 79976],
+            [8210, 51.71, 61.75, 69545],
+          ],
+          mod: [
+            [5005, 51.71, 91.83, 103425],
+            [5008, 51.79, 96.74, 108950],
+            [5001, 51.63, 76, 85598],
+          ],
+        },
+        win: {
+          pri: [
+            [8112, 53.58, 7.31, 8232],
+          ],
+          sec: [
+            [8226, 52.42, 5.53, 6232],
+          ],
+          mod: [
+            [5008, 52.94, 6.72, 7567],
+          ],
+        },
+      },
+    },
+    {
+      allyChampionKey: "103",
+      enemyChampionKey: "89",
+      fetchedAt: "2026-05-24T13:45:00.000Z",
+      role: "middle",
+    },
+  );
+
+  assert.equal(parsed.allyChampionKey, "103");
+  assert.equal(parsed.enemyChampionKey, "89");
+  assert.equal(parsed.role, "middle");
+  assert.equal(parsed.totalGames, 112627);
+  assert.equal(parsed.runes.pageCandidates.length, 1);
+  assert.deepEqual(parsed.runes.pageCandidates[0].primaryRuneIds, [8112, 8139, 8140, 8106]);
+  assert.deepEqual(
+    parsed.runes.primarySlotOptions.map((slotOptions) =>
+      slotOptions.map((option) => ({
+        id: option.id,
+        games: option.games,
+      })),
+    ),
+    [
+      [{ id: 8112, games: 100654 }],
+      [{ id: 8139, games: 94365 }],
+      [{ id: 8140, games: 88223 }],
+      [{ id: 8106, games: 99670 }],
+    ],
+  );
+  assert.deepEqual(parsed.spells.options, []);
+  assert.deepEqual(parsed.items.slotOptions, [[], [], [], [], [], []]);
+  assert.deepEqual(parsed.boots, []);
+});
+
+test("parseLolalyticsRuneBuildData isolates missing rune summaries", () => {
+  assert.throws(
+    () =>
+      parseLolalyticsRuneBuildData({
+        header: {
+          n: 100,
+          lane: "middle",
+        },
+        summary: {},
+      }),
+    /missing rune summary data/i,
   );
 });

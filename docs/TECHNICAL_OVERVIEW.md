@@ -59,6 +59,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - `GET /live-draft`
   - `POST /shutdown`
   - Lolalytics fetch/caching helpers
+  - app version and Lolalytics lookback metadata for the visible header
   - graceful shutdown
 
 - `public/app.js`
@@ -94,7 +95,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - frontend build-recommendation cache key
 
 - `public/build-suggestion-view.js`
-  - summary HTML for runes, ordered item paths, and boots
+  - summary HTML for build-modal recommendation sections
 
 - `public/rune-metadata.js`
   - local rune style and icon metadata used by the build parser and modal renderer
@@ -117,7 +118,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - build-suggestion payload assembly helpers
 
 - `lib/lolalytics-tier-list.js`
-  - parse tier-list HTML from Lolalytics
+  - normalize tier rows from Lolalytics mega JSON and older page HTML shapes
   - map parsed rows back to local champion metadata
   - enforce role eligibility thresholds
 
@@ -133,10 +134,10 @@ That means shared business rules often live in `public/`, not `lib/`.
   - flip enemy-facing matchup win rates back to the candidate pick perspective
 
 - `lib/lolalytics-build-parser.js`
-  - normalize matchup `q-data.json` into rune pages, item slot options, and completed boots
+  - normalize current Lolalytics mega rune payloads into build-modal rune data
 
 - `lib/build-suggestion-results.js`
-  - merge matchup build data across enemies into one summary payload for runes, items, and boots
+  - merge build data across enemies into one summary payload
 
 - `lib/draft-projection.js`
   - aggregate full-draft ally synergy and enemy counter matchups
@@ -178,7 +179,7 @@ Flow:
    - uses explicit `roles`, `role`, or `targetRole`, or
    - infers every still-unassigned role from the current ally selections
 7. For each target role, the server fetches:
-   - tier-list HTML for eligibility and live win rate
+   - mega tier data for eligibility and live win rate
    - ally synergy rows
    - enemy counter rows
 8. `buildRoleSuggestionResults(...)` aggregates, filters, and sorts the candidates.
@@ -245,7 +246,7 @@ Important behavioral details:
 
 ## `POST /build-suggestions`
 
-Used by the matchup-specific build recommendation modal.
+Used by the build recommendation modal.
 
 Minimal request example:
 
@@ -260,13 +261,12 @@ Minimal request example:
 Flow:
 
 1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, an optional enemy list, and no ally/enemy overlap.
-2. If enemies are selected, the server fetches one Lolalytics matchup build payload per enemy champion. Otherwise it fetches the generic champion build payload for the assigned role.
-3. `parseLolalyticsMatchupBuildData(...)` converts each payload into:
+2. If enemies are selected, the server fetches one Lolalytics mega rune payload per enemy champion. Otherwise it fetches the generic champion rune payload for the assigned role.
+3. `parseLolalyticsRuneBuildData(...)` converts each payload into:
    - rune style totals
    - rune slot options
    - exact page candidates
-   - ordered item slot options
-   - completed boots
+   - empty summoner spell, item, and boot sections when the current Lolalytics source does not expose them
 4. `buildBuildSuggestionResults(...)` merges those matchup records into one summary response.
 5. The response returns:
    - `request`
@@ -275,7 +275,7 @@ Flow:
    - `items`
    - `boots`
 
-The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it fetches matchup build data; when no enemies are selected it fetches the generic champion build data for the assigned role and renders it in the same modal.
+The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it includes each enemy in the mega rune request; when no enemies are selected it fetches generic champion rune data for the assigned role and renders it in the same modal.
 
 ## `GET /live-draft`
 
@@ -320,6 +320,7 @@ Backend sort order:
 Important behavioral details:
 
 - low projected win-rate rows stay visible; the UI highlights them instead of filtering them out
+- rows that are top-ranked by both projected win rate and projected agency get a gold `Top in both` banner
 - ally-only drafts produce `counterScore = 0`
 - enemy-only drafts produce `synergyScore = 0`
 - assigned ally roles prefer role-specific synergy data and fall back to the `all` lane when needed
@@ -338,7 +339,7 @@ Backend caches:
   - key: full request URL
   - TTL: 5 minutes
 
-- normalized matchup build cache
+- normalized build cache
   - key: ally champion + ally role + enemy champion + rank filter + patch
   - TTL: 5 minutes
 
@@ -370,7 +371,7 @@ Failure behavior:
 - build-suggestion fetches also use `Promise.allSettled(...)`, and enemy-specific failures are exposed in `summary.partialFailures`
 - if every requested role fails, `/suggest` returns an HTTP error payload
 - if a draft projection has no usable win-rate samples, `/draft-outlook` returns an HTTP error payload
-- if every matchup build fetch fails, `/build-suggestions` returns an HTTP error payload
+- if every rune build fetch fails, `/build-suggestions` returns an HTTP error payload
 - `/live-draft` expected failures return disabled payloads so the UI can show the auto-import banner without changing current selections
 
 ## External Assumptions
@@ -378,9 +379,10 @@ Failure behavior:
 The most fragile dependencies are external:
 
 - Riot documents local client APIs but states the League Client API is not officially supported for third-party applications; champ-select import depends on that local API and may change without notice
+- the UI must keep a readily visible unframed Riot non-endorsement/trademark footnote if it continues to reference Riot or League-related names, assets, or local client data
 - the Windows League Client lockfile must be present and readable while the client is running
-- Lolalytics tier-list pages must continue exposing champion rows in the currently supported HTML structures
-- Lolalytics `q-data.json` payloads must continue exposing the current Qwik `_objs` reference format
+- Lolalytics mega tier, synergy, and counter payloads must continue exposing the currently parsed fields
+- Lolalytics mega rune payloads must continue exposing `header`, `summary.runes`, `summary.pick`, and `summary.win`
 - the relevant sections must remain under the current payload areas used by the parsers
 
 If the app suddenly stops returning data without a local code change, these assumptions are the first place to investigate.
@@ -390,11 +392,12 @@ If the app suddenly stops returning data without a local code change, these assu
 - default port: `3000`
 - supported runtime env vars:
   - `PORT`
-  - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
+- `/app-config` exposes the package version and `lolalyticsDataWindowDays`; the header uses that value to describe the current Lolalytics `patch=7` lookback window as `last 7 days`
+- the frontend shows the lifetime Lolalytics live-hit count in the top-right header without enclosing it in the bordered data-source banner
 - the close button is only shown after `GET /app-config` succeeds
 - `POST /shutdown` only accepts loopback requests with the per-process shutdown token
 - `Ctrl+C` and `SIGTERM` both use the graceful shutdown path

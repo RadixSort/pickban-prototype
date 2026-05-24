@@ -10,28 +10,34 @@
     <main class="app-shell">
       <header class="hero">
         <div class="hero-topbar">
-          <h1>Pick the meta draft.</h1>
-          <div class="hero-toolbar">
-            <select id="rank-filter" class="hero-rank-filter" aria-label="Rank filter"></select>
-            <button
-              id="close-button"
-              class="close-button"
-              type="button"
-              hidden
-              aria-label="Stop app"
-              title="Stop app"
+          <h1>Pick the Meta.</h1>
+          <div class="hero-controls">
+            <span id="results-request-stat" class="results-request-stat hero-request-stat" aria-live="polite"
+              >Total Lolalytics live hits since server start: 0.</span
             >
-              <span aria-hidden="true">&times;</span>
-            </button>
+            <div class="hero-toolbar">
+              <select id="rank-filter" class="hero-rank-filter" aria-label="Rank filter"></select>
+              <button id="auto-import-button" class="secondary-button action-button action-button--auto" type="button">
+                Auto Import
+              </button>
+              <button
+                id="close-button"
+                class="close-button"
+                type="button"
+                hidden
+                aria-label="Stop app"
+                title="Stop app"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
           </div>
         </div>
         <p class="hero-credit">
           Powered by live data from
-          <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>.
-          Built independently with appreciation for their matchup and tier-list work.
-          <span id="results-request-stat" class="results-request-stat"
-            >Total Lolalytics live hits since server start: 0.</span
-          >
+          <a href="https://lolalytics.com/" target="_blank" rel="noreferrer">Lolalytics</a>,
+          using the <span id="lolalytics-data-window">last 7 days</span>.
+          <span class="hero-credit-line">Built independently with appreciation for their matchup and tier-list work.</span>
         </p>
       </header>
 
@@ -86,9 +92,6 @@
           <button id="reset-button" class="secondary-button action-button action-button--reset" type="button">
             <span class="button-icon" aria-hidden="true">&#x267B;</span>
             <span>Reset Draft</span>
-          </button>
-          <button id="auto-import-button" class="secondary-button action-button action-button--auto" type="button">
-            Auto Import
           </button>
           <button id="fetch-button" class="primary-button action-button action-button--fetch" type="button">
             Fetch Suggestions
@@ -145,6 +148,12 @@
           </table>
         </div>
       </section>
+
+      <footer class="riot-legal-footnote">
+        PickBan Prototype is not endorsed by Riot Games and does not reflect the views or opinions of
+        Riot Games or anyone officially involved in producing or managing Riot Games properties.
+        Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+      </footer>
     </main>
 
     <section
@@ -197,7 +206,7 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v5.3</span>
+      <span id="app-version">v0.6.0</span>
     </div>
 
     <script src="/roles.js" defer></script>

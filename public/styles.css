@@ -17,9 +17,9 @@
   --highlight-winrate-bg: rgba(153, 220, 176, 0.14);
   --highlight-winrate-border: rgba(153, 220, 176, 0.2);
   --highlight-winrate-text: #bbeccb;
-  --highlight-overlap-bg: rgba(141, 214, 207, 0.17);
-  --highlight-overlap-border: rgba(141, 214, 207, 0.24);
-  --highlight-overlap-text: #adf0e8;
+  --highlight-overlap-bg: rgba(207, 161, 61, 0.18);
+  --highlight-overlap-border: rgba(242, 216, 141, 0.32);
+  --highlight-overlap-text: #f6d88e;
   --danger-border: rgba(184, 87, 87, 0.42);
   --danger-surface: rgba(72, 20, 20, 0.56);
   --danger-text: #efb0b0;
@@ -87,13 +87,19 @@ select {
   min-width: 0;
 }
 
+.hero-controls {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .hero-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
   flex-wrap: nowrap;
-  margin-left: auto;
 }
 
 .hero-rank-filter {
@@ -156,9 +162,24 @@ select {
   text-decoration: underline;
 }
 
-.hero-credit .results-request-stat {
+.hero-credit-line {
   display: block;
-  margin-top: 6px;
+}
+
+.hero-request-stat {
+  display: block;
+  text-align: right;
+  max-width: 100%;
+  margin: 0;
+}
+
+.riot-legal-footnote {
+  width: 100%;
+  max-width: 100%;
+  margin: 14px 0 0;
+  color: rgba(150, 160, 180, 0.78);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
 .target-role-panel {
@@ -486,10 +507,10 @@ select {
 
 .action-row {
   display: grid;
-  grid-template-columns: minmax(150px, 0.24fr) minmax(150px, 0.28fr) minmax(0, 0.48fr);
+  grid-template-columns: minmax(150px, 0.32fr) minmax(0, 0.68fr);
   align-items: stretch;
   gap: 10px;
-  width: min(820px, 100%);
+  width: min(680px, 100%);
   margin: 0 auto;
 }
 
@@ -543,6 +564,16 @@ select {
   min-height: 64px;
   padding: 18px 28px;
   font-size: 1.08rem;
+}
+
+.hero-toolbar .action-button--auto {
+  width: auto;
+  min-width: 104px;
+  min-height: 42px;
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  box-shadow: none;
 }
 
 .button-icon {
@@ -728,18 +759,22 @@ select {
   gap: 8px;
 }
 
-.top-option-badge {
+.top-option-banner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid rgba(255, 224, 132, 0.34);
-  border-radius: 999px;
-  background: rgba(255, 224, 132, 0.14);
-  color: #ffe597;
-  font-size: 0.88rem;
-  line-height: 1;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 224, 132, 0.42);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(242, 216, 141, 0.96), rgba(188, 139, 48, 0.96));
+  color: #241804;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
   cursor: help;
   flex-shrink: 0;
@@ -1753,10 +1788,19 @@ select {
     flex-wrap: wrap;
   }
 
+  .hero-controls {
+    width: 100%;
+    justify-items: stretch;
+  }
+
   .hero-toolbar {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .hero-request-stat {
+    text-align: left;
   }
 
   .action-row {

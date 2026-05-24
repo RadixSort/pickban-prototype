@@ -119,6 +119,132 @@ function createRoleBuildQData(enemyRowsByRole) {
   });
 }
 
+function createTierMegaData(lane, rows = []) {
+  const cid = {};
+
+  rows.forEach((row, index) => {
+    cid[String(row.championKey)] = {
+      rank: row.rank || index + 1,
+      pctLane: row.lanePercent,
+      wr: row.winRate,
+      pr: row.pickRate,
+      games: row.games || 1000,
+    };
+  });
+
+  return {
+    tier: {
+      1: {
+        lane: {
+          [lane]: {
+            cid,
+          },
+        },
+      },
+    },
+  };
+}
+
+function createCounterMegaData(rows = []) {
+  return {
+    counters: rows.map((row) => ({
+      cid: Number(row.championKey),
+      defaultLane: row.role,
+      vsWr: row.candidateWinRate,
+      d1: row.candidateCounterScore,
+      n: row.games || 1000,
+    })),
+  };
+}
+
+function createRuneBuildMegaData({
+  role = "middle",
+  totalGames = 60,
+  pickWinRate = 55,
+  highestWinRate = 57,
+  highestWinGames = Math.max(1, Math.round(totalGames * 0.6)),
+} = {}) {
+  return {
+    header: {
+      n: totalGames,
+      defaultLane: role,
+      lane: role,
+    },
+    summary: {
+      runes: {
+        pick: {
+          wr: pickWinRate,
+          n: totalGames,
+          page: {
+            pri: 0,
+            sec: 4,
+          },
+          set: {
+            pri: [8008, 9111, 9103, 8014],
+            sec: [8304, 8347],
+            mod: [5005, 5008, 5011],
+          },
+        },
+        win: {
+          wr: highestWinRate,
+          n: highestWinGames,
+          page: {
+            pri: 0,
+            sec: 4,
+          },
+          set: {
+            pri: [8008, 9111, 9103, 8014],
+            sec: [8304, 8347],
+            mod: [5005, 5008, 5011],
+          },
+        },
+      },
+      pick: {
+        pri: [
+          [8008, pickWinRate, 100, totalGames],
+          [9111, pickWinRate, 100, totalGames],
+          [9103, pickWinRate, 100, totalGames],
+          [8014, pickWinRate, 100, totalGames],
+        ],
+        sec: [
+          [8304, pickWinRate, 100, totalGames],
+          [8347, pickWinRate, 100, totalGames],
+        ],
+        mod: [
+          [5005, pickWinRate, 100, totalGames],
+          [5008, pickWinRate, 100, totalGames],
+          [5011, pickWinRate, 100, totalGames],
+        ],
+      },
+      win: {
+        pri: [
+          [8008, highestWinRate, 100, highestWinGames],
+          [9111, highestWinRate, 100, highestWinGames],
+          [9103, highestWinRate, 100, highestWinGames],
+          [8014, highestWinRate, 100, highestWinGames],
+        ],
+        sec: [
+          [8304, highestWinRate, 100, highestWinGames],
+          [8347, highestWinRate, 100, highestWinGames],
+        ],
+        mod: [
+          [5005, highestWinRate, 100, highestWinGames],
+          [5008, highestWinRate, 100, highestWinGames],
+          [5011, highestWinRate, 100, highestWinGames],
+        ],
+      },
+    },
+    nav: {
+      lanes: {
+        [role]: 100,
+      },
+    },
+    response: {
+      valid: true,
+    },
+  };
+}
+
 function createGenericBuildQData({
   allyChampionKey = "103",
   role = "middle",
@@ -392,9 +518,12 @@ function waitForCloseTimeout(timeoutMs = 100) {
 
 module.exports = {
   buildTierListHtml,
+  createCounterMegaData,
+  createRuneBuildMegaData,
   createGenericBuildQData,
   createMatchupBuildQData,
   createRoleBuildQData,
+  createTierMegaData,
   jsonResponse,
   startMockLolalyticsServer,
   textResponse,

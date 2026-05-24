@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildEligibleTierStats,
   extractTierListRows,
+  extractTierRowsFromMegaPayload,
 } = require("../lib/lolalytics-tier-list.js");
 
 const sampleTierListHtml = `
@@ -170,6 +171,58 @@ test("extractTierListRows supports default Emerald+ build links without a tier q
   assert.equal(extractTierListRows(defaultTierGridHtml).length, 2);
 });
 
+test("extractTierRowsFromMegaPayload parses current mega tier payloads by champion id", () => {
+  const payload = {
+    tier: {
+      1: {
+        lane: {
+          support: {
+            cid: {
+              267: {
+                pctLane: 99.92,
+                wr: 52.06,
+                pr: 14.46,
+              },
+            },
+          },
+        },
+      },
+      2: {
+        lane: {
+          support: {
+            cid: {
+              412: {
+                pctLane: 99.72,
+                wr: 51.59,
+                pr: 12.3,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(extractTierRowsFromMegaPayload(payload, "support"), [
+    {
+      championKey: "267",
+      slug: "",
+      name: "",
+      lanePercent: 99.92,
+      winRate: 52.06,
+      pickRate: 14.46,
+    },
+    {
+      championKey: "412",
+      slug: "",
+      name: "",
+      lanePercent: 99.72,
+      winRate: 51.59,
+      pickRate: 12.3,
+    },
+  ]);
+});
+
 test("buildEligibleTierStats filters rows with minimum lane and pick thresholds", () => {
   const rows = extractTierListRows(sampleTierListHtml);
   const championBySlug = new Map([
@@ -230,6 +283,39 @@ test("buildEligibleTierStats falls back to normalized champion names when slugs 
       lanePercent: 72.4,
       winRate: 51.6,
       pickRate: 2.8,
+    },
+  ]);
+});
+
+test("buildEligibleTierStats can join current mega tier rows by champion id", () => {
+  const eligibleTierStats = buildEligibleTierStats(
+    [
+      {
+        championKey: "267",
+        slug: "",
+        name: "",
+        lanePercent: 99.92,
+        winRate: 52.06,
+        pickRate: 14.46,
+      },
+    ],
+    new Map(),
+    new Map(),
+    {
+      championByKey: new Map([["267", { key: "267", name: "Nami" }]]),
+      minLanePercent: 10,
+      minPickRate: 0.5,
+    },
+  );
+
+  assert.deepEqual(Array.from(eligibleTierStats.values()), [
+    {
+      candidateKey: "267",
+      candidateSlug: "",
+      candidate: "Nami",
+      lanePercent: 99.92,
+      winRate: 52.06,
+      pickRate: 14.46,
     },
   ]);
 });

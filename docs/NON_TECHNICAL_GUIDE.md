@@ -2,7 +2,7 @@
 
 This guide is for someone who wants to run the app locally without needing to understand the code.
 
-The app uses live Lolalytics data and is built independently with appreciation for their matchup and tier-list work.
+The app uses live Lolalytics data and is built independently with appreciation for their matchup and tier-list work. Its top banner shows the Lolalytics lookback window and live-hit count; the Riot Games non-endorsement/trademark notice appears as a small footnote near the bottom of the app.
 
 ## What The App Does
 
@@ -11,7 +11,7 @@ The app helps you compare champion options for any role that is still open in yo
 It also has:
 
 - a full-draft win-rate projection once all five allied roles are assigned
-- a matchup-specific build view for one ally, including runes, item path, and boots
+- a build view for one ally with current Lolalytics rune recommendations
 - an optional Windows auto import for League pick/ban in Normal Draft and Ranked games
 
 You choose:
@@ -98,9 +98,9 @@ Leave that terminal window open while you use the app.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
 6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-8. If one ally already has a role, click **Build** on that ally row. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
+8. If one ally already has a role, click **Build** on that ally row. With enemies selected it opens enemy-aware build suggestions; without enemies it opens generic champion build recommendations in the same popup.
 9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
-10. On Windows, after League pick/ban starts, click **Auto Import** to let the app fill visible champion picks and ally roles from the League Client.
+10. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
 
 ## Auto Import
 
@@ -116,6 +116,8 @@ If it cannot find a supported live draft, loses the connection, or sees another 
 - `Counter Score`: how well a candidate performs into your enemy champions
 - `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
 - `Projected Agency`: the blended score you can switch to in the **Rank by** dropdown
+
+When a champion is among the top options for both ranking methods, the results table marks it with a gold **Top in both** banner.
 
 ## Limits
 
@@ -173,7 +175,7 @@ Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer.
 
 That button only works after the ally has an assigned role.
 
-With enemies selected it opens matchup build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
+With enemies selected it opens enemy-aware build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
 
 ### I expected one role, but the app shows others
 

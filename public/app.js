@@ -57,7 +57,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "5.3.0",
+  version: "0.6.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -65,6 +65,7 @@ const state = {
   autoImport: createInitialAutoImportState(),
   buildSuggestionCache: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
+  lolalyticsDataWindowDays: 7,
   lolalyticsLifetimeAccessCount: 0,
 };
 
@@ -107,6 +108,7 @@ const resultsMeta = document.getElementById("results-meta");
 const resultsTitle = document.getElementById("results-title");
 const resultsRoleSelect = document.getElementById("results-role");
 const resultsRoleControl = document.getElementById("results-role-control");
+const lolalyticsDataWindow = document.getElementById("lolalytics-data-window");
 const resultsRequestStat = document.getElementById("results-request-stat");
 const partialFailures = document.getElementById("partial-failures");
 const sortSelect = document.getElementById("results-sort");
@@ -173,6 +175,10 @@ async function loadAppConfig() {
 
     const config = await response.json();
     state.version = typeof config.version === "string" ? config.version : state.version;
+    const lolalyticsDataWindowDays = Number(config.lolalyticsDataWindowDays);
+    if (Number.isFinite(lolalyticsDataWindowDays) && lolalyticsDataWindowDays > 0) {
+      state.lolalyticsDataWindowDays = lolalyticsDataWindowDays;
+    }
     state.canShutdown = Boolean(config.canShutdown);
     state.shutdownToken = typeof config.shutdownToken === "string" ? config.shutdownToken : "";
     updateLolalyticsRequestStats(config?.requestStats);
@@ -182,6 +188,7 @@ async function loadAppConfig() {
   }
 
   renderVersion();
+  renderLolalyticsDataWindow();
 }
 
 function wirePicker(side) {
@@ -330,6 +337,7 @@ function renderAll() {
   renderPicker("enemies");
   renderAllyRoleAssignments();
   renderResultsRequestStat();
+  renderLolalyticsDataWindow();
   renderResults();
   renderActionState();
   renderAutoImportBanner();
@@ -1838,6 +1846,17 @@ function formatLolalyticsAccessStat(accessCount) {
   return `Total Lolalytics live hits since server start: ${Math.max(0, accessCount)}.`;
 }
 
+function formatLolalyticsDataWindow(days) {
+  const normalizedDays = Math.max(1, Math.round(Number(days) || 7));
+  return `last ${normalizedDays} ${normalizedDays === 1 ? "day" : "days"}`;
+}
+
+function renderLolalyticsDataWindow() {
+  lolalyticsDataWindow.textContent = formatLolalyticsDataWindow(
+    state.lolalyticsDataWindowDays,
+  );
+}
+
 function renderResultsRequestStat() {
   resultsRequestStat.textContent = formatDisplayMessage(
     formatLolalyticsAccessStat(state.lolalyticsLifetimeAccessCount),
@@ -1893,7 +1912,7 @@ function getOverlapBadgeMarkup(topOptionTone) {
   }
 
   const tooltip = "Top 3 in both Projected Agency and Projected Win Rate.";
-  return `<span class="top-option-badge" title="${tooltip}" aria-label="${tooltip}">★</span>`;
+  return `<span class="top-option-banner" title="${tooltip}" aria-label="${tooltip}">Top in both</span>`;
 }
 
 function formatRate(value) {
@@ -1910,7 +1929,7 @@ function isLowWinRate(value) {
 
 function formatVersion(version) {
   const normalizedVersion = version.startsWith("v") ? version.slice(1) : version;
-  return `v${normalizedVersion.replace(/\.0$/, "")}`;
+  return `v${normalizedVersion}`;
 }
 
 function formatDisplayMessage(message) {

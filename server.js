@@ -5,7 +5,7 @@ const path = require("path");
 const { version: appVersion } = require("./package.json");
 const {
   buildEligibleTierStats,
-  extractTierListRows,
+  extractTierRowsFromMegaPayload,
 } = require("./lib/lolalytics-tier-list.js");
 const {
   normalizeBuildSuggestionRequest,
@@ -20,11 +20,8 @@ const {
   buildBuildSuggestionResults,
 } = require("./lib/build-suggestion-results.js");
 const {
-  parseLolalyticsMatchupBuildData,
+  parseLolalyticsRuneBuildData,
 } = require("./lib/lolalytics-build-parser.js");
-const {
-  resolveQwikPayload: resolveRawQwikPayload,
-} = require("./lib/qwik-payload.js");
 const {
   fetchLiveDraftImport,
 } = require("./lib/riot-live-draft.js");
@@ -72,14 +69,11 @@ const { buildBuildSuggestionCacheKey } = require(path.join(
 
 const PORT = process.env.PORT || 3000;
 const PATCH_WINDOW = "7";
+const LOLALYTICS_DATA_WINDOW_DAYS = Number.parseInt(PATCH_WINDOW, 10);
 const QUEUE = "ranked";
 const REGION = "all";
 const MIN_ROLE_TIER_LIST_PICK_RATE = 0.5;
 const MIN_ROLE_TIER_LIST_LANE_PERCENT = 10;
-const LOLALYTICS_BASE_URL = normalizeBaseUrl(
-  process.env.LOLALYTICS_BASE_URL,
-  "https://lolalytics.com",
-);
 const LOLALYTICS_MEGA_URL = normalizeBaseUrl(
   process.env.LOLALYTICS_MEGA_URL,
   "https://a1.lolalytics.com/mega/",
@@ -96,9 +90,7 @@ const allyRoleLikelihoodsCache = new Map();
 const normalizedMatchupBuildCache = new Map();
 const buildSuggestionQueryCache = new Map();
 const draftProjectionQueryCache = new Map();
-const resolvedQwikPayloadCache = new WeakMap();
 const extractedRoleValuesCache = new WeakMap();
-const lolalyticsBuildDataCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
 let lolalyticsLifetimeAccessCount = 0;
 const shutdownToken = crypto.randomBytes(24).toString("hex");
@@ -130,6 +122,7 @@ app.get("/app-config", (_request, response) => {
   response.set("Cache-Control", "no-store");
   response.json({
     version: appVersion,
+    lolalyticsDataWindowDays: LOLALYTICS_DATA_WINDOW_DAYS,
     canShutdown: true,
     shutdownToken,
     requestStats: buildLolalyticsRequestStats(),
@@ -415,7 +408,7 @@ app.post("/build-suggestions", async (request, response) =>
       if (!hasUsableBuildSuggestions(payload)) {
         return response.status(502).json({
           error:
-            "Lolalytics returned matchup data, but it did not include usable build recommendations.",
+            "Lolalytics returned build data, but it did not include usable build recommendations.",
           request: payload.request,
           summary: payload.summary,
         });
@@ -715,8 +708,8 @@ async function fetchRoleSynergyRowResults(champion, allyRole, targetRoles, rankF
 }
 
 async function fetchRoleCounterRowsByTargetRole(champion, targetRoles, rankFilter) {
-  const payload = await fetchLolalyticsBuildData(champion.id, rankFilter);
-  return extractRequestedRoleValues(payload?.enemy, targetRoles, 2);
+  const payload = await fetchLolalyticsCounterData(champion.id, rankFilter);
+  return extractCounterRoleValues(payload, targetRoles);
 }
 
 async function fetchRoleSynergyRowsByTargetRoleForLane(
@@ -758,10 +751,41 @@ function extractRequestedRoleValues(rowsByTargetRole, targetRoles, valueIndex) {
   return extractedRowsByTargetRole;
 }
 
+function extractCounterRoleValues(payload, targetRoles) {
+  const extractedRowsByTargetRole = new Map();
+
+  for (const targetRole of targetRoles) {
+    extractedRowsByTargetRole.set(targetRole, new Map());
+  }
+
+  if (!Array.isArray(payload?.counters)) {
+    return extractedRowsByTargetRole;
+  }
+
+  for (const row of payload.counters) {
+    const targetRole = normalizeRole(row?.defaultLane);
+    const targetRoleRows = extractedRowsByTargetRole.get(targetRole);
+    const candidateKey = String(row?.cid ?? "");
+
+    if (!targetRoleRows || !championByKey.has(candidateKey)) {
+      continue;
+    }
+
+    const counterValue = parseFiniteNumber(row.d1);
+    const candidateWinRate = parseFiniteNumber(row.vsWr);
+    targetRoleRows.set(candidateKey, {
+      value: counterValue == null ? null : -counterValue,
+      winRate: candidateWinRate == null ? null : 100 - candidateWinRate,
+    });
+  }
+
+  return extractedRowsByTargetRole;
+}
+
 async function fetchEligibleTierStats(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
-  const tierListUrl = buildTierListUrl(targetRole, rankFilter);
-  const cachedEligibleRoleTierStats = getCachedData(eligibleTierStatsCache, tierListUrl);
+  const tierListDataUrl = buildTierListDataUrl(targetRole, rankFilter);
+  const cachedEligibleRoleTierStats = getCachedData(eligibleTierStatsCache, tierListDataUrl);
   if (cachedEligibleRoleTierStats) {
     return cachedEligibleRoleTierStats;
   }
@@ -772,6 +796,7 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     championBySlug,
     championByName,
     {
+      championByKey,
       minLanePercent: MIN_ROLE_TIER_LIST_LANE_PERCENT,
       minPickRate: MIN_ROLE_TIER_LIST_PICK_RATE,
     },
@@ -781,25 +806,25 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier list returned no eligible picks.`);
   }
 
-  setCachedData(eligibleTierStatsCache, tierListUrl, eligibleRoleTierStats);
+  setCachedData(eligibleTierStatsCache, tierListDataUrl, eligibleRoleTierStats);
   return eligibleRoleTierStats;
 }
 
 async function fetchTierListRows(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
-  const tierListUrl = buildTierListUrl(targetRole, rankFilter);
-  const cachedRows = getCachedData(tierListRowsCache, tierListUrl);
+  const tierListDataUrl = buildTierListDataUrl(targetRole, rankFilter);
+  const cachedRows = getCachedData(tierListRowsCache, tierListDataUrl);
   if (cachedRows) {
     return cachedRows;
   }
 
-  const html = await fetchLolalyticsText(tierListUrl, `${roleLabel} tier list`);
-  const rows = extractTierListRows(html);
+  const payload = await fetchLolalyticsJson(tierListDataUrl, `${roleLabel} tier data`);
+  const rows = extractTierRowsFromMegaPayload(payload, targetRole);
   if (rows.length === 0) {
-    throw createHttpError(502, `Lolalytics ${roleLabel} tier list was missing champion rows.`);
+    throw createHttpError(502, `Lolalytics ${roleLabel} tier data was missing champion rows.`);
   }
 
-  setCachedData(tierListRowsCache, tierListUrl, rows);
+  setCachedData(tierListRowsCache, tierListDataUrl, rows);
   return rows;
 }
 
@@ -821,6 +846,7 @@ async function fetchAllyRoleLikelihoods(rankFilter) {
   for (const entry of rowsByRole) {
     for (const row of entry.rows) {
       const champion =
+        championByKey.get(String(row.championKey || "")) ||
         championBySlug.get(row.slug) ||
         championByName.get(normalizeChampionName(row.name));
       if (!champion) {
@@ -841,32 +867,24 @@ async function fetchAllyRoleLikelihoods(rankFilter) {
   return championRoleLikelihoods;
 }
 
-async function fetchLolalyticsBuildData(slug, rankFilter) {
+async function fetchLolalyticsCounterData(slug, rankFilter) {
   const searchParams = buildLolalyticsSearchParams(
     {
+      ep: "counter",
+      v: "1",
       patch: PATCH_WINDOW,
+      c: slug,
+      queue: QUEUE,
+      region: REGION,
     },
     rankFilter,
     { includeDefaultTier: true },
   );
-  const payload = await fetchLolalyticsJson(
-    `${LOLALYTICS_BASE_URL}/lol/${slug}/build/q-data.json?${searchParams.toString()}`,
-    `${slug} build q-data`,
+
+  return fetchLolalyticsMegaJson(
+    `?${searchParams.toString()}`,
+    `${slug} counter data`,
   );
-  const cachedBuildData = lolalyticsBuildDataCache.get(payload);
-  if (cachedBuildData) {
-    return cachedBuildData;
-  }
-
-  const root = resolveQwikPayload(payload);
-  const buildData = findLoader(root.loaders, isChampionBuildLoader);
-
-  if (!buildData) {
-    throw createHttpError(502, `Lolalytics build data for ${slug} was missing matchup rows.`);
-  }
-
-  lolalyticsBuildDataCache.set(payload, buildData);
-  return buildData;
 }
 
 async function fetchNormalizedMatchupBuildData({
@@ -886,18 +904,17 @@ async function fetchNormalizedMatchupBuildData({
     return cached;
   }
 
-  const payload = await fetchLolalyticsMatchupBuildPayload(
-    allyChampion.id,
-    enemyChampion.id,
-    role,
+  const payload = await fetchLolalyticsRuneBuildData({
+    allySlug: allyChampion.id,
+    enemySlug: enemyChampion.id,
+    label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rune build data`,
     rankFilter,
-  );
-  const {
-    buildLoader,
-    metadataLoader,
-  } = extractLolalyticsMatchupBuildLoaders(payload, allyChampion.name, enemyChampion.name);
-  const parsedBuildData = parseLolalyticsMatchupBuildData(buildLoader, metadataLoader, {
-    fetchedAt: new Date().toISOString(),
+    role,
+  });
+  const parsedBuildData = parseLolalyticsRuneBuildPayload(payload, {
+    allyChampion,
+    enemyChampion,
+    role,
   });
 
   setCachedData(normalizedMatchupBuildCache, cacheKey, parsedBuildData);
@@ -909,87 +926,69 @@ async function fetchNormalizedChampionBuildData({
   rankFilter,
   role,
 }) {
-  const payload = await fetchLolalyticsChampionBuildPayload(
-    allyChampion.id,
-    role,
+  const payload = await fetchLolalyticsRuneBuildData({
+    allySlug: allyChampion.id,
+    label: `${allyChampion.name} ${role} rune build data`,
     rankFilter,
-  );
-  const {
-    buildLoader,
-    metadataLoader,
-  } = extractLolalyticsChampionBuildLoaders(payload, allyChampion.name);
-
-  return parseLolalyticsMatchupBuildData(buildLoader, metadataLoader, {
-    fetchedAt: new Date().toISOString(),
+    role,
+  });
+  return parseLolalyticsRuneBuildPayload(payload, {
+    allyChampion,
+    role,
   });
 }
 
-async function fetchLolalyticsChampionBuildPayload(allySlug, role, rankFilter) {
+async function fetchLolalyticsRuneBuildData({
+  allySlug,
+  enemySlug = null,
+  label,
+  rankFilter,
+  role,
+}) {
   const searchParams = buildLolalyticsSearchParams(
     {
-      lane: role,
+      ep: "rune",
+      v: "1",
       patch: PATCH_WINDOW,
+      c: allySlug,
+      lane: role,
+      queue: QUEUE,
+      region: REGION,
     },
     rankFilter,
     { includeDefaultTier: true },
   );
 
-  return fetchLolalyticsJson(
-    `${LOLALYTICS_BASE_URL}/lol/${allySlug}/build/q-data.json?${searchParams.toString()}`,
-    `${allySlug} ${role || "all"} build q-data`,
-  );
-}
-
-async function fetchLolalyticsMatchupBuildPayload(allySlug, enemySlug, role, rankFilter) {
-  const searchParams = buildLolalyticsSearchParams(
-    {
-      lane: role,
-      patch: PATCH_WINDOW,
-    },
-    rankFilter,
-    { includeDefaultTier: true },
-  );
-
-  return fetchLolalyticsJson(
-    `${LOLALYTICS_BASE_URL}/lol/${allySlug}/vs/${enemySlug}/build/q-data.json?${searchParams.toString()}`,
-    `${allySlug} vs ${enemySlug} ${role} build q-data`,
-  );
-}
-
-function extractLolalyticsChampionBuildLoaders(payload, allyName) {
-  const root = resolveQwikPayload(payload);
-  const buildLoader = findLoader(root.loaders, isMatchupBuildLoader);
-  const metadataLoader = findLoader(root.loaders, isMatchupMetadataLoader);
-
-  if (!buildLoader || !metadataLoader) {
-    throw createHttpError(
-      502,
-      `Lolalytics build data for ${allyName} was missing rune or item metadata.`,
-    );
+  if (enemySlug) {
+    searchParams.set("vs", enemySlug);
   }
 
-  return {
-    buildLoader,
-    metadataLoader,
-  };
+  return fetchLolalyticsMegaJson(`?${searchParams.toString()}`, label);
 }
 
-function extractLolalyticsMatchupBuildLoaders(payload, allyName, enemyName) {
-  const root = resolveQwikPayload(payload);
-  const buildLoader = findLoader(root.loaders, isMatchupBuildLoader);
-  const metadataLoader = findLoader(root.loaders, isMatchupMetadataLoader);
-
-  if (!buildLoader || !metadataLoader) {
+function parseLolalyticsRuneBuildPayload(payload, {
+  allyChampion,
+  enemyChampion = null,
+  role,
+}) {
+  try {
+    return parseLolalyticsRuneBuildData(payload, {
+      allyChampionKey: allyChampion.key,
+      enemyChampionKey: enemyChampion?.key,
+      fetchedAt: new Date().toISOString(),
+      role,
+    });
+  } catch (error) {
+    const matchupLabel = enemyChampion
+      ? `${allyChampion.name} vs ${enemyChampion.name}`
+      : allyChampion.name;
     throw createHttpError(
       502,
-      `Lolalytics matchup build data for ${allyName} vs ${enemyName} was missing rune or item metadata.`,
+      `${matchupLabel} rune build data could not be parsed: ${
+        error.message || "Unexpected Lolalytics rune payload."
+      }`,
     );
   }
-
-  return {
-    buildLoader,
-    metadataLoader,
-  };
 }
 
 async function fetchLolalyticsMegaJson(query, label) {
@@ -1000,20 +999,20 @@ async function fetchLolalyticsJson(url, label) {
   return fetchLolalyticsResource(url, label, "json");
 }
 
-async function fetchLolalyticsText(url, label) {
-  return fetchLolalyticsResource(url, label, "text");
-}
-
-function buildTierListUrl(targetRole, rankFilter) {
+function buildTierListDataUrl(targetRole, rankFilter) {
   const searchParams = buildLolalyticsSearchParams(
     {
+      ep: "tier",
+      v: "1",
       lane: targetRole,
       patch: PATCH_WINDOW,
-      view: "grid",
+      queue: QUEUE,
+      region: REGION,
     },
     rankFilter,
+    { includeDefaultTier: true },
   );
-  return `${LOLALYTICS_BASE_URL}/lol/tierlist/?${searchParams.toString()}`;
+  return `${LOLALYTICS_MEGA_URL}?${searchParams.toString()}`;
 }
 
 function buildLolalyticsSearchParams(params, rankFilter, options = {}) {
@@ -1169,56 +1168,6 @@ function normalizeBaseUrl(value, fallback, { requireTrailingSlash = false } = {}
   return trimmedValue;
 }
 
-function resolveQwikPayload(payload) {
-  if (!payload || !Array.isArray(payload._objs)) {
-    throw createHttpError(502, "Lolalytics returned an unexpected q-data payload.");
-  }
-
-  const cachedResolvedPayload = resolvedQwikPayloadCache.get(payload);
-  if (cachedResolvedPayload) {
-    return cachedResolvedPayload;
-  }
-
-  const resolvedPayload = resolveRawQwikPayload(payload);
-  resolvedQwikPayloadCache.set(payload, resolvedPayload);
-  return resolvedPayload;
-}
-
-function findLoader(loaders, predicate) {
-  for (const value of Object.values(loaders || {})) {
-    if (predicate(value)) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function isChampionBuildLoader(value) {
-  return Boolean(value && typeof value === "object" && value.enemy && value.header);
-}
-
-function isMatchupBuildLoader(value) {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      value.header &&
-      value.summary &&
-      value.runes &&
-      value.boots,
-  );
-}
-
-function isMatchupMetadataLoader(value) {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      value.champions &&
-      value.items &&
-      value.runes,
-  );
-}
-
 function extractRoleValues(rows, valueIndex) {
   if (!Array.isArray(rows)) {
     return new Map();
@@ -1256,6 +1205,15 @@ function extractRoleValues(rows, valueIndex) {
 
   setCachedExtractedRoleValues(rows, valueIndex, roleValues);
   return roleValues;
+}
+
+function parseFiniteNumber(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function getCachedExtractedRoleValues(rows, valueIndex) {

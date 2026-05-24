@@ -4,10 +4,12 @@ PickBan Prototype is a local Node/Express web app for live draft assistance work
 
 - draft pick recommendations for every unassigned allied role
 - full-draft win-rate projection once all five allied roles are assigned
-- matchup-specific build recommendations for an assigned ally role, including runes, item paths, and boots
+- build rune recommendations for an assigned ally role
 - opt-in League Client pick/ban import on Windows for Normal Draft and Ranked queues
 
 It runs as one local process, serves plain browser JavaScript from `public/`, and has no build step, database, auth, or hosted deployment flow.
+
+The app header credits Lolalytics and shows the current last-7-days data window plus lifetime live-hit count. The Riot Games non-endorsement/trademark notice is kept as an unframed footnote at the bottom of the app.
 
 ## Quick Start
 
@@ -42,7 +44,6 @@ npm run bench:efficiency
 Supported runtime overrides:
 
 - `PORT`: override the local listen port
-- `LOLALYTICS_BASE_URL`: override the main Lolalytics origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
 - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import
 
@@ -55,7 +56,7 @@ There is no build, lint, or bundling command in this repo.
 3. Optionally assign known ally roles. The app will fetch every remaining role.
 4. Use `Fetch Suggestions` for role recommendations.
 5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
-6. Use `Build` on an ally row after that ally has a role. With enemies selected it opens matchup build suggestions; without enemies it opens generic champion build recommendations in the same popup.
+6. Use `Build` on an ally row after that ally has a role. With enemies selected it opens enemy-aware build suggestions; without enemies it opens generic champion build recommendations in the same popup.
 7. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
 
 Change feedback loops:
@@ -85,10 +86,10 @@ High-value files when you are new to the codebase:
 - `lib/requested-target-roles.js`: resolves explicit roles or infers unassigned roles from ally assignments
 - `lib/server-route-helpers.js`: shared request normalization and response shaping for the Express routes
 - `lib/draft-projection.js`: aggregates full-team ally synergy and enemy counter rows into one projected matchup summary
-- `lib/lolalytics-tier-list.js`: parses tier-list HTML into role eligibility data
+- `lib/lolalytics-tier-list.js`: normalizes Lolalytics tier data into role eligibility data
 - `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
-- `lib/lolalytics-build-parser.js`: normalizes Lolalytics matchup `q-data.json` payloads into rune, item, and boots data
-- `lib/build-suggestion-results.js`: aggregates matchup build data across enemies into one summary payload
+- `lib/lolalytics-build-parser.js`: normalizes Lolalytics build payloads into the build modal shape
+- `lib/build-suggestion-results.js`: aggregates build data across enemies into one summary payload
 - `lib/riot-live-draft.js`: reads the local League Client lockfile and normalizes visible champ-select picks
 - `public/result-ranking.js`: shared ranking and top-N helpers
 - `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
@@ -109,9 +110,9 @@ The three main request flows are:
 1. `public/app.js` collects `rankFilter`, `allies`, and `enemies`.
 2. `POST /suggest` uses `lib/server-route-helpers.js` to normalize the request and resolve target roles.
 3. For each requested role, the server fetches:
-   - role tier-list HTML
+   - role tier data from the Lolalytics mega endpoint
    - ally synergy data
-   - enemy counter data
+   - enemy counter data from the Lolalytics mega endpoint
 4. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
 5. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
 
@@ -129,10 +130,10 @@ The three main request flows are:
 ### Build Recommendations
 
 1. The UI enables `Build` when an ally role is assigned.
-2. If enemies are selected, `POST /build-suggestions` fetches one Lolalytics matchup build payload per enemy.
-3. If no enemies are selected, the same route fetches the generic champion build payload for the assigned ally role.
+2. If enemies are selected, `POST /build-suggestions` fetches one Lolalytics mega rune payload per enemy.
+3. If no enemies are selected, the same route fetches the generic champion rune payload for the assigned ally role.
 4. `lib/lolalytics-build-parser.js` normalizes those payloads.
-5. `lib/build-suggestion-results.js` merges the data into one summary that includes runes, ordered item paths, and completed boots.
+5. `lib/build-suggestion-results.js` merges the data into one summary. Current live Lolalytics mega build data exposes rune pages and rune slot stats; item paths, summoner spells, and boots stay empty until a compatible source is available again.
 
 ### Auto Import
 
@@ -223,7 +224,7 @@ The current UI only enables that flow when:
 - the ally has an assigned role
 - the app is not already loading role suggestions or shutting down
 
-With enemies selected it opens matchup build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
+With enemies selected it opens enemy-aware build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
 
 ### Requests fail immediately before any live fetches
 
@@ -244,10 +245,11 @@ The button is only shown after `GET /app-config` succeeds and the browser receiv
 
 ## Current Limitations
 
-- live behavior depends on Lolalytics HTML and `q-data.json` staying structurally compatible
+- live role and draft behavior depends on Lolalytics mega tier, synergy, and counter payloads staying structurally compatible
+- build recommendations depend on Lolalytics mega rune payloads staying structurally compatible; current accessible build data is rune-only
 - auto import depends on Riot's local League Client API and the Windows League Client lockfile staying compatible
-- runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`
-- the supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
+- runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`; the UI displays the current Lolalytics patch window as a last-7-days lookback
+- the supported runtime overrides are `PORT`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
 - there is no persistence, auth, or deployment story in this repository
 
 ## License

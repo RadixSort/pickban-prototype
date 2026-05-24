@@ -3,10 +3,9 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-  buildTierListHtml,
-  createGenericBuildQData,
-  createMatchupBuildQData,
-  createRoleBuildQData,
+  createCounterMegaData,
+  createRuneBuildMegaData,
+  createTierMegaData,
   jsonResponse,
   startMockLolalyticsServer,
   textResponse,
@@ -26,7 +25,6 @@ async function startServerWithMock(t, responder) {
     cwd: repoRoot,
     port,
     env: {
-      LOLALYTICS_BASE_URL: mockServer.baseUrl,
       LOLALYTICS_MEGA_URL: mockServer.megaUrl,
     },
   });
@@ -120,12 +118,11 @@ test("POST /suggest rejects a fully assigned allied draft before any upstream fe
 
 test("POST /suggest returns single-role results and legacy compatibility fields", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/tierlist/") {
-      return textResponse(
-        buildTierListHtml([
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "tier") {
+      return jsonResponse(
+        createTierMegaData("support", [
           {
-            slug: "nautilus",
-            name: "Nautilus",
+            championKey: "111",
             lanePercent: 82.1,
             winRate: 51.1,
             pickRate: 4.4,
@@ -134,7 +131,7 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       );
     }
 
-    if (url.pathname === "/mega/") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: {
           support: [[111, 53, 0, 60]],
@@ -142,11 +139,16 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       });
     }
 
-    if (url.pathname === "/lol/leona/build/q-data.json") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
       return jsonResponse(
-        createRoleBuildQData({
-          support: [[111, 47, 48]],
-        }),
+        createCounterMegaData([
+          {
+            championKey: "111",
+            role: "support",
+            candidateWinRate: 53,
+            candidateCounterScore: -48,
+          },
+        ]),
       );
     }
 
@@ -194,14 +196,20 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
     lolalyticsLiveAccessCount: 3,
     lolalyticsLifetimeAccessCount: 3,
   });
-  assert.equal(mockServer.countRequests("/lol/tierlist/"), 1);
-  assert.equal(mockServer.countRequests("/mega/"), 1);
-  assert.equal(mockServer.countRequests("/lol/leona/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 3);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=tier")),
+    1,
+  );
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=counter")),
+    1,
+  );
 });
 
 test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the cache", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname !== "/lol/tierlist/") {
+    if (url.pathname !== "/mega/" || url.searchParams.get("ep") !== "tier") {
       return textResponse("Not found.", 404);
     }
 
@@ -209,15 +217,13 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
     const rowsByLane = {
       top: [
         {
-          slug: "aatrox",
-          name: "Aatrox",
+          championKey: "266",
           lanePercent: 91.2,
           winRate: 50.8,
           pickRate: 8.4,
         },
         {
-          slug: "ahri",
-          name: "Ahri",
+          championKey: "103",
           lanePercent: 6.1,
           winRate: 47.3,
           pickRate: 0.3,
@@ -225,8 +231,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
       ],
       jungle: [
         {
-          slug: "ahri",
-          name: "Ahri",
+          championKey: "103",
           lanePercent: 9.6,
           winRate: 48.1,
           pickRate: 0.7,
@@ -234,8 +239,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
       ],
       middle: [
         {
-          slug: "ahri",
-          name: "Ahri",
+          championKey: "103",
           lanePercent: 83.4,
           winRate: 51.9,
           pickRate: 9.9,
@@ -243,8 +247,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
       ],
       bottom: [
         {
-          slug: "ahri",
-          name: "Ahri",
+          championKey: "103",
           lanePercent: 1.7,
           winRate: 45.5,
           pickRate: 0.1,
@@ -252,8 +255,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
       ],
       support: [
         {
-          slug: "ahri",
-          name: "Ahri",
+          championKey: "103",
           lanePercent: 4.2,
           winRate: 48.7,
           pickRate: 0.4,
@@ -261,7 +263,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
       ],
     };
 
-    return textResponse(buildTierListHtml(rowsByLane[lane] || []));
+    return jsonResponse(createTierMegaData(lane, rowsByLane[lane] || []));
   });
 
   const firstResponse = await getJson(baseUrl, "/ally-role-likelihoods?rankFilter=emerald_plus");
@@ -306,7 +308,7 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
     lolalyticsLiveAccessCount: 5,
     lolalyticsLifetimeAccessCount: 5,
   });
-  assert.equal(mockServer.countRequests("/lol/tierlist/"), 5);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
 
   const secondResponse = await getJson(baseUrl, "/ally-role-likelihoods?rankFilter=emerald_plus");
 
@@ -315,17 +317,16 @@ test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the
     lolalyticsLiveAccessCount: 0,
     lolalyticsLifetimeAccessCount: 5,
   });
-  assert.equal(mockServer.countRequests("/lol/tierlist/"), 5);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
 });
 
 test("POST /suggest preserves the lifetime Lolalytics hit count across later zero-hit requests", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/tierlist/") {
-      return textResponse(
-        buildTierListHtml([
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "tier") {
+      return jsonResponse(
+        createTierMegaData("support", [
           {
-            slug: "nautilus",
-            name: "Nautilus",
+            championKey: "111",
             lanePercent: 82.1,
             winRate: 51.1,
             pickRate: 4.4,
@@ -334,7 +335,7 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
       );
     }
 
-    if (url.pathname === "/mega/") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: {
           support: [[111, 53, 0, 60]],
@@ -342,11 +343,16 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
       });
     }
 
-    if (url.pathname === "/lol/leona/build/q-data.json") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
       return jsonResponse(
-        createRoleBuildQData({
-          support: [[111, 47, 48]],
-        }),
+        createCounterMegaData([
+          {
+            championKey: "111",
+            role: "support",
+            candidateWinRate: 53,
+            candidateCounterScore: -48,
+          },
+        ]),
       );
     }
 
@@ -378,12 +384,15 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
 
 test("POST /suggest preserves per-role failures while deduplicating shared upstream requests", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/tierlist/" && url.searchParams.get("lane") === "support") {
-      return textResponse(
-        buildTierListHtml([
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "tier" &&
+      url.searchParams.get("lane") === "support"
+    ) {
+      return jsonResponse(
+        createTierMegaData("support", [
           {
-            slug: "nautilus",
-            name: "Nautilus",
+            championKey: "111",
             lanePercent: 82.1,
             winRate: 51.1,
             pickRate: 4.4,
@@ -392,11 +401,15 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
       );
     }
 
-    if (url.pathname === "/lol/tierlist/" && url.searchParams.get("lane") === "bottom") {
-      return textResponse("");
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "tier" &&
+      url.searchParams.get("lane") === "bottom"
+    ) {
+      return jsonResponse(createTierMegaData("bottom", []));
     }
 
-    if (url.pathname === "/mega/") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: {
           support: [[111, 53, 0, 60]],
@@ -404,15 +417,28 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
       });
     }
 
-    if (url.pathname === "/lol/leona/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "counter" &&
+      url.searchParams.get("c") === "leona"
+    ) {
       return jsonResponse(
-        createRoleBuildQData({
-          support: [[111, 47, 48]],
-        }),
+        createCounterMegaData([
+          {
+            championKey: "111",
+            role: "support",
+            candidateWinRate: 53,
+            candidateCounterScore: -48,
+          },
+        ]),
       );
     }
 
-    if (url.pathname === "/lol/jinx/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "counter" &&
+      url.searchParams.get("c") === "jinx"
+    ) {
       return textResponse("Service unavailable.", 503);
     }
 
@@ -453,20 +479,25 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
   assert.equal(response.body.metaByRole.support.partialFailures.length, 1);
   assert.match(
     response.body.metaByRole.support.partialFailures[0],
-    /jinx build q-data .*status 503/i,
+    /jinx counter data .*status 503/i,
   );
   assert.equal(
     response.body.metaByRole.bottom.error,
-    "Lolalytics bot tier list was missing champion rows.",
+    "Lolalytics bot tier data was missing champion rows.",
   );
   assert.deepEqual(response.body.requestStats, {
     lolalyticsLiveAccessCount: 6,
     lolalyticsLifetimeAccessCount: 6,
   });
-  assert.equal(mockServer.countRequests("/lol/tierlist/"), 2);
-  assert.equal(mockServer.countRequests("/mega/"), 2);
-  assert.equal(mockServer.countRequests("/lol/leona/build/q-data.json"), 1);
-  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 6);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=tier")),
+    2,
+  );
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=counter")),
+    2,
+  );
 });
 
 test("POST /draft-outlook returns projected team win rates and caches identical drafts across enemy order", async (t) => {
@@ -502,30 +533,22 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
       bottom: [[21, 54, 0, 10]],
     },
   };
-  const enemyCounterRows = {
-    top: [[122, 46, 7]],
-    jungle: [[59, 46, 7]],
-    middle: [[103, 46, 7]],
-    bottom: [[21, 46, 7]],
-    support: [[89, 46, 7]],
-  };
+  const enemyCounterRows = [
+    { championKey: "122", role: "top", candidateWinRate: 54, candidateCounterScore: -7 },
+    { championKey: "59", role: "jungle", candidateWinRate: 54, candidateCounterScore: -7 },
+    { championKey: "103", role: "middle", candidateWinRate: 54, candidateCounterScore: -7 },
+    { championKey: "21", role: "bottom", candidateWinRate: 54, candidateCounterScore: -7 },
+    { championKey: "89", role: "support", candidateWinRate: 54, candidateCounterScore: -7 },
+  ];
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/mega/") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: allySynergyRowsByChampionSlug[url.searchParams.get("c")] || {},
       });
     }
 
-    if (url.pathname === "/lol/leona/build/q-data.json") {
-      return jsonResponse(createRoleBuildQData(enemyCounterRows));
-    }
-
-    if (url.pathname === "/lol/lux/build/q-data.json") {
-      return jsonResponse(createRoleBuildQData(enemyCounterRows));
-    }
-
-    if (url.pathname === "/lol/jinx/build/q-data.json") {
-      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
+      return jsonResponse(createCounterMegaData(enemyCounterRows));
     }
 
     return textResponse("Not found.", 404);
@@ -588,9 +611,15 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
     lolalyticsLiveAccessCount: 7,
     lolalyticsLifetimeAccessCount: 7,
   });
-  assert.equal(mockServer.countRequests("/mega/"), 5);
-  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
-  assert.equal(mockServer.countRequests("/lol/lux/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 7);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=build-team")),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=counter")),
+    2,
+  );
 
   const secondResponse = await postJson(baseUrl, "/draft-outlook", {
     rankFilter: "emerald_plus",
@@ -616,9 +645,7 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
     lolalyticsLiveAccessCount: 0,
     lolalyticsLifetimeAccessCount: 7,
   });
-  assert.equal(mockServer.countRequests("/mega/"), 5);
-  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
-  assert.equal(mockServer.countRequests("/lol/lux/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 7);
 });
 
 test("POST /draft-outlook rejects projections that have no usable win-rate inputs", async (t) => {
@@ -654,22 +681,22 @@ test("POST /draft-outlook rejects projections that have no usable win-rate input
       bottom: [[21, null, 0, 10]],
     },
   };
-  const enemyCounterRows = {
-    top: [[122, null, 7]],
-    jungle: [[59, null, 7]],
-    middle: [[103, null, 7]],
-    bottom: [[21, null, 7]],
-    support: [[89, null, 7]],
-  };
+  const enemyCounterRows = [
+    { championKey: "122", role: "top", candidateWinRate: null, candidateCounterScore: -7 },
+    { championKey: "59", role: "jungle", candidateWinRate: null, candidateCounterScore: -7 },
+    { championKey: "103", role: "middle", candidateWinRate: null, candidateCounterScore: -7 },
+    { championKey: "21", role: "bottom", candidateWinRate: null, candidateCounterScore: -7 },
+    { championKey: "89", role: "support", candidateWinRate: null, candidateCounterScore: -7 },
+  ];
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/mega/") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: allySynergyRowsByChampionSlug[url.searchParams.get("c")] || {},
       });
     }
 
-    if (url.pathname === "/lol/jinx/build/q-data.json") {
-      return jsonResponse(createRoleBuildQData(enemyCounterRows));
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
+      return jsonResponse(createCounterMegaData(enemyCounterRows));
     }
 
     return textResponse("Not found.", 404);
@@ -705,26 +732,30 @@ test("POST /draft-outlook rejects projections that have no usable win-rate input
     lolalyticsLiveAccessCount: 6,
     lolalyticsLifetimeAccessCount: 6,
   });
-  assert.equal(mockServer.countRequests("/mega/"), 5);
-  assert.equal(mockServer.countRequests("/lol/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 6);
 });
 
 test("POST /build-suggestions returns partial data and caches identical drafts across enemy order", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/ahri/vs/leona/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "rune" &&
+      url.searchParams.get("vs") === "leona"
+    ) {
       return jsonResponse(
-        createMatchupBuildQData({
-          allyChampionKey: "103",
-          enemyChampionKey: "89",
+        createRuneBuildMegaData({
           role: "middle",
-          enemyRole: "support",
           totalGames: 60,
-          winRate: 55,
+          pickWinRate: 55,
         }),
       );
     }
 
-    if (url.pathname === "/lol/ahri/vs/jinx/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "rune" &&
+      url.searchParams.get("vs") === "jinx"
+    ) {
       return textResponse("Service unavailable.", 503);
     }
 
@@ -755,30 +786,18 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
   assert.equal(firstResponse.body.summary.partialFailures.length, 1);
   assert.match(
     firstResponse.body.summary.partialFailures[0],
-    /Jinx: .*ahri vs jinx middle build q-data .*status 503/i,
+    /Jinx: .*Ahri vs Jinx middle rune build data .*status 503/i,
   );
   assert.equal(firstResponse.body.runes.overview.slotGroups.length > 0, true);
   assert.equal(
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
-  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 12]);
-  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
-  assert.deepEqual(firstResponse.body.boots.options.map((option) => ({
-    itemId: option.itemId,
-    isHighestWin: option.isHighestWin,
-    isMostPicked: option.isMostPicked,
-  })), [
-    {
-      itemId: 3006,
-      isHighestWin: true,
-      isMostPicked: true,
-    },
-  ]);
-  assert.deepEqual(
-    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
-    [3118, 3157, 3089, 3135, 4645],
-  );
+  assert.equal(firstResponse.body.spells.mostPickedSet, null);
+  assert.equal(firstResponse.body.spells.highestWinSet, null);
+  assert.equal(firstResponse.body.items.mostPickedBuild, null);
+  assert.equal(firstResponse.body.items.highestWinBuild, null);
+  assert.deepEqual(firstResponse.body.boots.options, []);
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
@@ -791,19 +810,21 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
 
   assert.equal(secondResponse.status, 200);
   assert.deepEqual(secondResponse.body, firstResponse.body);
-  assert.equal(mockServer.countRequests("/lol/ahri/vs/leona/build/q-data.json"), 1);
-  assert.equal(mockServer.countRequests("/lol/ahri/vs/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 2);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=rune")),
+    2,
+  );
 });
 
 test("POST /build-suggestions returns generic build data when no enemy is selected", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/ahri/build/q-data.json") {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
-        createGenericBuildQData({
-          allyChampionKey: "103",
+        createRuneBuildMegaData({
           role: "middle",
           totalGames: 75,
-          winRate: 54,
+          pickWinRate: 54,
         }),
       );
     }
@@ -842,13 +863,11 @@ test("POST /build-suggestions returns generic build data when no enemy is select
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
-  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 12]);
-  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
-  assert.deepEqual(
-    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
-    [3118, 3157, 3089, 3135, 4645],
-  );
-  assert.deepEqual(firstResponse.body.boots.options.map((option) => option.itemId), [3006]);
+  assert.equal(firstResponse.body.spells.mostPickedSet, null);
+  assert.equal(firstResponse.body.spells.highestWinSet, null);
+  assert.equal(firstResponse.body.items.mostPickedBuild, null);
+  assert.equal(firstResponse.body.items.highestWinBuild, null);
+  assert.deepEqual(firstResponse.body.boots.options, []);
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
@@ -861,23 +880,33 @@ test("POST /build-suggestions returns generic build data when no enemy is select
 
   assert.equal(secondResponse.status, 200);
   assert.deepEqual(secondResponse.body, firstResponse.body);
+  assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(
     mockServer.countRequests(
       (entry) =>
-        entry.pathname === "/lol/ahri/build/q-data.json" &&
+        entry.pathname === "/mega/" &&
+        entry.search.includes("ep=rune") &&
         /(?:^|&)lane=middle(?:&|$)/.test(entry.search.slice(1)),
     ),
     1,
   );
 });
 
-test("POST /build-suggestions returns a 502 summary when every matchup fetch fails", async (t) => {
+test("POST /build-suggestions returns a 502 summary when every rune build fetch fails", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/lol/ahri/vs/leona/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "rune" &&
+      url.searchParams.get("vs") === "leona"
+    ) {
       return textResponse("Service unavailable.", 503);
     }
 
-    if (url.pathname === "/lol/ahri/vs/jinx/build/q-data.json") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "rune" &&
+      url.searchParams.get("vs") === "jinx"
+    ) {
       return textResponse("Gateway timeout.", 504);
     }
 
@@ -904,12 +933,41 @@ test("POST /build-suggestions returns a 502 summary when every matchup fetch fai
   assert.equal(response.body.summary.partialFailures.length, 2);
   assert.match(
     response.body.summary.partialFailures[0],
-    /Leona: .*ahri vs leona middle build q-data .*status 503/i,
+    /Leona: .*Ahri vs Leona middle rune build data .*status 503/i,
   );
   assert.match(
     response.body.summary.partialFailures[1],
-    /Jinx: .*ahri vs jinx middle build q-data .*status 504/i,
+    /Jinx: .*Ahri vs Jinx middle rune build data .*status 504/i,
   );
-  assert.equal(mockServer.countRequests("/lol/ahri/vs/leona/build/q-data.json"), 1);
-  assert.equal(mockServer.countRequests("/lol/ahri/vs/jinx/build/q-data.json"), 1);
+  assert.equal(mockServer.countRequests("/mega/"), 2);
+});
+
+test("POST /build-suggestions isolates malformed rune payload failures", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
+      return jsonResponse({
+        header: {
+          n: 75,
+          lane: "middle",
+        },
+        summary: {},
+      });
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: [],
+  });
+
+  assert.equal(response.status, 502);
+  assert.match(response.body.error, /Ahri rune build data could not be parsed/i);
+  assert.match(response.body.error, /missing rune summary data/i);
+  assert.equal(mockServer.countRequests("/mega/"), 1);
 });
