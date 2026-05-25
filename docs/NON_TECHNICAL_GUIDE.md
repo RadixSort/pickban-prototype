@@ -98,7 +98,7 @@ Leave that terminal window open while you use the app.
 5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
 6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-8. If one ally already has a role, click **Build** on that ally row. With enemies selected it opens enemy-aware build suggestions; without enemies it opens generic champion build recommendations in the same popup.
+8. If one ally already has a role, click **Build** on that ally row. With enemies selected it combines matchup-specific build data for each selected enemy into one enemy-aware recommendation; without enemies it opens generic champion build recommendations in the same popup.
 9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
 10. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
 
@@ -175,7 +175,7 @@ Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer.
 
 That button only works after the ally has an assigned role.
 
-With enemies selected it opens enemy-aware build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
+With enemies selected it combines matchup-specific build data for those enemies. Without enemies it opens generic champion build recommendations in the same popup.
 
 ### I expected one role, but the app shows others
 

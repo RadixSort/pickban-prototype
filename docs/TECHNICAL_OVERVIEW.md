@@ -138,7 +138,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - parse rendered Lolalytics build pages for visible summoner spells, core items, and completed boots
 
 - `lib/build-suggestion-results.js`
-  - merge build data across enemies into one summary payload
+  - aggregate matchup-specific build records across selected enemies into one summary payload
 
 - `lib/draft-projection.js`
   - aggregate full-draft ally synergy and enemy counter matchups
@@ -262,7 +262,7 @@ Minimal request example:
 Flow:
 
 1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, an optional enemy list, and no ally/enemy overlap.
-2. If enemies are selected, the server fetches one Lolalytics mega rune payload and one rendered build page per enemy champion. Otherwise it fetches the generic champion rune payload and rendered build page for the assigned role.
+2. If enemies are selected, the server fetches one Lolalytics mega rune payload and one rendered matchup build page per enemy champion. Otherwise it fetches the generic champion rune payload and rendered build page for the assigned role.
 3. `parseLolalyticsRuneBuildData(...)` converts each payload into:
    - rune style totals
    - rune slot options
@@ -272,7 +272,7 @@ Flow:
    - core item slot options
    - completed boot options
 5. If the rendered page cannot be parsed or does not include all build sections, `parseUggBuildPage(...)` fills only the missing summoner spell, core item, and completed boot options from U.GG's embedded SSR build state.
-6. The server merges rune data with supplemental build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the records into one summary response.
+6. The server merges rune data with supplemental build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
 7. The response returns:
    - `request`
    - `summary`
@@ -282,6 +282,8 @@ Flow:
    - `boots`
 
 The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it includes each enemy in the mega rune request; when no enemies are selected it fetches generic champion rune data for the assigned role and renders it in the same modal.
+
+Enemy-aware build recommendations are composition-aware aggregates over matchup-specific build data. They do not use the Lolalytics `counter` endpoint that powers role suggestions and draft outlook. For each selected enemy, the route requests the ally-vs-enemy build/rune sources, keeps successful matchups, records failed enemy matchups in `summary.partialFailures`, and aggregates the successful matchup records into one modal payload.
 
 ## `GET /live-draft`
 
@@ -333,8 +335,10 @@ Important behavioral details:
 
 Build-suggestion aggregation:
 
-- highest-win rune pages default to a `1%` sample threshold
-- highest-win boots default to a `1%` sample threshold
+- games and wins are summed by rune style, rune slot, exact rune page, summoner spell set, item ID per item slot, and completed boot
+- most-picked selections use the highest aggregated game count
+- highest-win rune pages, summoner spell sets, item choices, and boots default to a `1%` sample threshold before ranking by win rate
+- ordered item paths are built slot-by-slot from non-boot items
 - only completed boots are kept
 
 ## Caching And Failure Handling
@@ -421,5 +425,6 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
 - `test/riot-live-draft.test.js` covers League Client payload normalization
 - `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads, rendered-page item/boot extraction, and U.GG fallback extraction
-- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL`, `LOLALYTICS_BASE_URL`, and `UGG_BASE_URL` so future build failures can be isolated to rune fetch, rendered page parsing, fallback parsing, or aggregation
+- `test/build-suggestion-results.test.js` covers cross-matchup build aggregation, highest-win thresholds, item-path construction, and boot ranking
+- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL`, `LOLALYTICS_BASE_URL`, and `UGG_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, fallback parsing, caching, or aggregation
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior
