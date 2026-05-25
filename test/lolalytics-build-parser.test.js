@@ -4,8 +4,12 @@ const assert = require("node:assert/strict");
 const {
   isCompletedBootItem,
   parseLolalyticsMatchupBuildData,
+  parseLolalyticsRenderedBuildPage,
   parseLolalyticsRuneBuildData,
 } = require("../lib/lolalytics-build-parser.js");
+const {
+  createRenderedBuildPageHtml,
+} = require("./helpers/lolalytics-mock-server.js");
 
 test("isCompletedBootItem filters unfinished and rune-granted boots", () => {
   assert.equal(isCompletedBootItem(3006, "Berserker's Greaves"), true);
@@ -336,6 +340,58 @@ test("parseLolalyticsRuneBuildData normalizes the current mega rune payload shap
   assert.deepEqual(parsed.spells.options, []);
   assert.deepEqual(parsed.items.slotOptions, [[], [], [], [], [], []]);
   assert.deepEqual(parsed.boots, []);
+});
+
+test("parseLolalyticsRenderedBuildPage restores current rendered page spells, items, and boots", () => {
+  const parsed = parseLolalyticsRenderedBuildPage(
+    createRenderedBuildPageHtml({
+      coreGames: 60,
+      coreWinRate: 57.61,
+      spellGames: 48,
+      spellWinRate: 53.63,
+    }),
+    {
+      allyChampionKey: "103",
+      enemyChampionKey: "89",
+      fetchedAt: "2026-05-24T14:15:00.000Z",
+      role: "middle",
+    },
+  );
+
+  assert.equal(parsed.allyChampionKey, "103");
+  assert.equal(parsed.enemyChampionKey, "89");
+  assert.equal(parsed.role, "middle");
+  assert.equal(parsed.totalGames, 60);
+  assert.deepEqual(parsed.spells.options[0].spellIds, [4, 14]);
+  assert.deepEqual(
+    parsed.spells.options[0].selections.map((selection) => selection.name),
+    ["Flash", "Ignite"],
+  );
+  assert.deepEqual(
+    parsed.items.slotOptions.map((slotOptions) => slotOptions.map((option) => option.name)),
+    [
+      ["Dusk and Dawn"],
+      [],
+      ["Nashor's Tooth"],
+      ["Rabadon's Deathcap", "Shadowflame"],
+      ["Shadowflame", "Void Staff"],
+      ["Void Staff"],
+    ],
+  );
+  assert.deepEqual(
+    parsed.boots.map((option) => ({
+      itemId: option.itemId,
+      name: option.name,
+    })),
+    [{ itemId: 3170, name: "Gluttonous Greaves" }],
+  );
+});
+
+test("parseLolalyticsRenderedBuildPage isolates missing rendered build rows", () => {
+  assert.throws(
+    () => parseLolalyticsRenderedBuildPage("<section><h2>Core Build</h2></section>"),
+    /did not include usable build rows/i,
+  );
 });
 
 test("parseLolalyticsRuneBuildData isolates missing rune summaries", () => {

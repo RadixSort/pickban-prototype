@@ -20,6 +20,7 @@ const {
   buildBuildSuggestionResults,
 } = require("./lib/build-suggestion-results.js");
 const {
+  parseLolalyticsRenderedBuildPage,
   parseLolalyticsRuneBuildData,
 } = require("./lib/lolalytics-build-parser.js");
 const {
@@ -74,6 +75,10 @@ const QUEUE = "ranked";
 const REGION = "all";
 const MIN_ROLE_TIER_LIST_PICK_RATE = 0.5;
 const MIN_ROLE_TIER_LIST_LANE_PERCENT = 10;
+const LOLALYTICS_BASE_URL = normalizeBaseUrl(
+  process.env.LOLALYTICS_BASE_URL,
+  "https://lolalytics.com",
+);
 const LOLALYTICS_MEGA_URL = normalizeBaseUrl(
   process.env.LOLALYTICS_MEGA_URL,
   "https://a1.lolalytics.com/mega/",
@@ -904,21 +909,45 @@ async function fetchNormalizedMatchupBuildData({
     return cached;
   }
 
-  const payload = await fetchLolalyticsRuneBuildData({
-    allySlug: allyChampion.id,
-    enemySlug: enemyChampion.id,
-    label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rune build data`,
-    rankFilter,
-    role,
-  });
-  const parsedBuildData = parseLolalyticsRuneBuildPayload(payload, {
+  const [runePayload, renderedPageResult] = await Promise.all([
+    fetchLolalyticsRuneBuildData({
+      allySlug: allyChampion.id,
+      enemySlug: enemyChampion.id,
+      label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rune build data`,
+      rankFilter,
+      role,
+    }),
+    fetchLolalyticsRenderedBuildPage({
+      allySlug: allyChampion.id,
+      enemySlug: enemyChampion.id,
+      label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rendered build page`,
+      rankFilter,
+      role,
+    }).then(
+      (html) => ({
+        status: "fulfilled",
+        value: html,
+      }),
+      (error) => ({
+        status: "rejected",
+        reason: error,
+      }),
+    ),
+  ]);
+  const parsedBuildData = parseLolalyticsRuneBuildPayload(runePayload, {
     allyChampion,
     enemyChampion,
     role,
   });
+  const renderedBuildData = parseOptionalRenderedBuildPage(renderedPageResult, {
+    allyChampion,
+    enemyChampion,
+    role,
+  });
+  const mergedBuildData = mergeParsedBuildSources(parsedBuildData, renderedBuildData);
 
-  setCachedData(normalizedMatchupBuildCache, cacheKey, parsedBuildData);
-  return parsedBuildData;
+  setCachedData(normalizedMatchupBuildCache, cacheKey, mergedBuildData);
+  return mergedBuildData;
 }
 
 async function fetchNormalizedChampionBuildData({
@@ -926,16 +955,39 @@ async function fetchNormalizedChampionBuildData({
   rankFilter,
   role,
 }) {
-  const payload = await fetchLolalyticsRuneBuildData({
-    allySlug: allyChampion.id,
-    label: `${allyChampion.name} ${role} rune build data`,
-    rankFilter,
-    role,
-  });
-  return parseLolalyticsRuneBuildPayload(payload, {
+  const [runePayload, renderedPageResult] = await Promise.all([
+    fetchLolalyticsRuneBuildData({
+      allySlug: allyChampion.id,
+      label: `${allyChampion.name} ${role} rune build data`,
+      rankFilter,
+      role,
+    }),
+    fetchLolalyticsRenderedBuildPage({
+      allySlug: allyChampion.id,
+      label: `${allyChampion.name} ${role} rendered build page`,
+      rankFilter,
+      role,
+    }).then(
+      (html) => ({
+        status: "fulfilled",
+        value: html,
+      }),
+      (error) => ({
+        status: "rejected",
+        reason: error,
+      }),
+    ),
+  ]);
+  const parsedBuildData = parseLolalyticsRuneBuildPayload(runePayload, {
     allyChampion,
     role,
   });
+  const renderedBuildData = parseOptionalRenderedBuildPage(renderedPageResult, {
+    allyChampion,
+    role,
+  });
+
+  return mergeParsedBuildSources(parsedBuildData, renderedBuildData);
 }
 
 async function fetchLolalyticsRuneBuildData({
@@ -964,6 +1016,79 @@ async function fetchLolalyticsRuneBuildData({
   }
 
   return fetchLolalyticsMegaJson(`?${searchParams.toString()}`, label);
+}
+
+async function fetchLolalyticsRenderedBuildPage({
+  allySlug,
+  enemySlug = null,
+  label,
+  rankFilter,
+  role,
+}) {
+  const searchParams = buildLolalyticsSearchParams(
+    {
+      lane: role,
+      patch: PATCH_WINDOW,
+    },
+    rankFilter,
+    { includeDefaultTier: true },
+  );
+  const path = enemySlug
+    ? `/lol/${allySlug}/vs/${enemySlug}/build/`
+    : `/lol/${allySlug}/build/`;
+
+  return fetchLolalyticsText(
+    `${LOLALYTICS_BASE_URL}${path}?${searchParams.toString()}`,
+    label,
+  );
+}
+
+function parseOptionalRenderedBuildPage(result, {
+  allyChampion,
+  enemyChampion = null,
+  role,
+}) {
+  if (result?.status !== "fulfilled") {
+    return null;
+  }
+
+  try {
+    return parseLolalyticsRenderedBuildPage(result.value, {
+      allyChampionKey: allyChampion.key,
+      enemyChampionKey: enemyChampion?.key,
+      fetchedAt: new Date().toISOString(),
+      role,
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
+  if (!renderedBuildData) {
+    return primaryBuildData;
+  }
+
+  return {
+    ...primaryBuildData,
+    spells: hasBuildList(renderedBuildData.spells?.options)
+      ? renderedBuildData.spells
+      : primaryBuildData.spells,
+    items: hasNestedBuildList(renderedBuildData.items?.slotOptions)
+      ? renderedBuildData.items
+      : primaryBuildData.items,
+    boots: hasBuildList(renderedBuildData.boots)
+      ? renderedBuildData.boots
+      : primaryBuildData.boots,
+  };
+}
+
+function hasBuildList(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasNestedBuildList(value) {
+  return Array.isArray(value) && value.some((entry) => Array.isArray(entry) && entry.length > 0);
 }
 
 function parseLolalyticsRuneBuildPayload(payload, {
@@ -997,6 +1122,10 @@ async function fetchLolalyticsMegaJson(query, label) {
 
 async function fetchLolalyticsJson(url, label) {
   return fetchLolalyticsResource(url, label, "json");
+}
+
+async function fetchLolalyticsText(url, label) {
+  return fetchLolalyticsResource(url, label, "text");
 }
 
 function buildTierListDataUrl(targetRole, rankFilter) {

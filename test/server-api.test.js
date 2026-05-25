@@ -4,6 +4,7 @@ const path = require("node:path");
 
 const {
   createCounterMegaData,
+  createRenderedBuildPageHtml,
   createRuneBuildMegaData,
   createTierMegaData,
   jsonResponse,
@@ -25,6 +26,7 @@ async function startServerWithMock(t, responder) {
     cwd: repoRoot,
     port,
     env: {
+      LOLALYTICS_BASE_URL: mockServer.baseUrl,
       LOLALYTICS_MEGA_URL: mockServer.megaUrl,
     },
   });
@@ -759,6 +761,13 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       return textResponse("Service unavailable.", 503);
     }
 
+    if (
+      url.pathname === "/lol/ahri/vs/leona/build/" ||
+      url.pathname === "/lol/ahri/vs/jinx/build/"
+    ) {
+      return textResponse(createRenderedBuildPageHtml());
+    }
+
     return textResponse("Not found.", 404);
   });
 
@@ -793,11 +802,20 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
-  assert.equal(firstResponse.body.spells.mostPickedSet, null);
-  assert.equal(firstResponse.body.spells.highestWinSet, null);
-  assert.equal(firstResponse.body.items.mostPickedBuild, null);
-  assert.equal(firstResponse.body.items.highestWinBuild, null);
-  assert.deepEqual(firstResponse.body.boots.options, []);
+  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 14]);
+  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
+  assert.deepEqual(
+    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
+    [2510, 3115, 3089, 4645, 3135],
+  );
+  assert.deepEqual(
+    firstResponse.body.items.highestWinBuild.selections.map((selection) => selection.itemId),
+    [2510, 3115, 3089, 4645, 3135],
+  );
+  assert.deepEqual(
+    firstResponse.body.boots.options.map((option) => option.itemId),
+    [3170],
+  );
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
@@ -815,6 +833,10 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=rune")),
     2,
   );
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
+    2,
+  );
 });
 
 test("POST /build-suggestions returns generic build data when no enemy is selected", async (t) => {
@@ -827,6 +849,10 @@ test("POST /build-suggestions returns generic build data when no enemy is select
           pickWinRate: 54,
         }),
       );
+    }
+
+    if (url.pathname === "/lol/ahri/build/") {
+      return textResponse(createRenderedBuildPageHtml());
     }
 
     return textResponse("Not found.", 404);
@@ -863,11 +889,20 @@ test("POST /build-suggestions returns generic build data when no enemy is select
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
   );
-  assert.equal(firstResponse.body.spells.mostPickedSet, null);
-  assert.equal(firstResponse.body.spells.highestWinSet, null);
-  assert.equal(firstResponse.body.items.mostPickedBuild, null);
-  assert.equal(firstResponse.body.items.highestWinBuild, null);
-  assert.deepEqual(firstResponse.body.boots.options, []);
+  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 14]);
+  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
+  assert.deepEqual(
+    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
+    [2510, 3115, 3089, 4645, 3135],
+  );
+  assert.deepEqual(
+    firstResponse.body.items.highestWinBuild.selections.map((selection) => selection.itemId),
+    [2510, 3115, 3089, 4645, 3135],
+  );
+  assert.deepEqual(
+    firstResponse.body.boots.options.map((option) => option.itemId),
+    [3170],
+  );
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
@@ -881,6 +916,7 @@ test("POST /build-suggestions returns generic build data when no enemy is select
   assert.equal(secondResponse.status, 200);
   assert.deepEqual(secondResponse.body, firstResponse.body);
   assert.equal(mockServer.countRequests("/mega/"), 1);
+  assert.equal(mockServer.countRequests("/lol/ahri/build/"), 1);
   assert.equal(
     mockServer.countRequests(
       (entry) =>

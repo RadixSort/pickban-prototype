@@ -215,7 +215,7 @@ function handleOutsideClick(event) {
     if (
       picker.input.contains(event.target) ||
       picker.suggestions.contains(event.target) ||
-      picker.selected.contains(event.target)
+      picker.selected?.contains(event.target)
     ) {
       continue;
     }
@@ -360,21 +360,23 @@ function renderPicker(side) {
         ? "Search ally champions"
         : "Search enemy champions";
 
-  picker.selected.innerHTML = "";
+  if (picker.selected) {
+    picker.selected.innerHTML = "";
 
-  for (const champion of selectedChampions) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "champion-chip";
-    chip.dataset.side = side;
-    chip.dataset.id = champion.id;
-    chip.innerHTML = `
-      <img src="${champion.icon}" alt="${champion.name}" width="28" height="28" />
-      <span>${champion.name}</span>
-      <span class="chip-close" aria-hidden="true">×</span>
-    `;
-    chip.addEventListener("click", () => removeChampion(side, champion.id));
-    picker.selected.appendChild(chip);
+    for (const champion of selectedChampions) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "champion-chip";
+      chip.dataset.side = side;
+      chip.dataset.id = champion.id;
+      chip.innerHTML = `
+        <img src="${champion.icon}" alt="${champion.name}" width="28" height="28" />
+        <span>${champion.name}</span>
+        <span class="chip-close" aria-hidden="true">×</span>
+      `;
+      chip.addEventListener("click", () => removeChampion(side, champion.id));
+      picker.selected.appendChild(chip);
+    }
   }
 
   renderSuggestions(side);
@@ -415,6 +417,15 @@ function renderAllyRoleAssignments() {
     controls.className = "role-row-controls";
     controls.title = buildAction.tooltipText;
 
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "role-remove-action";
+    removeButton.disabled = isInteractionLocked();
+    removeButton.title = `Remove ${ally.name}`;
+    removeButton.setAttribute("aria-label", `Remove ${ally.name}`);
+    removeButton.innerHTML = '<span aria-hidden="true">&times;</span>';
+    removeButton.addEventListener("click", () => removeChampion("allies", ally.id));
+
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "role-build-action";
@@ -428,6 +439,7 @@ function renderAllyRoleAssignments() {
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
     controls.appendChild(buildButton);
     controls.appendChild(select);
+    controls.appendChild(removeButton);
 
     row.appendChild(main);
     row.appendChild(controls);
@@ -1907,12 +1919,7 @@ function getMetricClassName(baseClasses = [], isHighlighted = false, tone = "") 
 }
 
 function getOverlapBadgeMarkup(topOptionTone) {
-  if (topOptionTone !== "overlap") {
-    return "";
-  }
-
-  const tooltip = "Top 3 in both Projected Agency and Projected Win Rate.";
-  return `<span class="top-option-banner" title="${tooltip}" aria-label="${tooltip}">Top in both</span>`;
+  return "";
 }
 
 function formatRate(value) {

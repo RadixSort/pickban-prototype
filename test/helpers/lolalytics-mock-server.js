@@ -245,6 +245,56 @@ function createRuneBuildMegaData({
   };
 }
 
+function createRenderedBuildPageHtml({
+  coreGames = 60,
+  coreWinRate = 57.61,
+  spellGames = 48,
+  spellWinRate = 53.63,
+  bootItemId = 3170,
+  bootName = "Gluttonous Greaves",
+} = {}) {
+  return `
+    <main>
+      <section>
+        <h2>Summoner Spells</h2>
+        <img src="https://cdn5.lolalytics.com/spell64/4.webp" alt="Flash" />
+        <img src="https://cdn5.lolalytics.com/spell64/14.webp" alt="Ignite" />
+        <p>${spellWinRate}% Win Rate ${spellGames.toLocaleString("en-US")} Games</p>
+        <h2>Skill Order</h2>
+      </section>
+      <section>
+        <h2>Core Build</h2>
+        <img src="https://cdn5.lolalytics.com/item64/2510.webp" alt="Dusk and Dawn" />
+        <img src="https://cdn5.lolalytics.com/item64/${bootItemId}.webp" alt="${bootName}" />
+        <div>${coreWinRate}%</div>
+        <div>${coreGames.toLocaleString("en-US")}</div>
+        <img src="https://cdn5.lolalytics.com/item64/3115.webp" alt="Nashor's Tooth" />
+        <h3>Item 4</h3>
+        <img src="https://cdn5.lolalytics.com/item64/3089.webp" alt="Rabadon's Deathcap" />
+        <div>61.3%</div>
+        <div>42</div>
+        <p>OR</p>
+        <img src="https://cdn5.lolalytics.com/item64/4645.webp" alt="Shadowflame" />
+        <div>59.63%</div>
+        <div>31</div>
+        <h3>Item 5</h3>
+        <img src="https://cdn5.lolalytics.com/item64/4645.webp" alt="Shadowflame" />
+        <div>65.04%</div>
+        <div>35</div>
+        <p>OR</p>
+        <img src="https://cdn5.lolalytics.com/item64/3135.webp" alt="Void Staff" />
+        <div>63.06%</div>
+        <div>29</div>
+        <h3>Item 6</h3>
+        <img src="https://cdn5.lolalytics.com/item64/3135.webp" alt="Void Staff" />
+        <div>64.27%</div>
+        <div>20</div>
+        <p>LEGEND:</p>
+      </section>
+    </main>
+  `;
+}
+
 function createGenericBuildQData({
   allyChampionKey = "103",
   role = "middle",
@@ -519,6 +569,7 @@ function waitForCloseTimeout(timeoutMs = 100) {
 module.exports = {
   buildTierListHtml,
   createCounterMegaData,
+  createRenderedBuildPageHtml,
   createRuneBuildMegaData,
   createGenericBuildQData,
   createMatchupBuildQData,

@@ -135,6 +135,7 @@ That means shared business rules often live in `public/`, not `lib/`.
 
 - `lib/lolalytics-build-parser.js`
   - normalize current Lolalytics mega rune payloads into build-modal rune data
+  - parse rendered Lolalytics build pages for visible summoner spells, core items, and completed boots
 
 - `lib/build-suggestion-results.js`
   - merge build data across enemies into one summary payload
@@ -261,17 +262,21 @@ Minimal request example:
 Flow:
 
 1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, an optional enemy list, and no ally/enemy overlap.
-2. If enemies are selected, the server fetches one Lolalytics mega rune payload per enemy champion. Otherwise it fetches the generic champion rune payload for the assigned role.
+2. If enemies are selected, the server fetches one Lolalytics mega rune payload and one rendered build page per enemy champion. Otherwise it fetches the generic champion rune payload and rendered build page for the assigned role.
 3. `parseLolalyticsRuneBuildData(...)` converts each payload into:
    - rune style totals
    - rune slot options
    - exact page candidates
-   - empty summoner spell, item, and boot sections when the current Lolalytics source does not expose them
-4. `buildBuildSuggestionResults(...)` merges those matchup records into one summary response.
-5. The response returns:
+4. `parseLolalyticsRenderedBuildPage(...)` converts the visible build page into:
+   - summoner spell set options
+   - core item slot options
+   - completed boot options
+5. The server merges rune data with rendered-page build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the records into one summary response.
+6. The response returns:
    - `request`
    - `summary`
    - `runes`
+   - `spells`
    - `items`
    - `boots`
 
@@ -320,7 +325,7 @@ Backend sort order:
 Important behavioral details:
 
 - low projected win-rate rows stay visible; the UI highlights them instead of filtering them out
-- rows that are top-ranked by both projected win rate and projected agency get a gold `Top in both` banner
+- rows that are top-ranked by projected win rate or projected agency are highlighted
 - ally-only drafts produce `counterScore = 0`
 - enemy-only drafts produce `synergyScore = 0`
 - assigned ally roles prefer role-specific synergy data and fall back to the `all` lane when needed
@@ -372,6 +377,7 @@ Failure behavior:
 - if every requested role fails, `/suggest` returns an HTTP error payload
 - if a draft projection has no usable win-rate samples, `/draft-outlook` returns an HTTP error payload
 - if every rune build fetch fails, `/build-suggestions` returns an HTTP error payload
+- rendered build-page fetch or parse failures leave the rune recommendation data intact
 - `/live-draft` expected failures return disabled payloads so the UI can show the auto-import banner without changing current selections
 
 ## External Assumptions
@@ -383,7 +389,7 @@ The most fragile dependencies are external:
 - the Windows League Client lockfile must be present and readable while the client is running
 - Lolalytics mega tier, synergy, and counter payloads must continue exposing the currently parsed fields
 - Lolalytics mega rune payloads must continue exposing `header`, `summary.runes`, `summary.pick`, and `summary.win`
-- the relevant sections must remain under the current payload areas used by the parsers
+- Lolalytics rendered build pages must continue exposing recognizable `Summoner Spells` and `Core Build` sections with item/spell image metadata and nearby win-rate/game-count text
 
 If the app suddenly stops returning data without a local code change, these assumptions are the first place to investigate.
 
@@ -392,6 +398,7 @@ If the app suddenly stops returning data without a local code change, these assu
 - default port: `3000`
 - supported runtime env vars:
   - `PORT`
+  - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - static assets and API routes are served by the same process
@@ -411,4 +418,6 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-startup.test.js` is a startup/shutdown smoke test for `server.js`
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
 - `test/riot-live-draft.test.js` covers League Client payload normalization
+- `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads and rendered-page item/boot extraction
+- `test/server-api.test.js` mocks both `LOLALYTICS_MEGA_URL` and `LOLALYTICS_BASE_URL` so future build failures can be isolated to rune fetch, rendered page parsing, or aggregation
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior

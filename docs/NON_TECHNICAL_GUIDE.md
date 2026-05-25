@@ -11,7 +11,7 @@ The app helps you compare champion options for any role that is still open in yo
 It also has:
 
 - a full-draft win-rate projection once all five allied roles are assigned
-- a build view for one ally with current Lolalytics rune recommendations
+- a build view for one ally with current Lolalytics runes, summoner spells, items, and boots
 - an optional Windows auto import for League pick/ban in Normal Draft and Ranked games
 
 You choose:
@@ -117,7 +117,7 @@ If it cannot find a supported live draft, loses the connection, or sees another 
 - `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
 - `Projected Agency`: the blended score you can switch to in the **Rank by** dropdown
 
-When a champion is among the top options for both ranking methods, the results table marks it with a gold **Top in both** banner.
+Rows that rank highly by projected win rate or projected agency are highlighted in the results table.
 
 ## Limits
 
