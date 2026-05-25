@@ -24,6 +24,9 @@ const {
   parseLolalyticsRuneBuildData,
 } = require("./lib/lolalytics-build-parser.js");
 const {
+  parseUggBuildPage,
+} = require("./lib/ugg-build-parser.js");
+const {
   fetchLiveDraftImport,
 } = require("./lib/riot-live-draft.js");
 const {
@@ -84,6 +87,7 @@ const LOLALYTICS_MEGA_URL = normalizeBaseUrl(
   "https://a1.lolalytics.com/mega/",
   { requireTrailingSlash: true },
 );
+const UGG_BASE_URL = normalizeBaseUrl(process.env.UGG_BASE_URL, "https://u.gg");
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
@@ -944,7 +948,16 @@ async function fetchNormalizedMatchupBuildData({
     enemyChampion,
     role,
   });
-  const mergedBuildData = mergeParsedBuildSources(parsedBuildData, renderedBuildData);
+  const fallbackBuildData = hasCompleteSupplementalBuildData(renderedBuildData)
+    ? null
+    : await fetchOptionalUggBuildData({
+        allyChampion,
+        enemyChampion,
+        rankFilter,
+        role,
+      });
+  const supplementalBuildData = mergeMissingBuildSections(renderedBuildData, fallbackBuildData);
+  const mergedBuildData = mergeParsedBuildSources(parsedBuildData, supplementalBuildData);
 
   setCachedData(normalizedMatchupBuildCache, cacheKey, mergedBuildData);
   return mergedBuildData;
@@ -986,8 +999,16 @@ async function fetchNormalizedChampionBuildData({
     allyChampion,
     role,
   });
+  const fallbackBuildData = hasCompleteSupplementalBuildData(renderedBuildData)
+    ? null
+    : await fetchOptionalUggBuildData({
+        allyChampion,
+        rankFilter,
+        role,
+      });
+  const supplementalBuildData = mergeMissingBuildSections(renderedBuildData, fallbackBuildData);
 
-  return mergeParsedBuildSources(parsedBuildData, renderedBuildData);
+  return mergeParsedBuildSources(parsedBuildData, supplementalBuildData);
 }
 
 async function fetchLolalyticsRuneBuildData({
@@ -1064,6 +1085,91 @@ function parseOptionalRenderedBuildPage(result, {
   }
 }
 
+async function fetchOptionalUggBuildData({
+  allyChampion,
+  enemyChampion = null,
+  rankFilter,
+  role,
+}) {
+  try {
+    const html = await fetchUggBuildPage({
+      allySlug: allyChampion.id,
+      label: `${allyChampion.name} ${role} fallback build page`,
+      rankFilter,
+      role,
+    });
+
+    return parseUggBuildPage(html, {
+      allyChampionKey: allyChampion.key,
+      enemyChampionKey: enemyChampion?.key,
+      fetchedAt: new Date().toISOString(),
+      rankFilter,
+      role,
+    });
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function fetchUggBuildPage({
+  allySlug,
+  label,
+  rankFilter,
+  role,
+}) {
+  const rolePath = getUggRolePath(role);
+  const rankQueryValue = getUggRankQueryValue(rankFilter);
+  const searchParams = new URLSearchParams();
+  if (rankQueryValue) {
+    searchParams.set("rank", rankQueryValue);
+  }
+  const query = searchParams.toString();
+
+  return fetchExternalText(
+    `${UGG_BASE_URL}/lol/champions/${allySlug}/build/${rolePath}${query ? `?${query}` : ""}`,
+    label,
+    "U.GG",
+    {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "en-US,en;q=0.9",
+      "user-agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+      "referer": "https://u.gg/",
+    },
+  );
+}
+
+function mergeMissingBuildSections(primaryBuildData, fallbackBuildData) {
+  if (!primaryBuildData) {
+    return fallbackBuildData;
+  }
+
+  if (!fallbackBuildData) {
+    return primaryBuildData;
+  }
+
+  return {
+    ...primaryBuildData,
+    spells: hasBuildList(primaryBuildData.spells?.options)
+      ? primaryBuildData.spells
+      : fallbackBuildData.spells,
+    items: hasNestedBuildList(primaryBuildData.items?.slotOptions)
+      ? primaryBuildData.items
+      : fallbackBuildData.items,
+    boots: hasBuildList(primaryBuildData.boots)
+      ? primaryBuildData.boots
+      : fallbackBuildData.boots,
+  };
+}
+
+function hasCompleteSupplementalBuildData(buildData) {
+  return Boolean(
+    hasBuildList(buildData?.spells?.options) &&
+      hasNestedBuildList(buildData?.items?.slotOptions) &&
+      hasBuildList(buildData?.boots),
+  );
+}
+
 function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
   if (!renderedBuildData) {
     return primaryBuildData;
@@ -1089,6 +1195,35 @@ function hasBuildList(value) {
 
 function hasNestedBuildList(value) {
   return Array.isArray(value) && value.some((entry) => Array.isArray(entry) && entry.length > 0);
+}
+
+function getUggRolePath(role) {
+  switch (role) {
+    case "middle":
+      return "mid";
+    case "bottom":
+      return "adc";
+    default:
+      return role || "mid";
+  }
+}
+
+function getUggRankQueryValue(rankFilter) {
+  switch (rankFilter) {
+    case "all":
+      return "overall";
+    case "gold_plus":
+      return "gold";
+    case "platinum_plus":
+      return "platinum_plus";
+    case "diamond_plus":
+      return "diamond_plus";
+    case "d2_plus":
+      return "diamond_2_plus";
+    case "emerald_plus":
+    default:
+      return null;
+  }
 }
 
 function parseLolalyticsRuneBuildPayload(payload, {
@@ -1126,6 +1261,68 @@ async function fetchLolalyticsJson(url, label) {
 
 async function fetchLolalyticsText(url, label) {
   return fetchLolalyticsResource(url, label, "text");
+}
+
+async function fetchExternalText(url, label, sourceName, headers = {}) {
+  const cached = requestCache.get(url);
+  if (cached) {
+    if (cached.data != null && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
+    if (cached.promise) {
+      return cached.promise;
+    }
+
+    requestCache.delete(url);
+  }
+
+  const requestPromise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers,
+      });
+
+      if (!res.ok) {
+        throw createHttpError(
+          502,
+          `${sourceName} request failed for ${label} with status ${res.status}.`,
+        );
+      }
+
+      const data = await res.text();
+      requestCache.set(url, {
+        data,
+        expiresAt: Date.now() + CACHE_TTL_MS,
+      });
+      return data;
+    } catch (error) {
+      requestCache.delete(url);
+
+      if (error.name === "AbortError") {
+        throw createHttpError(504, `Timed out while fetching ${label} from ${sourceName}.`);
+      }
+
+      if (error.statusCode) {
+        throw error;
+      }
+
+      throw createHttpError(502, `Failed to fetch ${label} from ${sourceName}.`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  requestCache.set(url, {
+    promise: requestPromise,
+    expiresAt: Date.now() + REQUEST_TIMEOUT_MS,
+  });
+
+  return requestPromise;
 }
 
 function buildTierListDataUrl(targetRole, rankFilter) {

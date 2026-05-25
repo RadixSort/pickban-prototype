@@ -295,6 +295,134 @@ function createRenderedBuildPageHtml({
   `;
 }
 
+function createUggBuildPageHtml({
+  roleKey = "world_emerald_plus_mid",
+  totalGames = 100,
+  coreGames = 60,
+  coreWinRate = 58.33,
+  spellGames = 48,
+  spellWinRate = 54.17,
+  bootItemId = 3008,
+  bootName = "Gluttonous Greaves",
+} = {}) {
+  const state = {
+    "https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/2510.json": {
+      data: {
+        2510: {
+          name: "Dusk and Dawn",
+          image: { group: "item" },
+          gold: { total: 3000 },
+        },
+      },
+    },
+    [`https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/${bootItemId}.json`]: {
+      data: {
+        [bootItemId]: {
+          name: bootName,
+          image: { group: "item" },
+          gold: { total: 1200 },
+        },
+      },
+    },
+    "https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/3115.json": {
+      data: {
+        3115: {
+          name: "Nashor's Tooth",
+          image: { group: "item" },
+          gold: { total: 2900 },
+        },
+      },
+    },
+    "https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/3089.json": {
+      data: {
+        3089: {
+          name: "Rabadon's Deathcap",
+          image: { group: "item" },
+          gold: { total: 3600 },
+        },
+      },
+    },
+    "https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/4645.json": {
+      data: {
+        4645: {
+          name: "Shadowflame",
+          image: { group: "item" },
+          gold: { total: 3200 },
+        },
+      },
+    },
+    "https://static.bigbrain.gg/assets/lol/riot_static/16.10.1/data/en_US/items/3135.json": {
+      data: {
+        3135: {
+          name: "Void Staff",
+          image: { group: "item" },
+          gold: { total: 3000 },
+        },
+      },
+    },
+    "rankings_emerald_plus_world::https://stats2.u.gg/lol/1.5/rankings/16_10/ranked_solo_5x5/103/1.5.0.json": {
+      data: {
+        [roleKey]: {
+          rank: 1,
+          role: "mid",
+          win_rate: 51,
+        },
+      },
+    },
+    "overview_emerald_plus_world_recommended::https://stats2.u.gg/lol/1.5/overview/16_10/ranked_solo_5x5/103/1.5.0.json": {
+      data: {
+        [roleKey]: {
+          matches: totalGames,
+          wins: Math.round(totalGames * 0.55),
+          win_rate: 55,
+          rec_summoner_spells: {
+            matches: spellGames,
+            wins: Math.round(spellGames * (spellWinRate / 100)),
+            win_rate: spellWinRate,
+            ids: [4, 14],
+          },
+          rec_core_items: {
+            matches: coreGames,
+            wins: Math.round(coreGames * (coreWinRate / 100)),
+            win_rate: coreWinRate,
+            ids: [2510, bootItemId, 3115],
+          },
+          item_options_1: [
+            { id: 3089, matches: 70, wins: 42, win_rate: 60 },
+            { id: 4645, matches: 31, wins: 18, win_rate: 58.06 },
+          ],
+          item_options_2: [
+            { id: 4645, matches: 35, wins: 22, win_rate: 62.86 },
+            { id: 3135, matches: 29, wins: 18, win_rate: 62.07 },
+          ],
+          item_options_3: [
+            { id: 3135, matches: 20, wins: 13, win_rate: 65 },
+          ],
+          t3_boots_options: [
+            {
+              id: bootItemId,
+              matches: coreGames,
+              wins: Math.round(coreGames * (coreWinRate / 100)),
+              win_rate: coreWinRate,
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  return `
+    <html>
+      <body>
+        <script id="reactn-preloaded-state">
+          window.__REACTN_PRELOADED_STATE__ = {"adblock":false,"language":"en_US"};
+          window.__SSR_DATA__ = ${JSON.stringify(state)};
+        </script>
+      </body>
+    </html>
+  `;
+}
+
 function createGenericBuildQData({
   allyChampionKey = "103",
   role = "middle",
@@ -570,6 +698,7 @@ module.exports = {
   buildTierListHtml,
   createCounterMegaData,
   createRenderedBuildPageHtml,
+  createUggBuildPageHtml,
   createRuneBuildMegaData,
   createGenericBuildQData,
   createMatchupBuildQData,

@@ -271,8 +271,9 @@ Flow:
    - summoner spell set options
    - core item slot options
    - completed boot options
-5. The server merges rune data with rendered-page build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the records into one summary response.
-6. The response returns:
+5. If the rendered page cannot be parsed or does not include all build sections, `parseUggBuildPage(...)` fills only the missing summoner spell, core item, and completed boot options from U.GG's embedded SSR build state.
+6. The server merges rune data with supplemental build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the records into one summary response.
+7. The response returns:
    - `request`
    - `summary`
    - `runes`
@@ -400,6 +401,7 @@ If the app suddenly stops returning data without a local code change, these assu
   - `PORT`
   - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
+  - `UGG_BASE_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
@@ -418,6 +420,6 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-startup.test.js` is a startup/shutdown smoke test for `server.js`
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
 - `test/riot-live-draft.test.js` covers League Client payload normalization
-- `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads and rendered-page item/boot extraction
-- `test/server-api.test.js` mocks both `LOLALYTICS_MEGA_URL` and `LOLALYTICS_BASE_URL` so future build failures can be isolated to rune fetch, rendered page parsing, or aggregation
+- `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads, rendered-page item/boot extraction, and U.GG fallback extraction
+- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL`, `LOLALYTICS_BASE_URL`, and `UGG_BASE_URL` so future build failures can be isolated to rune fetch, rendered page parsing, fallback parsing, or aggregation
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior

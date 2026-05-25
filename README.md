@@ -46,6 +46,7 @@ Supported runtime overrides:
 - `PORT`: override the local listen port
 - `LOLALYTICS_BASE_URL`: override the rendered Lolalytics page origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
+- `UGG_BASE_URL`: override the U.GG page origin used only as a fallback for missing build items, boots, and summoner spells
 - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import
 
 There is no build, lint, or bundling command in this repo.
@@ -133,8 +134,8 @@ The three main request flows are:
 1. The UI enables `Build` when an ally role is assigned.
 2. If enemies are selected, `POST /build-suggestions` fetches one Lolalytics mega rune payload and matching rendered build page per enemy.
 3. If no enemies are selected, the same route fetches generic champion rune and rendered-page build data for the assigned ally role.
-4. `lib/lolalytics-build-parser.js` normalizes rune payloads plus visible summoner spell, core item, and boot sections.
-5. `lib/build-suggestion-results.js` merges the parsed data into one summary.
+4. If the rendered Lolalytics page is blocked or missing build sections, the route fills only missing summoner spell, core item, and boot sections from U.GG's embedded build state.
+5. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, `lib/ugg-build-parser.js` normalizes the fallback build sections, and `lib/build-suggestion-results.js` merges the parsed data into one summary.
 
 ### Auto Import
 
@@ -247,10 +248,10 @@ The button is only shown after `GET /app-config` succeeds and the browser receiv
 ## Current Limitations
 
 - live role and draft behavior depends on Lolalytics mega tier, synergy, and counter payloads staying structurally compatible
-- build recommendations depend on Lolalytics mega rune payloads and rendered build-page sections staying structurally compatible
+- build recommendations depend on Lolalytics mega rune payloads, rendered build-page sections, and U.GG fallback build state staying structurally compatible
 - auto import depends on Riot's local League Client API and the Windows League Client lockfile staying compatible
 - runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`; the UI displays the current Lolalytics patch window as a last-7-days lookback
-- the supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
+- the supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, `UGG_BASE_URL`, and the League Client lockfile path vars listed above
 - there is no persistence, auth, or deployment story in this repository
 
 ## License

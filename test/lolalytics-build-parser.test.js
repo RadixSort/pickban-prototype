@@ -8,7 +8,11 @@ const {
   parseLolalyticsRuneBuildData,
 } = require("../lib/lolalytics-build-parser.js");
 const {
+  parseUggBuildPage,
+} = require("../lib/ugg-build-parser.js");
+const {
   createRenderedBuildPageHtml,
+  createUggBuildPageHtml,
 } = require("./helpers/lolalytics-mock-server.js");
 
 test("isCompletedBootItem filters unfinished and rune-granted boots", () => {
@@ -384,6 +388,52 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
       name: option.name,
     })),
     [{ itemId: 3170, name: "Gluttonous Greaves" }],
+  );
+});
+
+test("parseUggBuildPage restores fallback spells, items, and boots from embedded state", () => {
+  const parsed = parseUggBuildPage(
+    createUggBuildPageHtml({
+      roleKey: "world_emerald_plus_mid",
+      coreGames: 60,
+      spellGames: 48,
+    }),
+    {
+      allyChampionKey: "103",
+      enemyChampionKey: "89",
+      fetchedAt: "2026-05-24T14:30:00.000Z",
+      rankFilter: "emerald_plus",
+      role: "middle",
+    },
+  );
+
+  assert.equal(parsed.allyChampionKey, "103");
+  assert.equal(parsed.enemyChampionKey, "89");
+  assert.equal(parsed.role, "middle");
+  assert.equal(parsed.totalGames, 100);
+  assert.deepEqual(parsed.spells.options[0].spellIds, [4, 14]);
+  assert.deepEqual(
+    parsed.spells.options[0].selections.map((selection) => selection.name),
+    ["Flash", "Ignite"],
+  );
+  assert.deepEqual(
+    parsed.items.slotOptions.map((slotOptions) => slotOptions.map((option) => option.name)),
+    [
+      ["Dusk and Dawn"],
+      [],
+      ["Nashor's Tooth"],
+      ["Rabadon's Deathcap", "Shadowflame"],
+      ["Shadowflame", "Void Staff"],
+      ["Void Staff"],
+    ],
+  );
+  assert.deepEqual(
+    parsed.boots.map((option) => ({
+      itemId: option.itemId,
+      name: option.name,
+      games: option.games,
+    })),
+    [{ itemId: 3008, name: "Gluttonous Greaves", games: 60 }],
   );
 });
 
