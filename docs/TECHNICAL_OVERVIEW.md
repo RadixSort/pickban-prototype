@@ -275,9 +275,8 @@ Flow:
    - summoner spell set options
    - core item slot options
    - completed boot options
-5. If the rendered page cannot be parsed or does not include all build sections, `parseUggBuildPage(...)` fills only the missing summoner spell, core item, and completed boot options from U.GG's embedded SSR build state.
-6. The server merges rune data with supplemental build data for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
-7. The response returns:
+5. The server merges rune data with the rendered-page build sections for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
+6. The response returns:
    - `request`
    - `summary`
    - `runes`
@@ -454,7 +453,6 @@ If the app suddenly stops returning data without a local code change, these assu
   - `PORT`
   - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
-  - `UGG_BASE_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
@@ -474,8 +472,8 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
 - `test/riot-live-draft.test.js` covers League Client payload normalization
 - `test/riot-rune-import.test.js` covers rune-page validation, first editable page selection, and League Client rune-page mutation shaping
-- `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads, rendered-page item/boot extraction, and U.GG fallback extraction
+- `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads and rendered-page item/boot extraction
 - `test/build-suggestion-results.test.js` covers cross-matchup build aggregation, highest-win thresholds, item-path construction, and boot ranking
-- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL`, `LOLALYTICS_BASE_URL`, and `UGG_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, fallback parsing, caching, or aggregation
+- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL` and `LOLALYTICS_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, caching, or aggregation
 - `test/server-http.test.js` covers local League Client route behavior for both champ-select import and rune-page import with a fake local Riot client
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior
