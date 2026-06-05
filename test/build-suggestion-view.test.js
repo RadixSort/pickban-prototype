@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const {
   BUILD_SUGGESTION_TABS,
   DEFAULT_BUILD_SUGGESTION_TAB,
+  getRecommendedRunePages,
+  getRunePageRecommendationKey,
   renderBuildSuggestionBody,
 } = require("../public/build-suggestion-view.js");
 
@@ -390,6 +392,8 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Highest Win/);
   assert.match(html, /Most Picked/);
   assert.match(html, /Runes/);
+  assert.equal(countMatches(html, /Import Runes/g), 2);
+  assert.equal(countMatches(html, /data-rune-import-key=/g), 2);
   assert.match(html, /Summoner Spells/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
@@ -483,7 +487,29 @@ test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and 
   assert.equal(countMatches(html, /Flash \+ Ignite/g), 1);
   assert.equal(countMatches(html, /Sorcerer(?:&#39;|')s Shoes/g), 2);
   assert.match(html, /Highest Win \+ Most Picked/);
+  assert.equal(countMatches(html, /Import Runes/g), 1);
   assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
+});
+
+test("renderBuildSuggestionBody renders rune import status for the matching page", () => {
+  const payload = createPayload();
+  const [page] = getRecommendedRunePages(
+    payload.runes.highestWinPage,
+    payload.runes.mostPickedPage,
+  );
+  const pageKey = getRunePageRecommendationKey(page);
+  const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {
+    runeImportStatesByPageKey: {
+      [pageKey]: {
+        status: "success",
+        message: "Imported runes into import - Ahri.",
+      },
+    },
+  });
+
+  assert.match(html, /Imported runes into import - Ahri\./);
+  assert.match(html, /build-rune-import-status--success/);
+  assert.equal(countMatches(html, /Imported runes into import - Ahri\./g), 1);
 });
 
 test("renderBuildSuggestionBody returns an empty state when payload is missing", () => {

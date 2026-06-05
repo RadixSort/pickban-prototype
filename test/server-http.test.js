@@ -38,14 +38,21 @@ async function getJson(baseUrl, pathname) {
 
 async function startMockRiotClient(responder) {
   const requests = [];
-  const server = http.createServer((request, response) => {
+  const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, `http://${request.headers.host}`);
+    const chunks = [];
+    for await (const chunk of request) {
+      chunks.push(chunk);
+    }
+    const bodyText = Buffer.concat(chunks).toString("utf8");
     requests.push({
       authorization: request.headers.authorization || "",
+      bodyText,
+      method: request.method,
       pathname: url.pathname,
     });
 
-    const result = responder({ request, url });
+    const result = await responder({ bodyText, request, url });
     response.writeHead(result?.status || 200, {
       "content-type": "application/json; charset=utf-8",
     });
@@ -82,6 +89,36 @@ async function createMockLockfile(port) {
   const lockfilePath = path.join(directory, "lockfile");
   await fs.writeFile(lockfilePath, `LeagueClientUx:1234:${port}:secret:http`, "utf8");
   return lockfilePath;
+}
+
+function createRuneImportPage() {
+  return {
+    primaryStyle: {
+      styleId: 8000,
+      name: "Precision",
+    },
+    secondaryStyle: {
+      styleId: 8200,
+      name: "Sorcery",
+    },
+    selections: {
+      primary: [
+        { id: 8008, slotIndex: 0 },
+        { id: 9111, slotIndex: 1 },
+        { id: 9103, slotIndex: 2 },
+        { id: 8014, slotIndex: 3 },
+      ],
+      secondary: [
+        { id: 8210, slotIndex: 1 },
+        { id: 8236, slotIndex: 3 },
+      ],
+      modifiers: [
+        { id: 5008 },
+        { id: 5005 },
+        { id: 5001 },
+      ],
+    },
+  };
 }
 
 test("GET /app-config returns the local app metadata", async (t) => {
@@ -251,6 +288,139 @@ test("GET /live-draft disables auto import outside draft and ranked queues", asy
   assert.equal(response.body.reason, "unsupported_queue");
   assert.deepEqual(response.body.allies, []);
   assert.deepEqual(response.body.enemies, []);
+  assert.equal(
+    riotClient.requests.some((request) => request.pathname === "/lol-champ-select/v1/session"),
+    false,
+  );
+
+  await stopServer(child);
+});
+
+test("POST /rune-import rewrites the first editable League rune page", async (t) => {
+  const riotClient = await startMockRiotClient(({ bodyText, url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "ChampSelect",
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-perks/v1/pages") {
+      return {
+        body: [
+          {
+            id: 1,
+            name: "Default",
+            order: 0,
+            isEditable: false,
+            isDeletable: false,
+          },
+          {
+            id: 7,
+            name: "Saved",
+            order: 1,
+            isEditable: true,
+            isDeletable: true,
+          },
+        ],
+      };
+    }
+
+    if (url.pathname === "/lol-perks/v1/pages/7") {
+      return {
+        body: JSON.parse(bodyText),
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const response = await postJson(baseUrl, "/rune-import", {
+    champion: "Ahri",
+    page: createRuneImportPage(),
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.status, "imported");
+  assert.equal(payload.page.name, "import - Ahri");
+  assert.deepEqual(payload.page.selectedPerkIds, [
+    8008,
+    9111,
+    9103,
+    8014,
+    8210,
+    8236,
+    5008,
+    5005,
+    5001,
+  ]);
+
+  const putRequest = riotClient.requests.find(
+    (request) => request.method === "PUT" && request.pathname === "/lol-perks/v1/pages/7",
+  );
+  assert.ok(putRequest);
+  assert.deepEqual(JSON.parse(putRequest.bodyText), {
+    id: 7,
+    name: "import - Ahri",
+    order: 1,
+    isEditable: true,
+    isDeletable: true,
+    primaryStyleId: 8000,
+    selectedPerkIds: [8008, 9111, 9103, 8014, 8210, 8236, 5008, 5005, 5001],
+    subStyleId: 8200,
+  });
+
+  await stopServer(child);
+});
+
+test("POST /rune-import refuses to rewrite pages outside champ select", async (t) => {
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "Lobby",
+        },
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const response = await postJson(baseUrl, "/rune-import", {
+    champion: "Ahri",
+    page: createRuneImportPage(),
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.equal(payload.status, "disabled");
+  assert.equal(payload.reason, "not_in_champ_select");
+  assert.equal(
+    riotClient.requests.some((request) => request.method === "PUT"),
+    false,
+  );
 
   await stopServer(child);
 });

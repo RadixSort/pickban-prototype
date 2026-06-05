@@ -21,6 +21,8 @@ const {
 const {
   BUILD_SUGGESTION_TABS,
   DEFAULT_BUILD_SUGGESTION_TAB,
+  getRecommendedRunePages,
+  getRunePageRecommendationKey,
   normalizeBuildSuggestionTab,
   renderBuildSuggestionBody,
 } = globalThis.buildSuggestionView;
@@ -57,7 +59,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.0",
+  version: "0.6.1",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -456,6 +458,7 @@ function createInitialBuildSuggestionModalState() {
     payload: null,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+    runeImportStatesByPageKey: {},
   };
 }
 
@@ -551,6 +554,7 @@ async function handleOpenBuildSuggestions(allyId) {
     payload: cachedPayload,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+    runeImportStatesByPageKey: {},
   };
   renderBuildSuggestionModal();
 
@@ -1504,7 +1508,113 @@ function renderBuildSuggestionModal() {
     ? '<div class="build-empty-state">Fetching build recommendations from Lolalytics...</div>'
     : modalState.error
       ? '<div class="build-empty-state">The build recommendation request failed.</div>'
-      : renderBuildSuggestionBody(payload, modalState.activeTab);
+      : renderBuildSuggestionBody(payload, modalState.activeTab, {
+          runeImportStatesByPageKey: modalState.runeImportStatesByPageKey,
+        });
+  if (!modalState.loading && !modalState.error) {
+    wireBuildSuggestionRuneImportButtons(payload);
+  }
+}
+
+function wireBuildSuggestionRuneImportButtons(payload) {
+  buildSuggestionBody.querySelectorAll("[data-rune-import-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleImportBuildSuggestionRunes(payload, button.dataset.runeImportKey);
+    });
+  });
+}
+
+async function handleImportBuildSuggestionRunes(payload, pageKey) {
+  if (state.shuttingDown || !state.buildSuggestionModal.open || !pageKey) {
+    return;
+  }
+
+  const modalState = state.buildSuggestionModal;
+  const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
+  const page = getBuildSuggestionRuneRecommendationByKey(payload, pageKey);
+  if (!ally || !page) {
+    setBuildSuggestionRuneImportState(pageKey, {
+      status: "error",
+      message: "Rune import is unavailable for this recommendation.",
+    });
+    return;
+  }
+
+  const cacheKey = modalState.cacheKey;
+  setBuildSuggestionRuneImportState(pageKey, {
+    status: "importing",
+    message: "Importing runes into the League Client...",
+  });
+
+  try {
+    const response = await fetch("/rune-import", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        champion: ally.name,
+        page,
+      }),
+    });
+    const importPayload = await parseJsonSafely(response);
+    if (!response.ok || importPayload?.status !== "imported") {
+      throw new Error(
+        importPayload?.message ||
+          importPayload?.error ||
+          "Failed to import runes into the League Client.",
+      );
+    }
+
+    if (!isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey)) {
+      return;
+    }
+
+    setBuildSuggestionRuneImportState(pageKey, {
+      status: "success",
+      message: importPayload.message || "Imported runes into the League Client.",
+    });
+  } catch (error) {
+    if (!isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey)) {
+      return;
+    }
+
+    setBuildSuggestionRuneImportState(pageKey, {
+      status: "error",
+      message: formatDisplayMessage(
+        error.message || "Failed to import runes into the League Client.",
+      ),
+    });
+  }
+}
+
+function getBuildSuggestionRuneRecommendationByKey(payload, pageKey) {
+  const recommendations = getRecommendedRunePages(
+    payload?.runes?.highestWinPage,
+    payload?.runes?.mostPickedPage,
+  );
+
+  return recommendations.find((page) => getRunePageRecommendationKey(page) === pageKey) || null;
+}
+
+function isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey) {
+  return (
+    state.buildSuggestionModal.open &&
+    state.buildSuggestionModal.cacheKey === cacheKey &&
+    Boolean(state.buildSuggestionModal.runeImportStatesByPageKey?.[pageKey])
+  );
+}
+
+function setBuildSuggestionRuneImportState(pageKey, importState) {
+  if (!state.buildSuggestionModal.open || !pageKey) {
+    return;
+  }
+
+  state.buildSuggestionModal.runeImportStatesByPageKey = {
+    ...state.buildSuggestionModal.runeImportStatesByPageKey,
+    [pageKey]: importState,
+  };
+  renderBuildSuggestionModal();
 }
 
 function buildBuildSuggestionMetaText(ally, payload) {

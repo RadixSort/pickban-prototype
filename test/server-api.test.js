@@ -7,7 +7,6 @@ const {
   createRenderedBuildPageHtml,
   createRuneBuildMegaData,
   createTierMegaData,
-  createUggBuildPageHtml,
   jsonResponse,
   startMockLolalyticsServer,
   textResponse,
@@ -29,7 +28,6 @@ async function startServerWithMock(t, responder) {
     env: {
       LOLALYTICS_BASE_URL: mockServer.baseUrl,
       LOLALYTICS_MEGA_URL: mockServer.megaUrl,
-      UGG_BASE_URL: mockServer.baseUrl,
     },
   });
 
@@ -930,7 +928,7 @@ test("POST /build-suggestions returns generic build data when no enemy is select
   );
 });
 
-test("POST /build-suggestions falls back when the rendered build page is blocked", async (t) => {
+test("POST /build-suggestions keeps rune data only when the rendered build page is blocked", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -944,14 +942,6 @@ test("POST /build-suggestions falls back when the rendered build page is blocked
 
     if (url.pathname === "/lol/ahri/build/") {
       return textResponse("Just a moment...", 403);
-    }
-
-    if (url.pathname === "/lol/champions/ahri/build/mid") {
-      return textResponse(
-        createUggBuildPageHtml({
-          roleKey: "world_emerald_plus_mid",
-        }),
-      );
     }
 
     return textResponse("Not found.", 404);
@@ -968,18 +958,15 @@ test("POST /build-suggestions falls back when the rendered build page is blocked
 
   assert.equal(response.status, 200);
   assert.equal(response.body.runes.overview.slotGroups.length > 0, true);
-  assert.deepEqual(response.body.spells.mostPickedSet.spellIds, [4, 14]);
-  assert.deepEqual(
-    response.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
-    [2510, 3115, 3089, 4645, 3135],
-  );
-  assert.deepEqual(
-    response.body.boots.options.map((option) => option.itemId),
-    [3008],
-  );
+  assert.deepEqual(response.body.spells.options, []);
+  assert.equal(response.body.spells.mostPickedSet, null);
+  assert.equal(response.body.spells.highestWinSet, null);
+  assert.equal(response.body.items.mostPickedBuild, null);
+  assert.equal(response.body.items.highestWinBuild, null);
+  assert.deepEqual(response.body.boots.options, []);
   assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(mockServer.countRequests("/lol/ahri/build/"), 1);
-  assert.equal(mockServer.countRequests("/lol/champions/ahri/build/mid"), 1);
+  assert.equal(mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/champions/")), 0);
 });
 
 test("POST /build-suggestions returns a 502 summary when every rune build fetch fails", async (t) => {
