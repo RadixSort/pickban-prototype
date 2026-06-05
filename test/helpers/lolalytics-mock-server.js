@@ -248,6 +248,10 @@ function createRuneBuildMegaData({
 function createRenderedBuildPageHtml({
   coreGames = 60,
   coreWinRate = 57.61,
+  bootGames = 9,
+  bootWinRate = 66.67,
+  thirdCoreGames = 6,
+  thirdCoreWinRate = 83.33,
   spellGames = 48,
   spellWinRate = 53.63,
   bootItemId = 3170,
@@ -265,10 +269,14 @@ function createRenderedBuildPageHtml({
       <section>
         <h2>Core Build</h2>
         <img src="https://cdn5.lolalytics.com/item64/2510.webp" alt="Dusk and Dawn" />
-        <img src="https://cdn5.lolalytics.com/item64/${bootItemId}.webp" alt="${bootName}" />
         <div>${coreWinRate}%</div>
         <div>${coreGames.toLocaleString("en-US")}</div>
+        <img src="https://cdn5.lolalytics.com/item64/${bootItemId}.webp" alt="${bootName}" />
+        <div>${bootWinRate}%</div>
+        <div>${bootGames.toLocaleString("en-US")}</div>
         <img src="https://cdn5.lolalytics.com/item64/3115.webp" alt="Nashor's Tooth" />
+        <div>${thirdCoreWinRate}%</div>
+        <div>${thirdCoreGames.toLocaleString("en-US")}</div>
         <h3>Item 4</h3>
         <img src="https://cdn5.lolalytics.com/item64/3089.webp" alt="Rabadon's Deathcap" />
         <div>61.3%</div>

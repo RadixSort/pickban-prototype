@@ -392,40 +392,25 @@ app.post("/build-suggestions", async (request, response) =>
         return response.json(cachedPayload);
       }
 
-      const isGenericBuildLookup = normalizedRequest.enemies.length === 0;
-      let matchupBuilds = [];
-      let partialFailures = [];
-
-      if (isGenericBuildLookup) {
-        matchupBuilds = [
-          await fetchNormalizedChampionBuildData({
+      const matchupResults = await Promise.allSettled(
+        normalizedRequest.enemies.map((enemyChampion) =>
+          fetchNormalizedMatchupBuildData({
             allyChampion: normalizedRequest.ally.champion,
+            enemyChampion,
             rankFilter: normalizedRequest.rankFilter,
             role: normalizedRequest.ally.role,
           }),
-        ];
-      } else {
-        const matchupResults = await Promise.allSettled(
-          normalizedRequest.enemies.map((enemyChampion) =>
-            fetchNormalizedMatchupBuildData({
-              allyChampion: normalizedRequest.ally.champion,
-              enemyChampion,
-              rankFilter: normalizedRequest.rankFilter,
-              role: normalizedRequest.ally.role,
-            }),
-          ),
-        );
-        ({ matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
-          matchupResults,
-          normalizedRequest.enemies,
-        ));
-      }
+        ),
+      );
+      const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
+        matchupResults,
+        normalizedRequest.enemies,
+      );
 
       if (matchupBuilds.length === 0) {
         return response.status(502).json({
-          error: isGenericBuildLookup
-            ? "No build recommendation data was returned from Lolalytics for the selected ally and role."
-            : "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
+          error:
+            "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
           summary: {
             enemyCount: normalizedRequest.enemies.length,
             sourceMatchups: 0,
@@ -983,46 +968,6 @@ async function fetchNormalizedMatchupBuildData({
 
   setCachedData(normalizedMatchupBuildCache, cacheKey, mergedBuildData);
   return mergedBuildData;
-}
-
-async function fetchNormalizedChampionBuildData({
-  allyChampion,
-  rankFilter,
-  role,
-}) {
-  const [runePayload, renderedPageResult] = await Promise.all([
-    fetchLolalyticsRuneBuildData({
-      allySlug: allyChampion.id,
-      label: `${allyChampion.name} ${role} rune build data`,
-      rankFilter,
-      role,
-    }),
-    fetchLolalyticsRenderedBuildPage({
-      allySlug: allyChampion.id,
-      label: `${allyChampion.name} ${role} rendered build page`,
-      rankFilter,
-      role,
-    }).then(
-      (html) => ({
-        status: "fulfilled",
-        value: html,
-      }),
-      (error) => ({
-        status: "rejected",
-        reason: error,
-      }),
-    ),
-  ]);
-  const parsedBuildData = parseLolalyticsRuneBuildPayload(runePayload, {
-    allyChampion,
-    role,
-  });
-  const renderedBuildData = parseOptionalRenderedBuildPage(renderedPageResult, {
-    allyChampion,
-    role,
-  });
-
-  return mergeParsedBuildSources(parsedBuildData, renderedBuildData);
 }
 
 async function fetchLolalyticsRuneBuildData({

@@ -218,23 +218,41 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         overview: {
           slotGroups: [{ key: "primary-style" }],
         },
-        mostPickedPage: null,
+        mostPickedPage: { pageKey: "most-picked" },
+        highestWinPage: { pageKey: "highest-win" },
       },
       spells: {
         mostPickedSet: {
           setKey: "4-12",
           spellIds: [4, 12],
         },
-        highestWinSet: null,
+        highestWinSet: {
+          setKey: "4-14",
+          spellIds: [4, 14],
+        },
       },
       items: {
-        highestWinBuild: null,
+        highestWinBuild: {
+          selections: [
+            { itemId: 6655 },
+            { itemId: 3157 },
+            { itemId: 3100 },
+            { itemId: 3089 },
+            { itemId: 3135 },
+          ],
+        },
         mostPickedBuild: {
-          selections: [{ itemId: 3118 }],
+          selections: [
+            { itemId: 3118 },
+            { itemId: 3157 },
+            { itemId: 4645 },
+            { itemId: 3089 },
+            { itemId: 3135 },
+          ],
         },
       },
       boots: {
-        options: [],
+        options: [{ itemId: 3006 }],
       },
     },
     sourceMatchups: collected.matchupBuilds.length,
@@ -257,9 +275,23 @@ test("build suggestion helper payloads preserve request and summary fields", () 
     partialFailures: ["Leona: Missing matchup rows."],
   });
   assert.deepEqual(payload.items, {
-    highestWinBuild: null,
+    highestWinBuild: {
+      selections: [
+        { itemId: 6655 },
+        { itemId: 3157 },
+        { itemId: 3100 },
+        { itemId: 3089 },
+        { itemId: 3135 },
+      ],
+    },
     mostPickedBuild: {
-      selections: [{ itemId: 3118 }],
+      selections: [
+        { itemId: 3118 },
+        { itemId: 3157 },
+        { itemId: 4645 },
+        { itemId: 3089 },
+        { itemId: 3135 },
+      ],
     },
   });
   assert.deepEqual(payload.spells, {
@@ -267,7 +299,10 @@ test("build suggestion helper payloads preserve request and summary fields", () 
       setKey: "4-12",
       spellIds: [4, 12],
     },
-    highestWinSet: null,
+    highestWinSet: {
+      setKey: "4-14",
+      spellIds: [4, 14],
+    },
   });
   assert.equal(hasUsableBuildSuggestions(payload), true);
 

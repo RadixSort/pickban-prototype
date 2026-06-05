@@ -59,7 +59,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.1",
+  version: "0.6.2",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -478,7 +478,7 @@ function createInitialAutoImportState() {
 }
 
 function canOpenBuildSuggestionsForAlly(ally) {
-  return Boolean(ally?.role) && !isInteractionLocked();
+  return Boolean(ally?.role) && state.enemies.length === limits.enemies && !isInteractionLocked();
 }
 
 function getBuildSuggestionAction(ally) {
@@ -506,11 +506,13 @@ function getBuildSuggestionAction(ally) {
     );
   }
 
-  if (state.enemies.length === 0) {
+  if (state.enemies.length < limits.enemies) {
     return buildBuildActionState(
       ally,
-      "",
-      `Open generic build recommendation for ${ally.name}.`,
+      `Select ${limits.enemies - state.enemies.length} more enemy ${
+        limits.enemies - state.enemies.length === 1 ? "champion" : "champions"
+      } to unlock build suggestions.`,
+      "Build recommendations require all 5 enemy champions.",
     );
   }
 
@@ -1635,16 +1637,9 @@ function buildBuildSuggestionMetaText(ally, payload) {
   }
 
   if (payload?.summary?.sourceMatchups) {
-    const isGenericBuild = Number(payload?.summary?.enemyCount || 0) === 0;
     parts.push(
       `${payload.summary.sourceMatchups} ${
-        isGenericBuild
-          ? payload.summary.sourceMatchups === 1
-            ? "generic build"
-            : "generic builds"
-          : payload.summary.sourceMatchups === 1
-            ? "matchup"
-            : "matchups"
+        payload.summary.sourceMatchups === 1 ? "matchup" : "matchups"
       }`,
     );
   }

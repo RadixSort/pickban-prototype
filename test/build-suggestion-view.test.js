@@ -453,6 +453,16 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Overview/);
 });
 
+test("renderBuildSuggestionBody renders unknown item purchase minutes as empty", () => {
+  const payload = createPayload();
+  payload.items.highestWinBuild.selections[0].purchaseMinute = null;
+
+  const html = renderBuildSuggestionBody(payload);
+
+  assert.doesNotMatch(html, /0 min/);
+  assert.match(html, /build-item-card-stat--minute">\s*-/);
+});
+
 test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and boot highlights", () => {
   const payload = createPayload();
   payload.runes.mostPickedPage = payload.runes.highestWinPage;

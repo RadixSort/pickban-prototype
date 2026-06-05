@@ -281,14 +281,44 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
 
   assert.deepEqual(
     aggregated.items.mostPickedBuild.selections.map((selection) => selection.itemId),
-    [3118, 4645, 3089, 3135, 3041],
+    [3118, 3157, 4645, 3089, 3135],
   );
   assert.deepEqual(
     aggregated.items.highestWinBuild.selections.map((selection) => selection.itemId),
     [6655, 3157, 3100, 3089, 3135],
   );
   assert.equal(aggregated.items.mostPickedBuild.selections[0].purchaseMinute, 12);
-  assert.equal(aggregated.items.mostPickedBuild.selections[4].purchaseMinute, 32);
+  assert.equal(aggregated.items.mostPickedBuild.selections[4].purchaseMinute, 31);
+});
+
+test("buildBuildSuggestionResults keeps unknown item purchase minutes empty", () => {
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 20,
+        fetchedAt: "2026-03-19T20:15:00.000Z",
+        itemSlotOptions: [
+          [
+            createItemOption({
+              itemId: 3118,
+              name: "Malignance",
+              games: 20,
+              wins: 11,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        boots: [],
+      }),
+    ],
+  });
+
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].purchaseMinute, null);
+  assert.equal(aggregated.items.highestWinBuild.selections[0].purchaseMinute, null);
 });
 
 test("buildBuildSuggestionResults reports when no page crosses the highest-win threshold", () => {

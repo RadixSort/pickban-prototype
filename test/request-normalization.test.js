@@ -119,7 +119,7 @@ test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank fil
         champion: "Ahri",
         role: "mid",
       },
-      enemies: ["Jarvan IV", "Miss Fortune"],
+      enemies: ["Jarvan IV", "Miss Fortune", "Leona", "Jinx", "Darius"],
     },
     {
       championByName,
@@ -135,35 +135,36 @@ test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank fil
       champion: championByName.get("ahri"),
       role: "middle",
     },
-    enemies: [championByName.get("jarvaniv"), championByName.get("missfortune")],
+    enemies: [
+      championByName.get("jarvaniv"),
+      championByName.get("missfortune"),
+      championByName.get("leona"),
+      championByName.get("jinx"),
+      championByName.get("darius"),
+    ],
   });
 });
 
-test("normalizeBuildSuggestionRequest allows an empty enemy list for generic build lookups", () => {
-  const request = normalizeBuildSuggestionRequest(
-    {
-      ally: {
-        champion: "Ahri",
-        role: "mid",
-      },
-      enemies: [],
-    },
-    {
-      championByName,
-      defaultRankFilter: DEFAULT_RANK_FILTER,
-      normalizeRankFilter,
-      normalizeRole,
-    },
+test("normalizeBuildSuggestionRequest requires a full enemy team", () => {
+  assert.throws(
+    () =>
+      normalizeBuildSuggestionRequest(
+        {
+          ally: {
+            champion: "Ahri",
+            role: "mid",
+          },
+          enemies: [],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /exactly 5 enemy champions/i,
   );
-
-  assert.deepEqual(request, {
-    rankFilter: DEFAULT_RANK_FILTER,
-    ally: {
-      champion: championByName.get("ahri"),
-      role: "middle",
-    },
-    enemies: [],
-  });
 });
 
 test("normalizeBuildSuggestionRequest rejects missing ally role and opposing picks", () => {
@@ -194,7 +195,7 @@ test("normalizeBuildSuggestionRequest rejects missing ally role and opposing pic
             champion: "Ahri",
             role: "mid",
           },
-          enemies: ["Ahri"],
+          enemies: ["Ahri", "Jarvan IV", "Miss Fortune", "Leona", "Jinx"],
         },
         {
           championByName,

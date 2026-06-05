@@ -259,14 +259,14 @@ Minimal request example:
 {
   "rankFilter": "emerald_plus",
   "ally": { "champion": "Ahri", "role": "middle" },
-  "enemies": ["Zed", "Sejuani"]
+  "enemies": ["Zed", "Sejuani", "Ashe", "Neeko", "Sion"]
 }
 ```
 
 Flow:
 
-1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, an optional enemy list, and no ally/enemy overlap.
-2. If enemies are selected, the server fetches one Lolalytics mega rune payload and one rendered matchup build page per enemy champion. Otherwise it fetches the generic champion rune payload and rendered build page for the assigned role.
+1. `normalizeBuildSuggestionRequest(...)` validates one ally, a required ally role, exactly five enemies, and no ally/enemy overlap.
+2. The server fetches one Lolalytics mega rune payload and one rendered matchup build page per enemy champion.
 3. `parseLolalyticsRuneBuildData(...)` converts each payload into:
    - rune style totals
    - rune slot options
@@ -276,7 +276,8 @@ Flow:
    - core item slot options
    - completed boot options
 5. The server merges rune data with the rendered-page build sections for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
-6. The response returns:
+6. `hasUsableBuildSuggestions(...)` only accepts responses that include most-picked and highest-win runes, summoner spells, both five-item paths, and at least one boot option.
+7. The response returns:
    - `request`
    - `summary`
    - `runes`
@@ -284,7 +285,7 @@ Flow:
    - `items`
    - `boots`
 
-The browser exposes this route from the `Build` button whenever the selected ally already has a role. When enemies are selected it includes each enemy in the mega rune request; when no enemies are selected it fetches generic champion rune data for the assigned role and renders it in the same modal.
+The browser exposes this route from the `Build` button only when the selected ally already has a role and all five enemy slots are filled.
 
 Enemy-aware build recommendations are composition-aware aggregates over matchup-specific build data. They do not use the Lolalytics `counter` endpoint that powers role suggestions and draft outlook. For each selected enemy, the route requests the ally-vs-enemy build/rune sources, keeps successful matchups, records failed enemy matchups in `summary.partialFailures`, and aggregates the successful matchup records into one modal payload.
 
@@ -428,7 +429,7 @@ Failure behavior:
 - if every requested role fails, `/suggest` returns an HTTP error payload
 - if a draft projection has no usable win-rate samples, `/draft-outlook` returns an HTTP error payload
 - if every rune build fetch fails, `/build-suggestions` returns an HTTP error payload
-- rendered build-page fetch or parse failures leave the rune recommendation data intact
+- if rendered build-page fetch or parse failures leave the popup without runes, summoner spells, both five-item paths, or boots, `/build-suggestions` returns an HTTP error payload instead of rendering a partial build popup
 - `/live-draft` expected failures return disabled payloads so the UI can show the auto-import banner without changing current selections
 - `/rune-import` expected failures return `409` with a disabled payload so the modal can show page-specific import feedback
 
@@ -474,6 +475,6 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/riot-rune-import.test.js` covers rune-page validation, first editable page selection, and League Client rune-page mutation shaping
 - `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads and rendered-page item/boot extraction
 - `test/build-suggestion-results.test.js` covers cross-matchup build aggregation, highest-win thresholds, item-path construction, and boot ranking
-- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL` and `LOLALYTICS_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, caching, or aggregation
+- `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL` and `LOLALYTICS_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, caching, category completeness, or aggregation
 - `test/server-http.test.js` covers local League Client route behavior for both champ-select import and rune-page import with a fake local Riot client
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior

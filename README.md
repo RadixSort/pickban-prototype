@@ -58,7 +58,7 @@ There is no build, lint, or bundling command in this repo.
 3. Optionally assign known ally roles. The app will fetch every remaining role.
 4. Use `Fetch Suggestions` for role recommendations.
 5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
-6. Use `Build` on an ally row after that ally has a role. With enemies selected it opens enemy-aware build suggestions; without enemies it opens generic champion build recommendations in the same popup. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
+6. Use `Build` on an ally row after that ally has a role and all five enemies are selected. It opens enemy-aware build suggestions. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
 7. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
 
 Change feedback loops:
@@ -131,10 +131,10 @@ The three main request flows are:
 
 ### Build Recommendations
 
-1. The UI enables `Build` when an ally role is assigned.
-2. If enemies are selected, `POST /build-suggestions` fetches one Lolalytics mega rune payload and matching rendered matchup build page per enemy, then treats the successful enemy matchups as the selected enemy-composition sample.
-3. If no enemies are selected, the same route fetches generic champion rune and rendered-page build data for the assigned ally role.
-4. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, and `lib/build-suggestion-results.js` sums games and wins across the matchup records into most-picked and highest-win rune, spell, item, and boot recommendations.
+1. The UI enables `Build` only when an ally role is assigned and all five enemy champions are selected.
+2. `POST /build-suggestions` fetches one Lolalytics mega rune payload and matching rendered matchup build page per enemy, then treats the successful enemy matchups as the selected enemy-composition sample.
+3. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, and `lib/build-suggestion-results.js` sums games and wins across the matchup records into most-picked and highest-win rune, spell, item, and boot recommendations.
+4. The route only returns success when runes, summoner spells, boots, and both five-item build paths can populate the popup.
 5. The browser renders `Import Runes` for each displayed rune page. `POST /rune-import` accepts one complete page recommendation, verifies the League Client is in champ select, then overwrites the first editable saved rune page with the recommended selections and the name `import - {Champion}`.
 
 ### Auto Import
@@ -226,9 +226,10 @@ That means all five allied champions are selected and all five allied roles are 
 The current UI only enables that flow when:
 
 - the ally has an assigned role
+- all five enemy champions are selected
 - the app is not already loading role suggestions or shutting down
 
-With enemies selected it opens enemy-aware build suggestions. Without enemies it opens generic champion build recommendations in the same popup.
+It opens one enemy-aware build recommendation by aggregating the selected ally's five Lolalytics matchups.
 
 ### `Import Runes` fails
 

@@ -430,7 +430,7 @@ test("POST /suggest rejects champions that appear on both sides before live fetc
 
   const response = await postJson(baseUrl, "/suggest", {
     allies: [{ champion: "Ahri" }],
-    enemies: ["Ahri"],
+    enemies: ["Ahri", "Leona", "Jinx", "Sion", "Vi"],
   });
   const payload = await response.json();
 
@@ -452,7 +452,7 @@ test("POST /build-suggestions rejects champions that appear on both sides", asyn
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Ahri"],
+    enemies: ["Ahri", "Leona", "Jinx", "Sion", "Vi"],
   });
   const payload = await response.json();
 

@@ -378,12 +378,15 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
       ["Void Staff"],
     ],
   );
+  assert.equal(parsed.items.slotOptions[0][0].games, 60);
+  assert.equal(parsed.items.slotOptions[2][0].games, 6);
   assert.deepEqual(
     parsed.boots.map((option) => ({
       itemId: option.itemId,
       name: option.name,
+      games: option.games,
     })),
-    [{ itemId: 3170, name: "Gluttonous Greaves" }],
+    [{ itemId: 3170, name: "Gluttonous Greaves", games: 9 }],
   );
 });
 

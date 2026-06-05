@@ -73,6 +73,17 @@ async function getJson(baseUrl, endpoint) {
   };
 }
 
+function assertBuildSuggestionSectionsArePopulated(payload) {
+  assert.equal(payload.runes.overview.slotGroups.length > 0, true);
+  assert.ok(payload.runes.mostPickedPage);
+  assert.ok(payload.runes.highestWinPage);
+  assert.ok(payload.spells.mostPickedSet);
+  assert.ok(payload.spells.highestWinSet);
+  assert.ok(payload.boots.options.length > 0);
+  assert.equal(payload.items.mostPickedBuild.selections.length, 5);
+  assert.equal(payload.items.highestWinBuild.selections.length, 5);
+}
+
 test("POST /suggest rejects an empty draft before any upstream fetch", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, () => {
     throw new Error("Unexpected upstream request.");
@@ -737,12 +748,12 @@ test("POST /draft-outlook rejects projections that have no usable win-rate input
   assert.equal(mockServer.countRequests("/mega/"), 6);
 });
 
-test("POST /build-suggestions returns partial data and caches identical drafts across enemy order", async (t) => {
+test("POST /build-suggestions aggregates a full enemy team and caches identical drafts across enemy order", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (
       url.pathname === "/mega/" &&
       url.searchParams.get("ep") === "rune" &&
-      url.searchParams.get("vs") === "leona"
+      ["leona", "sion", "vi", "neeko"].includes(url.searchParams.get("vs"))
     ) {
       return jsonResponse(
         createRuneBuildMegaData({
@@ -761,10 +772,7 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       return textResponse("Service unavailable.", 503);
     }
 
-    if (
-      url.pathname === "/lol/ahri/vs/leona/build/" ||
-      url.pathname === "/lol/ahri/vs/jinx/build/"
-    ) {
+    if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
       return textResponse(createRenderedBuildPageHtml());
     }
 
@@ -777,7 +785,7 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Leona", "Jinx"],
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
   });
 
   assert.equal(firstResponse.status, 200);
@@ -787,17 +795,17 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       championKey: "103",
       role: "middle",
     },
-    enemies: ["Leona", "Jinx"],
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
     rankFilter: "emerald_plus",
   });
-  assert.equal(firstResponse.body.summary.enemyCount, 2);
-  assert.equal(firstResponse.body.summary.sourceMatchups, 1);
+  assert.equal(firstResponse.body.summary.enemyCount, 5);
+  assert.equal(firstResponse.body.summary.sourceMatchups, 4);
   assert.equal(firstResponse.body.summary.partialFailures.length, 1);
   assert.match(
     firstResponse.body.summary.partialFailures[0],
     /Jinx: .*Ahri vs Jinx middle rune build data .*status 503/i,
   );
-  assert.equal(firstResponse.body.runes.overview.slotGroups.length > 0, true);
+  assertBuildSuggestionSectionsArePopulated(firstResponse.body);
   assert.equal(
     firstResponse.body.runes.mostPickedPage.pageKey,
     "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
@@ -823,112 +831,61 @@ test("POST /build-suggestions returns partial data and caches identical drafts a
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Jinx", "Leona"],
+    enemies: ["Neeko", "Vi", "Sion", "Jinx", "Leona"],
   });
 
   assert.equal(secondResponse.status, 200);
   assert.deepEqual(secondResponse.body, firstResponse.body);
-  assert.equal(mockServer.countRequests("/mega/"), 2);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=rune")),
-    2,
+    5,
   );
-  assert.equal(
-    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
-    2,
-  );
-});
-
-test("POST /build-suggestions returns generic build data when no enemy is selected", async (t) => {
-  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
-    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
-      return jsonResponse(
-        createRuneBuildMegaData({
-          role: "middle",
-          totalGames: 75,
-          pickWinRate: 54,
-        }),
-      );
-    }
-
-    if (url.pathname === "/lol/ahri/build/") {
-      return textResponse(createRenderedBuildPageHtml());
-    }
-
-    return textResponse("Not found.", 404);
-  });
-
-  const firstResponse = await postJson(baseUrl, "/build-suggestions", {
-    rankFilter: "emerald_plus",
-    ally: {
-      champion: "Ahri",
-      role: "mid",
-    },
-    enemies: [],
-  });
-
-  assert.equal(firstResponse.status, 200);
-  assert.deepEqual(firstResponse.body.request, {
-    ally: {
-      champion: "Ahri",
-      championKey: "103",
-      role: "middle",
-    },
-    enemies: [],
-    rankFilter: "emerald_plus",
-  });
-  assert.deepEqual(firstResponse.body.summary, {
-    enemyCount: 0,
-    sourceMatchups: 1,
-    lastUpdatedAt: firstResponse.body.summary.lastUpdatedAt,
-    partialFailures: [],
-  });
-  assert.equal(Number.isFinite(Date.parse(firstResponse.body.summary.lastUpdatedAt)), true);
-  assert.equal(firstResponse.body.runes.overview.slotGroups.length > 0, true);
-  assert.equal(
-    firstResponse.body.runes.mostPickedPage.pageKey,
-    "priStyle=8000|pri=8008-9111-9103-8014|secStyle=8300|sec=8304-8347|mods=5005-5008-5011",
-  );
-  assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 14]);
-  assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
-  assert.deepEqual(
-    firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
-    [2510, 3115, 3089, 4645, 3135],
-  );
-  assert.deepEqual(
-    firstResponse.body.items.highestWinBuild.selections.map((selection) => selection.itemId),
-    [2510, 3115, 3089, 4645, 3135],
-  );
-  assert.deepEqual(
-    firstResponse.body.boots.options.map((option) => option.itemId),
-    [3170],
-  );
-
-  const secondResponse = await postJson(baseUrl, "/build-suggestions", {
-    rankFilter: "emerald_plus",
-    ally: {
-      champion: "Ahri",
-      role: "mid",
-    },
-    enemies: [],
-  });
-
-  assert.equal(secondResponse.status, 200);
-  assert.deepEqual(secondResponse.body, firstResponse.body);
-  assert.equal(mockServer.countRequests("/mega/"), 1);
-  assert.equal(mockServer.countRequests("/lol/ahri/build/"), 1);
   assert.equal(
     mockServer.countRequests(
       (entry) =>
         entry.pathname === "/mega/" &&
-        entry.search.includes("ep=rune") &&
-        /(?:^|&)lane=middle(?:&|$)/.test(entry.search.slice(1)),
+        new URLSearchParams(entry.search).get("ep") === "rune" &&
+        new URLSearchParams(entry.search).get("tier") === "emerald_plus",
     ),
-    1,
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname.startsWith("/lol/ahri/vs/") &&
+        new URLSearchParams(entry.search).get("tier") === "emerald_plus" &&
+        new URLSearchParams(entry.search).get("lane") === "middle" &&
+        new URLSearchParams(entry.search).get("patch") === "7",
+    ),
+    5,
   );
 });
 
-test("POST /build-suggestions keeps rune data only when the rendered build page is blocked", async (t) => {
+test("POST /build-suggestions rejects incomplete enemy teams before upstream fetches", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: ["Leona", "Jinx", "Sion", "Vi"],
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.error, /exactly 5 enemy champions/i);
+  assert.equal(mockServer.countRequests(), 0);
+});
+
+test("POST /build-suggestions rejects rune-only data when rendered build pages are blocked", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -940,7 +897,7 @@ test("POST /build-suggestions keeps rune data only when the rendered build page 
       );
     }
 
-    if (url.pathname === "/lol/ahri/build/") {
+    if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
       return textResponse("Just a moment...", 403);
     }
 
@@ -953,20 +910,21 @@ test("POST /build-suggestions keeps rune data only when the rendered build page 
       champion: "Ahri",
       role: "mid",
     },
-    enemies: [],
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
   });
 
-  assert.equal(response.status, 200);
-  assert.equal(response.body.runes.overview.slotGroups.length > 0, true);
-  assert.deepEqual(response.body.spells.options, []);
-  assert.equal(response.body.spells.mostPickedSet, null);
-  assert.equal(response.body.spells.highestWinSet, null);
-  assert.equal(response.body.items.mostPickedBuild, null);
-  assert.equal(response.body.items.highestWinBuild, null);
-  assert.deepEqual(response.body.boots.options, []);
-  assert.equal(mockServer.countRequests("/mega/"), 1);
-  assert.equal(mockServer.countRequests("/lol/ahri/build/"), 1);
-  assert.equal(mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/champions/")), 0);
+  assert.equal(response.status, 502);
+  assert.equal(
+    response.body.error,
+    "Lolalytics returned build data, but it did not include usable build recommendations.",
+  );
+  assert.equal(response.body.summary.enemyCount, 5);
+  assert.equal(response.body.summary.sourceMatchups, 5);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
+    5,
+  );
 });
 
 test("POST /build-suggestions returns a 502 summary when every rune build fetch fails", async (t) => {
@@ -982,7 +940,7 @@ test("POST /build-suggestions returns a 502 summary when every rune build fetch 
     if (
       url.pathname === "/mega/" &&
       url.searchParams.get("ep") === "rune" &&
-      url.searchParams.get("vs") === "jinx"
+      ["jinx", "sion", "vi", "neeko"].includes(url.searchParams.get("vs"))
     ) {
       return textResponse("Gateway timeout.", 504);
     }
@@ -996,7 +954,7 @@ test("POST /build-suggestions returns a 502 summary when every rune build fetch 
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Leona", "Jinx"],
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
   });
 
   assert.equal(response.status, 502);
@@ -1004,10 +962,10 @@ test("POST /build-suggestions returns a 502 summary when every rune build fetch 
     response.body.error,
     "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
   );
-  assert.equal(response.body.summary.enemyCount, 2);
+  assert.equal(response.body.summary.enemyCount, 5);
   assert.equal(response.body.summary.sourceMatchups, 0);
   assert.equal(Number.isFinite(Date.parse(response.body.summary.lastUpdatedAt)), true);
-  assert.equal(response.body.summary.partialFailures.length, 2);
+  assert.equal(response.body.summary.partialFailures.length, 5);
   assert.match(
     response.body.summary.partialFailures[0],
     /Leona: .*Ahri vs Leona middle rune build data .*status 503/i,
@@ -1016,7 +974,7 @@ test("POST /build-suggestions returns a 502 summary when every rune build fetch 
     response.body.summary.partialFailures[1],
     /Jinx: .*Ahri vs Jinx middle rune build data .*status 504/i,
   );
-  assert.equal(mockServer.countRequests("/mega/"), 2);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
 });
 
 test("POST /build-suggestions isolates malformed rune payload failures", async (t) => {
@@ -1040,11 +998,16 @@ test("POST /build-suggestions isolates malformed rune payload failures", async (
       champion: "Ahri",
       role: "mid",
     },
-    enemies: [],
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
   });
 
   assert.equal(response.status, 502);
-  assert.match(response.body.error, /Ahri rune build data could not be parsed/i);
-  assert.match(response.body.error, /missing rune summary data/i);
-  assert.equal(mockServer.countRequests("/mega/"), 1);
+  assert.equal(
+    response.body.error,
+    "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
+  );
+  assert.equal(response.body.summary.partialFailures.length, 5);
+  assert.match(response.body.summary.partialFailures[0], /Ahri vs Leona rune build data could not be parsed/i);
+  assert.match(response.body.summary.partialFailures[0], /missing rune summary data/i);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
 });

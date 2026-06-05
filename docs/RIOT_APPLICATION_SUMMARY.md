@@ -12,7 +12,7 @@ The app helps a player make draft and build decisions during champion select by 
 
 - Suggest champions for unassigned allied roles based on selected allies, selected enemies, role eligibility, matchup synergy, and matchup counter data.
 - Project a full allied draft win-rate estimate once all five allied champions have assigned roles.
-- Show build recommendations for a selected allied champion and role, including runes, summoner spells, items, and boots.
+- Show build recommendations for a selected allied champion and role after all five enemies are selected, including runes, summoner spells, items, and boots.
 - Optionally import visible champion-select picks and assigned allied roles from the local League Client after the user clicks `Auto Import`.
 - Optionally import one displayed rune recommendation into the local League Client after the user clicks `Import Runes`.
 
@@ -47,7 +47,7 @@ The app does not create or delete rune pages. It skips default non-editable Riot
 
 ## Third-Party Data
 
-The app fetches public Lolalytics data for role suggestions, draft projections, and build recommendations. Requests are cached and coalesced locally to reduce repeated upstream hits without changing result quality.
+The app fetches public Lolalytics data for role suggestions, draft projections, and full-enemy-team build recommendations. Requests are cached and coalesced locally to reduce repeated upstream hits without changing result quality.
 
 Lolalytics data is used for recommendations only. The app is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
 

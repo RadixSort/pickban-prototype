@@ -913,7 +913,10 @@
   }
 
   function formatMinute(value) {
-    return Number.isFinite(Number(value)) ? `${Math.round(Number(value))} min` : "-";
+    const numericValue = Number(value);
+    return value != null && Number.isFinite(numericValue) && numericValue > 0
+      ? `${Math.round(numericValue)} min`
+      : "-";
   }
 
   function escapeAttribute(value) {
