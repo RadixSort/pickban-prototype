@@ -12,6 +12,7 @@ It also has:
 
 - a full-draft win-rate projection once all five allied roles are assigned
 - a build view for one ally with current Lolalytics runes, summoner spells, items, and boots
+- a League Client rune import button for displayed build-view rune pages
 - an optional Windows auto import for League pick/ban in Normal Draft and Ranked games
 
 You choose:
@@ -99,8 +100,9 @@ Leave that terminal window open while you use the app.
 6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
 7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
 8. If one ally already has a role, click **Build** on that ally row. With enemies selected it combines matchup-specific build data for each selected enemy into one enemy-aware recommendation; without enemies it opens generic champion build recommendations in the same popup.
-9. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
-10. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
+9. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
+10. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
+11. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
 
 ## Auto Import
 
@@ -127,6 +129,7 @@ Rows that rank highly by projected win rate or projected agency are highlighted 
 - A champion can only appear once across both teams
 - Ally role assignment is optional
 - Build lookup needs 1 ally with an assigned role
+- Rune import needs League pick/ban and at least 1 editable saved rune page
 - Full-draft projection needs all 5 allies plus 5 unique ally roles
 - Auto Import needs the Windows League Client in Normal Draft or Ranked champ select
 
@@ -176,6 +179,10 @@ Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer.
 That button only works after the ally has an assigned role.
 
 With enemies selected it combines matchup-specific build data for those enemies. Without enemies it opens generic champion build recommendations in the same popup.
+
+### Import Runes fails
+
+Make sure League is currently in pick/ban and that your League account has at least one editable saved rune page. The app skips default Riot rune pages and only rewrites the first editable saved page.
 
 ### I expected one role, but the app shows others
 

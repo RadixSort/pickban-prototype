@@ -28,6 +28,7 @@ const {
 } = require("./lib/ugg-build-parser.js");
 const {
   fetchLiveDraftImport,
+  importRunePageIntoLeagueClient,
 } = require("./lib/riot-live-draft.js");
 const {
   buildRoleSuggestionResults,
@@ -169,6 +170,40 @@ app.get("/live-draft", async (_request, response) => {
   response.set("Cache-Control", "no-store");
   response.json(payload);
 });
+
+app.post("/rune-import", async (request, response) => {
+  try {
+    const champion = getKnownChampionFromImportRequest(request.body);
+    const payload = await importRunePageIntoLeagueClient({
+      championName: champion.name,
+      runePage: request.body?.page ?? request.body?.runePage,
+    });
+
+    response
+      .status(payload?.status === "imported" ? 200 : 409)
+      .json(payload);
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    response.status(statusCode).json({
+      status: "error",
+      active: false,
+      imported: false,
+      reason: error.reason || "rune_import_failed",
+      error: error.message || "Unexpected server error.",
+      message: error.message || "Unexpected server error.",
+    });
+  }
+});
+
+function getKnownChampionFromImportRequest(body = {}) {
+  const championName = body?.champion ?? body?.championName;
+  const champion = championByName.get(normalizeChampionName(championName));
+  if (!champion) {
+    throw createHttpError(400, "Choose a known allied champion before importing runes.");
+  }
+
+  return champion;
+}
 
 app.post("/suggest", async (request, response) =>
   lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {

@@ -18,7 +18,11 @@
    * Render the cached `/build-suggestions` payload into the summary-only modal
    * layout used by the current browser UI.
    */
-  function renderBuildSuggestionBody(payload, activeTab = DEFAULT_BUILD_SUGGESTION_TAB) {
+  function renderBuildSuggestionBody(
+    payload,
+    activeTab = DEFAULT_BUILD_SUGGESTION_TAB,
+    options = {},
+  ) {
     void activeTab;
 
     if (!payload || typeof payload !== "object") {
@@ -51,6 +55,7 @@
       mostPickedItemBuild,
       boots,
       notes: [...runeNotes, ...spellNotes],
+      runeImportStatesByPageKey: normalizeRuneImportStates(options?.runeImportStatesByPageKey),
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
   }
@@ -64,6 +69,7 @@
     mostPickedItemBuild,
     boots,
     notes,
+    runeImportStatesByPageKey,
     slotGroupMap,
   }) {
     const runeRecommendations = buildRecommendedRunePages(highestWinPage, mostPickedPage);
@@ -93,7 +99,11 @@
         ${renderInlineNotes(notes)}
         ${renderBuildSummaryGlobalNote()}
         <div class="build-summary-top-grid">
-          ${renderRuneRecommendationsSection(runeRecommendations, slotGroupMap)}
+          ${renderRuneRecommendationsSection(
+            runeRecommendations,
+            slotGroupMap,
+            runeImportStatesByPageKey,
+          )}
           <div class="build-summary-side-stack">
             ${renderSpellRecommendationsSection(spellRecommendations)}
             ${renderBootsSection(highlightedBoots)}
@@ -107,7 +117,14 @@
     `;
   }
 
-  function renderSummaryPageColumn({ title, tone, page, slotGroupMap, emptyMessage }) {
+  function renderSummaryPageColumn({
+    title,
+    tone,
+    page,
+    runeImportStatesByPageKey,
+    slotGroupMap,
+    emptyMessage,
+  }) {
     if (!page) {
       return `
         <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
@@ -129,19 +146,25 @@
       slotGroupMap,
     );
     const modifiers = Array.isArray(page?.selections?.modifiers) ? page.selections.modifiers : [];
+    const pageKey = getRecommendationPageKey(page);
+    const runeImportState = pageKey ? runeImportStatesByPageKey[pageKey] || null : null;
 
     return `
       <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
         <header class="build-summary-column-header">
-          <div class="build-summary-column-heading">
-            <span class="build-summary-kicker">${escapeHtml(title)}</span>
-            <h3>${escapeHtml(getPageTitle(page))}</h3>
+          <div class="build-summary-column-header-top">
+            <div class="build-summary-column-heading">
+              <span class="build-summary-kicker">${escapeHtml(title)}</span>
+              <h3>${escapeHtml(getPageTitle(page))}</h3>
+            </div>
+            ${renderRuneImportAction(pageKey, runeImportState)}
           </div>
           <div class="build-summary-metric-grid">
             ${renderSummaryMetric("Win", formatPercent(page.winRate), "win")}
             ${renderSummaryMetric("Pick", formatPercent(page.pickRate), "pick")}
             ${renderSummaryMetric("Games", formatCount(page.games), "games")}
           </div>
+          ${renderRuneImportStatus(runeImportState)}
         </header>
         <div class="build-summary-section-list">
           ${renderRuneSection("Primary Runes", primaryRunes)}
@@ -152,7 +175,11 @@
     `;
   }
 
-  function renderRuneRecommendationsSection(recommendations, slotGroupMap) {
+  function renderRuneRecommendationsSection(
+    recommendations,
+    slotGroupMap,
+    runeImportStatesByPageKey = {},
+  ) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended runes">
@@ -182,6 +209,7 @@
                 title: getRecommendationTitle(page),
                 tone: getRecommendationTone(page),
                 page,
+                runeImportStatesByPageKey,
                 slotGroupMap,
                 emptyMessage: "",
               }),
@@ -582,6 +610,45 @@
     `;
   }
 
+  function renderRuneImportAction(pageKey, runeImportState) {
+    if (!pageKey) {
+      return "";
+    }
+
+    const isImporting = runeImportState?.status === "importing";
+
+    return `
+      <button
+        type="button"
+        class="build-rune-import-action"
+        data-rune-import-key="${escapeAttribute(pageKey)}"
+        aria-label="Import this rune page into the League Client"
+        ${isImporting ? "disabled" : ""}
+      >
+        ${isImporting ? "Importing..." : "Import Runes"}
+      </button>
+    `;
+  }
+
+  function renderRuneImportStatus(runeImportState) {
+    const message = typeof runeImportState?.message === "string" ? runeImportState.message.trim() : "";
+    if (!message) {
+      return "";
+    }
+
+    const status = runeImportState?.status === "success"
+      ? "success"
+      : runeImportState?.status === "error"
+        ? "error"
+        : "pending";
+
+    return `
+      <p class="build-rune-import-status build-rune-import-status--${escapeAttribute(status)}" aria-live="polite">
+        ${escapeHtml(message)}
+      </p>
+    `;
+  }
+
   function renderHighlightLegend(option) {
     if (option?.isHighestWin && option?.isMostPicked) {
       return '<span class="build-highlight build-highlight--both">Highest Win + Most Picked</span>';
@@ -641,6 +708,10 @@
     });
 
     return [...pagesByKey.values()].sort(compareHighlightedOptions);
+  }
+
+  function normalizeRuneImportStates(statesByPageKey) {
+    return statesByPageKey && typeof statesByPageKey === "object" ? statesByPageKey : {};
   }
 
   function buildRecommendedSpellSets(highestWinSet, mostPickedSet) {
@@ -861,6 +932,8 @@
   return {
     BUILD_SUGGESTION_TABS,
     DEFAULT_BUILD_SUGGESTION_TAB,
+    getRecommendedRunePages: buildRecommendedRunePages,
+    getRunePageRecommendationKey: getRecommendationPageKey,
     normalizeBuildSuggestionTab,
     renderBuildSuggestionBody,
   };

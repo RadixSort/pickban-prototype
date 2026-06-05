@@ -57,6 +57,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - `POST /draft-outlook`
   - `POST /build-suggestions`
   - `GET /live-draft`
+  - `POST /rune-import`
   - `POST /shutdown`
   - Lolalytics fetch/caching helpers
   - app version and Lolalytics lookback metadata for the visible header
@@ -69,6 +70,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - role-results rendering
   - draft projection fetch and rendering
   - build recommendation modal flow
+  - build-modal rune import state and League Client import requests
 
 - `public/roles.js`
   - role aliases
@@ -96,6 +98,7 @@ That means shared business rules often live in `public/`, not `lib/`.
 
 - `public/build-suggestion-view.js`
   - summary HTML for build-modal recommendation sections
+  - per-rune-page import controls rendered with stable page keys
 
 - `public/rune-metadata.js`
   - local rune style and icon metadata used by the build parser and modal renderer
@@ -149,6 +152,7 @@ That means shared business rules often live in `public/`, not `lib/`.
   - read League Client champ-select and gameflow state from localhost
   - allow only Normal Draft (`400`), Ranked Solo/Duo (`420`), and Ranked Flex (`440`)
   - normalize visible champion IDs and assigned positions into local champion/role metadata
+  - validate complete rune recommendations and update the first editable saved League rune page
 
 ## Request Flows
 
@@ -285,6 +289,48 @@ The browser exposes this route from the `Build` button whenever the selected all
 
 Enemy-aware build recommendations are composition-aware aggregates over matchup-specific build data. They do not use the Lolalytics `counter` endpoint that powers role suggestions and draft outlook. For each selected enemy, the route requests the ally-vs-enemy build/rune sources, keeps successful matchups, records failed enemy matchups in `summary.partialFailures`, and aggregates the successful matchup records into one modal payload.
 
+## `POST /rune-import`
+
+Used by each `Import Runes` button rendered in the build recommendation modal.
+
+Minimal request example:
+
+```json
+{
+  "champion": "Ahri",
+  "page": {
+    "primaryStyle": { "styleId": 8000 },
+    "secondaryStyle": { "styleId": 8200 },
+    "selections": {
+      "primary": [{ "id": 8008 }, { "id": 9111 }, { "id": 9103 }, { "id": 8014 }],
+      "secondary": [{ "id": 8210 }, { "id": 8236 }],
+      "modifiers": [{ "id": 5008 }, { "id": 5008 }, { "id": 5001 }]
+    }
+  }
+}
+```
+
+Flow:
+
+1. The route validates the champion against local champion metadata and the rune page as a complete League page: 4 primary runes, 2 secondary runes, 3 stat modifiers, and both rune style IDs.
+2. `lib/riot-live-draft.js` reads the League Client lockfile using the same env override order as `GET /live-draft`.
+3. It reads `/lol-gameflow/v1/session` and refuses to mutate pages unless the phase is `ChampSelect`.
+4. It reads `/lol-perks/v1/pages`, skips non-editable default Riot pages, and chooses the first editable saved page by `order`, then `id`.
+5. If the target page does not already match the requested import, it sends `PUT /lol-perks/v1/pages/{id}` with the existing page fields plus:
+   - `name: "import - {Champion}"`
+   - `primaryStyleId`
+   - `subStyleId`
+   - `selectedPerkIds`
+6. The browser stores import status per displayed rune page key so one failed import does not mark the other recommendation as failed.
+
+Important behavioral details:
+
+- rune import is not cached; every click reads the local page state before deciding whether a write is needed
+- stat modifier IDs may repeat across modifier rows and are preserved
+- the route returns `409` for expected local unavailability such as no champ-select phase or no editable saved rune page
+- it never creates or deletes rune pages
+- if the first editable page already has the requested name and rune IDs, the route reports success without sending a `PUT`
+
 ## `GET /live-draft`
 
 Used by the opt-in Windows auto-import flow during League of Legends pick/ban.
@@ -297,7 +343,7 @@ Flow:
 4. If the phase is not `ChampSelect`, the client is disconnected, or the queue is not Normal Draft/Ranked, the route returns a disabled payload and no draft selections.
 5. If the session is supported, the route returns visible allied picks with roles, visible enemy picks, the local player's assigned role, and queue metadata.
 
-The browser polls this route only after the user clicks `Auto Import`. It applies a changed live-draft signature once, then preserves manual edits until the League Client exposes new conflicting live data.
+The browser polls this route only after the user clicks `Auto Import`. The server checks gameflow before reading champ-select details, so unsupported phases or queues stop after one local League Client request. The browser applies a changed live-draft signature once, then preserves manual edits until the League Client exposes new conflicting live data.
 
 ## Scoring, Filtering, And Ranking
 
@@ -371,6 +417,7 @@ Frontend caches:
 - build suggestions are cached for the current browser session by rank filter + ally + ally role + enemies
 - draft outlook responses are cached for the current browser session under the same draft key as role suggestions
 - live-draft responses are not cached; they are short-poll reads from the local League Client after explicit opt-in
+- rune imports are not cached; each `Import Runes` click reads fresh local page state and writes only when the target page differs
 
 Failure behavior:
 
@@ -384,6 +431,7 @@ Failure behavior:
 - if every rune build fetch fails, `/build-suggestions` returns an HTTP error payload
 - rendered build-page fetch or parse failures leave the rune recommendation data intact
 - `/live-draft` expected failures return disabled payloads so the UI can show the auto-import banner without changing current selections
+- `/rune-import` expected failures return `409` with a disabled payload so the modal can show page-specific import feedback
 
 ## External Assumptions
 
@@ -392,6 +440,7 @@ The most fragile dependencies are external:
 - Riot documents local client APIs but states the League Client API is not officially supported for third-party applications; champ-select import depends on that local API and may change without notice
 - the UI must keep a readily visible unframed Riot non-endorsement/trademark footnote if it continues to reference Riot or League-related names, assets, or local client data
 - the Windows League Client lockfile must be present and readable while the client is running
+- League Client rune import depends on `/lol-gameflow/v1/session` and `/lol-perks/v1/pages` staying compatible
 - Lolalytics mega tier, synergy, and counter payloads must continue exposing the currently parsed fields
 - Lolalytics mega rune payloads must continue exposing `header`, `summary.runes`, `summary.pick`, and `summary.win`
 - Lolalytics rendered build pages must continue exposing recognizable `Summoner Spells` and `Core Build` sections with item/spell image metadata and nearby win-rate/game-count text
@@ -424,7 +473,9 @@ If the app suddenly stops returning data without a local code change, these assu
 - `test/server-startup.test.js` is a startup/shutdown smoke test for `server.js`
 - `test/server-route-helpers.test.js` covers the shared route helper module used by `server.js`
 - `test/riot-live-draft.test.js` covers League Client payload normalization
+- `test/riot-rune-import.test.js` covers rune-page validation, first editable page selection, and League Client rune-page mutation shaping
 - `test/lolalytics-build-parser.test.js` keeps separate regression coverage for mega rune payloads, rendered-page item/boot extraction, and U.GG fallback extraction
 - `test/build-suggestion-results.test.js` covers cross-matchup build aggregation, highest-win thresholds, item-path construction, and boot ranking
 - `test/server-api.test.js` mocks `LOLALYTICS_MEGA_URL`, `LOLALYTICS_BASE_URL`, and `UGG_BASE_URL` so future build failures can be isolated to enemy matchup fetches, rune parsing, rendered page parsing, fallback parsing, caching, or aggregation
+- `test/server-http.test.js` covers local League Client route behavior for both champ-select import and rune-page import with a fake local Riot client
 - `npm run bench:efficiency` is useful after changing aggregation or ranking behavior
