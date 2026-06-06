@@ -289,6 +289,8 @@ The browser exposes this route from the `Build` button only when the selected al
 
 Enemy-aware build recommendations are composition-aware aggregates over matchup-specific build data. They do not use the Lolalytics `counter` endpoint that powers role suggestions and draft outlook. For each selected enemy, the route requests the ally-vs-enemy build/rune sources, keeps successful matchups, records failed enemy matchups in `summary.partialFailures`, and aggregates the successful matchup records into one modal payload.
 
+Rendered-page parsing supports both older combined stat text such as `57.6% Win Rate 48 Games` and the current Qwik split text such as `57.6` / `% Win Rate` / `48 Games` for spells or `57.6` / `%` / `48` for items. Build-route tests use the split shape so upstream display changes cannot silently return rune-only data while the popup categories stay empty.
+
 ## `POST /rune-import`
 
 Used by each `Import Runes` button rendered in the build recommendation modal.

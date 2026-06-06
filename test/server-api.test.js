@@ -773,7 +773,7 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
     }
 
     if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
-      return textResponse(createRenderedBuildPageHtml());
+      return textResponse(createRenderedBuildPageHtml({ splitStats: true }));
     }
 
     return textResponse("Not found.", 404);

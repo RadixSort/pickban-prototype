@@ -349,6 +349,7 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
       coreWinRate: 57.61,
       spellGames: 48,
       spellWinRate: 53.63,
+      splitStats: true,
     }),
     {
       allyChampionKey: "103",

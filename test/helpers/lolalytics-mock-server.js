@@ -256,47 +256,60 @@ function createRenderedBuildPageHtml({
   spellWinRate = 53.63,
   bootItemId = 3170,
   bootName = "Gluttonous Greaves",
+  splitStats = false,
 } = {}) {
+  const renderSpellStats = (winRate, games) =>
+    splitStats
+      ? `
+        <span>${winRate}</span>
+        <span>% Win Rate</span>
+        <span>${games.toLocaleString("en-US")} Games</span>
+      `
+      : `<p>${winRate}% Win Rate ${games.toLocaleString("en-US")} Games</p>`;
+  const renderItemStats = (winRate, games) =>
+    splitStats
+      ? `
+        <span>${winRate}</span>
+        <span>%</span>
+        <span>${games.toLocaleString("en-US")}</span>
+      `
+      : `
+        <div>${winRate}%</div>
+        <div>${games.toLocaleString("en-US")}</div>
+      `;
+
   return `
     <main>
       <section>
         <h2>Summoner Spells</h2>
         <img src="https://cdn5.lolalytics.com/spell64/4.webp" alt="Flash" />
         <img src="https://cdn5.lolalytics.com/spell64/14.webp" alt="Ignite" />
-        <p>${spellWinRate}% Win Rate ${spellGames.toLocaleString("en-US")} Games</p>
+        ${renderSpellStats(spellWinRate, spellGames)}
         <h2>Skill Order</h2>
       </section>
       <section>
         <h2>Core Build</h2>
         <img src="https://cdn5.lolalytics.com/item64/2510.webp" alt="Dusk and Dawn" />
-        <div>${coreWinRate}%</div>
-        <div>${coreGames.toLocaleString("en-US")}</div>
+        ${renderItemStats(coreWinRate, coreGames)}
         <img src="https://cdn5.lolalytics.com/item64/${bootItemId}.webp" alt="${bootName}" />
-        <div>${bootWinRate}%</div>
-        <div>${bootGames.toLocaleString("en-US")}</div>
+        ${renderItemStats(bootWinRate, bootGames)}
         <img src="https://cdn5.lolalytics.com/item64/3115.webp" alt="Nashor's Tooth" />
-        <div>${thirdCoreWinRate}%</div>
-        <div>${thirdCoreGames.toLocaleString("en-US")}</div>
+        ${renderItemStats(thirdCoreWinRate, thirdCoreGames)}
         <h3>Item 4</h3>
         <img src="https://cdn5.lolalytics.com/item64/3089.webp" alt="Rabadon's Deathcap" />
-        <div>61.3%</div>
-        <div>42</div>
+        ${renderItemStats(61.3, 42)}
         <p>OR</p>
         <img src="https://cdn5.lolalytics.com/item64/4645.webp" alt="Shadowflame" />
-        <div>59.63%</div>
-        <div>31</div>
+        ${renderItemStats(59.63, 31)}
         <h3>Item 5</h3>
         <img src="https://cdn5.lolalytics.com/item64/4645.webp" alt="Shadowflame" />
-        <div>65.04%</div>
-        <div>35</div>
+        ${renderItemStats(65.04, 35)}
         <p>OR</p>
         <img src="https://cdn5.lolalytics.com/item64/3135.webp" alt="Void Staff" />
-        <div>63.06%</div>
-        <div>29</div>
+        ${renderItemStats(63.06, 29)}
         <h3>Item 6</h3>
         <img src="https://cdn5.lolalytics.com/item64/3135.webp" alt="Void Staff" />
-        <div>64.27%</div>
-        <div>20</div>
+        ${renderItemStats(64.27, 20)}
         <p>LEGEND:</p>
       </section>
     </main>
