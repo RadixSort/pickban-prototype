@@ -82,9 +82,10 @@ async function spawnServerProcess({
   cwd,
   port,
   env = {},
+  script = "server.js",
   timeoutMs = 5000,
 } = {}) {
-  const child = spawn(process.execPath, ["server.js"], {
+  const child = spawn(process.execPath, [script], {
     cwd,
     env: {
       ...process.env,
@@ -133,7 +134,7 @@ function stopServerProcess(childOrProcess, timeoutMs = 5000) {
 
 async function startServer(testContext, options = {}) {
   const port = Number.isInteger(options.port) ? options.port : await getAvailablePort();
-  const child = spawn(process.execPath, ["server.js"], {
+  const child = spawn(process.execPath, [options.script || "server.js"], {
     cwd: options.cwd || path.resolve(__dirname, "../.."),
     env: {
       ...process.env,

@@ -16,3 +16,17 @@ test("server.js starts cleanly, reports the bound port, and handles SIGTERM shut
 
   await stopServer(child);
 });
+
+test("start.js runs the startup wrapper before the server", async (t) => {
+  const { child, stdout } = await startServer(t, {
+    script: "start.js",
+    env: {
+      PICKBAN_DISABLE_AUTO_UPDATE: "1",
+    },
+  });
+
+  assert.match(stdout, /PickBan auto-update disabled\./);
+  assert.match(stdout, /PickBan prototype running at http:\/\/localhost:\d+/);
+
+  await stopServer(child);
+});

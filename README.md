@@ -45,11 +45,20 @@ npm run bench:efficiency
 Supported runtime overrides:
 
 - `PORT`: override the local listen port
+- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0`: skip the startup git update check
+- `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH`: override the checked git remote and branch; defaults are `origin` and `main`
 - `LOLALYTICS_BASE_URL`: override the rendered Lolalytics page origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
 - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import and rune import
 
 There is no build, lint, or bundling command in this repo.
+
+Startup auto-update:
+
+- `npm start` runs `start.js`, which checks `origin/main` before loading `server.js`
+- if the local package version differs from `origin/main`, the current branch is `main`, and the working tree is clean, the app fast-forwards to the fetched commit before starting
+- if `package.json` or `package-lock.json` changed during the update, startup runs `npm install --no-audit --no-fund`
+- local branches, dirty worktrees, fetch failures, and non-fast-forward states skip auto-update and start the current checkout
 
 ## Local Workflow
 
@@ -71,6 +80,7 @@ Change feedback loops:
 
 Entry points:
 
+- `start.js`: `npm start` bootstrap that runs the clean-main auto-update check before loading the server
 - `server.js`: Express startup, `GET /app-config`, `GET /live-draft`, `POST /rune-import`, `POST /suggest`, `POST /draft-outlook`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
 - `public/index.html`: browser entry point
 - `public/app.js`: frontend controller, draft state, fetch flows, modal state, and rendering
@@ -260,7 +270,7 @@ The button is only shown after `GET /app-config` succeeds and the browser receiv
 - auto import depends on Riot's local League Client API and the Windows League Client lockfile staying compatible
 - rune import depends on Riot's local League Client `/lol-perks/v1/pages` API staying compatible
 - runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`; the UI displays the current Lolalytics patch window as a last-7-days lookback
-- the supported runtime overrides are `PORT`, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
+- the supported runtime overrides are `PORT`, the startup auto-update vars, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
 - there is no persistence, auth, or deployment story in this repository
 
 ## License

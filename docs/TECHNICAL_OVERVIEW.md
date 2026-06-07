@@ -29,13 +29,14 @@ If you are onboarding to the codebase, read these files in order:
 
 Runtime entry points:
 
+- `start.js`: startup bootstrap used by `npm start`; runs the git auto-update check before loading `server.js`
 - `server.js`: starts the Express process and owns every HTTP route
 - `public/index.html`: browser entry point
 - `public/app.js`: frontend state and controller logic
 
 Commands:
 
-- `npm start`: run the local server
+- `npm start`: run the startup bootstrap and local server
 - `npm test`: run the Node test suite
 - `npm run bench:efficiency`: run the aggregation benchmark
 
@@ -62,6 +63,11 @@ That means shared business rules often live in `public/`, not `lib/`.
   - Lolalytics fetch/caching helpers
   - app version and Lolalytics lookback metadata for the visible header
   - graceful shutdown
+
+- `lib/startup-auto-update.js`
+  - clean-main startup update policy
+  - `origin/main` package-version comparison
+  - fast-forward-only git update and dependency install orchestration
 
 - `public/app.js`
   - draft state
@@ -454,9 +460,13 @@ If the app suddenly stops returning data without a local code change, these assu
 - default port: `3000`
 - supported runtime env vars:
   - `PORT`
+  - `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0` to skip the startup update check
+  - `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH` to override the checked git remote and branch; defaults are `origin` and `main`
   - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
+- `npm start` checks the configured git remote/branch before loading `server.js`; it updates only when the local package version differs, the current branch matches the target branch, the working tree is clean, and the fetched commit can fast-forward
+- if `package.json` or `package-lock.json` changes during startup auto-update, the bootstrap runs `npm install --no-audit --no-fund` before loading `server.js`
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
 - `/app-config` exposes the package version and `lolalyticsDataWindowDays`; the header uses that value to describe the current Lolalytics `patch=7` lookback window as `last 7 days`
