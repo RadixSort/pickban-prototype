@@ -17,6 +17,7 @@ The app header credits Lolalytics and shows the current last-7-days data window 
 Requirements:
 
 - Node.js 18 or newer
+- npm
 - internet access while fetching live data
 - a modern browser
 
@@ -45,8 +46,9 @@ npm run bench:efficiency
 Supported runtime overrides:
 
 - `PORT`: override the local listen port
-- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0`: skip the startup git update check
+- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0`: skip the startup update check
 - `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH`: override the checked git remote and branch; defaults are `origin` and `main`
+- `PICKBAN_AUTO_UPDATE_ZIP_URL`: override the no-git release zip URL; defaults to `https://github.com/RadixSort/pickban-prototype/archive/refs/heads/main.zip`
 - `LOLALYTICS_BASE_URL`: override the rendered Lolalytics page origin
 - `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
 - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import and rune import
@@ -57,6 +59,7 @@ Startup auto-update:
 
 - `npm start` runs `start.js`, which checks `origin/main` before loading `server.js`
 - if the local package version differs from `origin/main`, the current branch is `main`, and the working tree is clean, the app fast-forwards to the fetched commit before starting
+- if Git is unavailable and the app is not running from a git worktree, startup downloads the `main.zip` release archive, extracts it automatically, and copies its files over the current app folder before starting
 - if `package.json` or `package-lock.json` changed during the update, startup runs `npm install --no-audit --no-fund`
 - local branches, dirty worktrees, fetch failures, and non-fast-forward states skip auto-update and start the current checkout
 

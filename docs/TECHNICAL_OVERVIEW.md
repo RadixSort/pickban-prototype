@@ -67,7 +67,8 @@ That means shared business rules often live in `public/`, not `lib/`.
 - `lib/startup-auto-update.js`
   - clean-main startup update policy
   - `origin/main` package-version comparison
-  - fast-forward-only git update and dependency install orchestration
+  - fast-forward-only git update path
+  - no-git GitHub release zip download, extraction, file sync, and dependency install orchestration
 
 - `public/app.js`
   - draft state
@@ -462,10 +463,12 @@ If the app suddenly stops returning data without a local code change, these assu
   - `PORT`
   - `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0` to skip the startup update check
   - `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH` to override the checked git remote and branch; defaults are `origin` and `main`
+  - `PICKBAN_AUTO_UPDATE_ZIP_URL` to override the no-git release zip URL; default is `https://github.com/RadixSort/pickban-prototype/archive/refs/heads/main.zip`
   - `LOLALYTICS_BASE_URL`
   - `LOLALYTICS_MEGA_URL`
   - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` for local League Client lockfile overrides
 - `npm start` checks the configured git remote/branch before loading `server.js`; it updates only when the local package version differs, the current branch matches the target branch, the working tree is clean, and the fetched commit can fast-forward
+- if Git is unavailable and no `.git` directory exists beside the app, startup falls back to the configured GitHub zip archive, extracts it with the built-in Node zip reader, and copies archive files into the app directory
 - if `package.json` or `package-lock.json` changes during startup auto-update, the bootstrap runs `npm install --no-audit --no-fund` before loading `server.js`
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`

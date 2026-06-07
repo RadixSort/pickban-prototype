@@ -1,7 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const zlib = require("node:zlib");
 
 const {
+  extractZipEntries,
   isAutoUpdateDisabled,
   readPackageVersion,
   runStartupAutoUpdate,
@@ -11,9 +13,9 @@ const CWD = "/repo";
 const LOCAL_PACKAGE = JSON.stringify({ version: "0.6.3" });
 const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.4" });
 
-test("startup auto-update can be disabled by env", () => {
+test("startup auto-update can be disabled by env", async () => {
   const commands = [];
-  const result = runStartupAutoUpdate({
+  const result = await runStartupAutoUpdate({
     cwd: CWD,
     env: {
       PICKBAN_DISABLE_AUTO_UPDATE: "1",
@@ -27,9 +29,9 @@ test("startup auto-update can be disabled by env", () => {
   assert.equal(isAutoUpdateDisabled({ PICKBAN_AUTO_UPDATE: "0" }), true);
 });
 
-test("startup auto-update skips branches other than main", () => {
+test("startup auto-update skips branches other than main", async () => {
   const commands = [];
-  const result = runStartupAutoUpdate({
+  const result = await runStartupAutoUpdate({
     cwd: CWD,
     env: {},
     logger: createLogger(),
@@ -51,9 +53,9 @@ test("startup auto-update skips branches other than main", () => {
   );
 });
 
-test("startup auto-update skips dirty work trees before fetching", () => {
+test("startup auto-update skips dirty work trees before fetching", async () => {
   const commands = [];
-  const result = runStartupAutoUpdate({
+  const result = await runStartupAutoUpdate({
     cwd: CWD,
     env: {},
     logger: createLogger(),
@@ -71,9 +73,9 @@ test("startup auto-update skips dirty work trees before fetching", () => {
   );
 });
 
-test("startup auto-update does nothing when remote main has the same version", () => {
+test("startup auto-update does nothing when remote main has the same version", async () => {
   const commands = [];
-  const result = runStartupAutoUpdate({
+  const result = await runStartupAutoUpdate({
     cwd: CWD,
     env: {},
     logger: createLogger(),
@@ -88,9 +90,9 @@ test("startup auto-update does nothing when remote main has the same version", (
   assert.equal(result.remoteVersion, "0.6.3");
 });
 
-test("startup auto-update fast-forwards and installs when remote main has a new version", () => {
+test("startup auto-update fast-forwards and installs when remote main has a new version", async () => {
   const commands = [];
-  const result = runStartupAutoUpdate({
+  const result = await runStartupAutoUpdate({
     cwd: CWD,
     env: {},
     logger: createLogger(),
@@ -121,6 +123,87 @@ test("startup auto-update fast-forwards and installs when remote main has a new 
       "npm install --no-audit --no-fund",
     ],
   );
+});
+
+test("startup auto-update installs a newer release zip when git is unavailable", async () => {
+  const commands = [];
+  const writtenFiles = new Map();
+  const createdDirs = [];
+  const archiveBuffer = createZipBuffer({
+    "pickban-prototype-main/package.json": REMOTE_PACKAGE,
+    "pickban-prototype-main/server.js": "require('express');\n",
+  });
+  const result = await runStartupAutoUpdate({
+    cwd: CWD,
+    env: {},
+    exists: () => false,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () =>
+        archiveBuffer.buffer.slice(
+          archiveBuffer.byteOffset,
+          archiveBuffer.byteOffset + archiveBuffer.byteLength,
+        ),
+    }),
+    logger: createLogger(),
+    mkdir: (dirPath) => {
+      createdDirs.push(dirPath);
+    },
+    readFile: (filePath) => {
+      if (filePath === `${CWD}/package.json`) {
+        return LOCAL_PACKAGE;
+      }
+
+      throw new Error(`Unexpected read: ${filePath}`);
+    },
+    runCommand: createCommandRunner(commands, {
+      "git rev-parse --is-inside-work-tree": failure("git not found"),
+    }),
+    writeFile: (filePath, fileBuffer) => {
+      writtenFiles.set(filePath, Buffer.from(fileBuffer).toString("utf8"));
+    },
+  });
+
+  assert.equal(result.status, "updated");
+  assert.equal(result.source, "zip");
+  assert.equal(result.localVersion, "0.6.3");
+  assert.equal(result.remoteVersion, "0.6.4");
+  assert.equal(writtenFiles.get(`${CWD}/package.json`), REMOTE_PACKAGE);
+  assert.equal(writtenFiles.get(`${CWD}/server.js`), "require('express');\n");
+  assert.deepEqual(createdDirs, [CWD, CWD]);
+  assert.deepEqual(
+    commands.map((entry) => commandKey(entry.command, entry.args)),
+    [
+      "git rev-parse --is-inside-work-tree",
+      "npm install --no-audit --no-fund",
+    ],
+  );
+});
+
+test("zip extraction strips the GitHub archive root directory", () => {
+  const archiveBuffer = createZipBuffer({
+    "pickban-prototype-main/package.json": LOCAL_PACKAGE,
+    "pickban-prototype-main/public/index.html": "<!doctype html>\n",
+  });
+  const entries = extractZipEntries(archiveBuffer);
+
+  assert.deepEqual([...entries.keys()], ["package.json", "public/index.html"]);
+  assert.equal(entries.get("public/index.html").toString("utf8"), "<!doctype html>\n");
+});
+
+test("zip extraction inflates deflated entries", () => {
+  const archiveBuffer = createZipBuffer(
+    {
+      "pickban-prototype-main/package.json": LOCAL_PACKAGE,
+    },
+    {
+      compressionMethod: 8,
+    },
+  );
+  const entries = extractZipEntries(archiveBuffer);
+
+  assert.equal(entries.get("package.json").toString("utf8"), LOCAL_PACKAGE);
 });
 
 test("readPackageVersion normalizes invalid package text to an empty string", () => {
@@ -221,4 +304,64 @@ function createLogger() {
       this.errors.push(message);
     },
   };
+}
+
+function createZipBuffer(files, { compressionMethod = 0 } = {}) {
+  const localFileRecords = [];
+  const centralDirectoryRecords = [];
+  let offset = 0;
+
+  for (const [fileName, content] of Object.entries(files)) {
+    const fileNameBuffer = Buffer.from(fileName, "utf8");
+    const contentBuffer = Buffer.from(content);
+    const compressedContentBuffer =
+      compressionMethod === 8 ? zlib.deflateRawSync(contentBuffer) : contentBuffer;
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(compressionMethod, 8);
+    localHeader.writeUInt32LE(0, 10);
+    localHeader.writeUInt32LE(0, 14);
+    localHeader.writeUInt32LE(compressedContentBuffer.length, 18);
+    localHeader.writeUInt32LE(contentBuffer.length, 22);
+    localHeader.writeUInt16LE(fileNameBuffer.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(compressionMethod, 10);
+    centralHeader.writeUInt32LE(0, 12);
+    centralHeader.writeUInt32LE(0, 16);
+    centralHeader.writeUInt32LE(compressedContentBuffer.length, 20);
+    centralHeader.writeUInt32LE(contentBuffer.length, 24);
+    centralHeader.writeUInt16LE(fileNameBuffer.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt32LE(0, 34);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+
+    const localRecord = Buffer.concat([localHeader, fileNameBuffer, compressedContentBuffer]);
+    localFileRecords.push(localRecord);
+    centralDirectoryRecords.push(Buffer.concat([centralHeader, fileNameBuffer]));
+    offset += localRecord.length;
+  }
+
+  const centralDirectoryOffset = offset;
+  const centralDirectory = Buffer.concat(centralDirectoryRecords);
+  const endOfCentralDirectory = Buffer.alloc(22);
+  endOfCentralDirectory.writeUInt32LE(0x06054b50, 0);
+  endOfCentralDirectory.writeUInt16LE(0, 4);
+  endOfCentralDirectory.writeUInt16LE(0, 6);
+  endOfCentralDirectory.writeUInt16LE(centralDirectoryRecords.length, 8);
+  endOfCentralDirectory.writeUInt16LE(centralDirectoryRecords.length, 10);
+  endOfCentralDirectory.writeUInt32LE(centralDirectory.length, 12);
+  endOfCentralDirectory.writeUInt32LE(centralDirectoryOffset, 16);
+  endOfCentralDirectory.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...localFileRecords, centralDirectory, endOfCentralDirectory]);
 }

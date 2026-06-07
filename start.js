@@ -3,9 +3,14 @@ const {
   runStartupAutoUpdate,
 } = require("./lib/startup-auto-update.js");
 
-runStartupAutoUpdate({
-  cwd: path.resolve(__dirname),
-  logger: console,
-});
+(async () => {
+  await runStartupAutoUpdate({
+    cwd: path.resolve(__dirname),
+    logger: console,
+  });
 
-require("./server.js");
+  require("./server.js");
+})().catch((error) => {
+  console.error(`PickBan startup failed: ${error.message || "unexpected error"}.`);
+  process.exit(1);
+});
