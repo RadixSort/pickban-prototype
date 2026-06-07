@@ -874,6 +874,79 @@ select {
   margin-bottom: 0;
 }
 
+.draft-projection-failures {
+  border: 1px solid rgba(255, 154, 154, 0.16);
+  border-radius: 12px;
+  background: rgba(72, 20, 20, 0.16);
+  padding: 10px 12px;
+}
+
+.partial-failures-accordion {
+  display: grid;
+  gap: 8px;
+}
+
+.partial-failures-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  color: var(--action-blue-text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.partial-failures-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.partial-failures-toggle::before {
+  content: "+";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid var(--action-blue-border);
+  border-radius: 999px;
+  color: var(--action-blue-text);
+  background: rgba(34, 57, 89, 0.42);
+}
+
+.partial-failures-accordion[open] .partial-failures-toggle::before {
+  content: "-";
+}
+
+.partial-failures-toggle-label {
+  flex: 1 1 auto;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.partial-failures-toggle-label--open,
+.partial-failures-accordion[open] .partial-failures-toggle-label--closed {
+  display: none;
+}
+
+.partial-failures-accordion[open] .partial-failures-toggle-label--open {
+  display: inline;
+}
+
+.partial-failures-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.partial-failures-list {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+
 .draft-projection-scoreboard {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

@@ -37,7 +37,7 @@
       name: "Sorcery",
       icon: "https://ddragon.leagueoflegends.com/cdn/img/perk-images/Styles/7202_Sorcery.png",
       slots: [
-        [8214, 8229, 8230],
+        [8214, 8229, 8230, 8992],
         [8224, 8226, 8275],
         [8210, 8234, 8233],
         [8237, 8232, 8236],

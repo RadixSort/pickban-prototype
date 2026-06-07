@@ -57,7 +57,7 @@ test("draft projection view renders 50-50 outcomes as yellow on both sides", () 
   assert.match(html, /style="width: 50%;"/);
 });
 
-test("draft projection view renders partial scrape failures below the win rates", () => {
+test("draft projection view hides partial scrape failures behind a disclosure", () => {
   const html = renderDraftProjectionView(
     {
       summary: {
@@ -74,11 +74,18 @@ test("draft projection view renders partial scrape failures below the win rates"
   );
 
   assert.match(html, /Partial scrape failures/);
+  assert.match(html, /<details class="partial-failures-accordion">/);
+  assert.match(html, /see more/);
+  assert.match(html, /1 message/);
   assert.match(html, /Ahri: Missing synergy row\./);
+  assert.doesNotMatch(html, /<details class="partial-failures-accordion" open>/);
   assert.ok(
     html.indexOf("draft-projection-scoreboard") < html.indexOf("Partial scrape failures"),
   );
   assert.ok(
-    html.indexOf("Partial scrape failures") < html.indexOf("draft-projection-meta"),
+    html.indexOf("see more") < html.indexOf("Ahri: Missing synergy row."),
+  );
+  assert.ok(
+    html.indexOf("Ahri: Missing synergy row.") < html.indexOf("draft-projection-meta"),
   );
 });

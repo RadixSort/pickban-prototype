@@ -35,14 +35,25 @@
       partialFailures.length === 0
         ? ""
         : `
-        <div class="partial-failures">
+        <div class="partial-failures draft-projection-failures">
           <p class="partial-failures-title">Partial scrape failures</p>
-          ${partialFailures
-            .map(
-              (failure) =>
-                `<p class="partial-failure-item">${escapeHtml(failure)}</p>`,
-            )
-            .join("")}
+          <details class="partial-failures-accordion">
+            <summary class="partial-failures-toggle">
+              <span class="partial-failures-toggle-label partial-failures-toggle-label--closed">see more</span>
+              <span class="partial-failures-toggle-label partial-failures-toggle-label--open">show less</span>
+              <span class="partial-failures-count">
+                ${partialFailures.length} ${partialFailures.length === 1 ? "message" : "messages"}
+              </span>
+            </summary>
+            <div class="partial-failures-list">
+              ${partialFailures
+                .map(
+                  (failure) =>
+                    `<p class="partial-failure-item">${escapeHtml(failure)}</p>`,
+                )
+                .join("")}
+            </div>
+          </details>
         </div>
       `;
 

@@ -342,6 +342,94 @@ test("parseLolalyticsRuneBuildData normalizes the current mega rune payload shap
   assert.deepEqual(parsed.boots, []);
 });
 
+test("parseLolalyticsRuneBuildData accepts current Senna Sorcery pages with Deathfire Touch", () => {
+  const parsed = parseLolalyticsRuneBuildData(
+    {
+      header: {
+        n: 103151,
+        defaultLane: "bottom",
+        lane: "support",
+      },
+      summary: {
+        runes: {
+          pick: {
+            wr: 54.44,
+            n: 76443,
+            page: {
+              pri: 2,
+              sec: 4,
+            },
+            set: {
+              pri: [8992, 8226, 8234, 8236],
+              sec: [8304, 8316],
+              mod: [5005, 5008, 5011],
+            },
+          },
+          win: {
+            wr: 54.44,
+            n: 76443,
+            page: {
+              pri: 2,
+              sec: 4,
+            },
+            set: {
+              pri: [8992, 8226, 8234, 8236],
+              sec: [8316, 8304],
+              mod: [5008, 5010, 5011],
+            },
+          },
+        },
+        pick: {
+          pri: [
+            [8992, 54.44, 74.11, 76443],
+            [8226, 54.37, 78.27, 80735],
+            [8234, 54.56, 71.83, 74098],
+            [8236, 54.53, 70.85, 73084],
+          ],
+          sec: [
+            [8304, 54.76, 65.59, 67661],
+            [8316, 55.26, 53.35, 55031],
+          ],
+          mod: [
+            [5005, 54.33, 37.21, 38390],
+            [5008, 54.67, 38.81, 40039],
+            [5011, 54.27, 48.71, 50253],
+          ],
+        },
+        win: {
+          pri: [
+            [8992, 54.44, 74.11, 76443],
+          ],
+          sec: [
+            [8316, 55.26, 53.35, 55031],
+          ],
+          mod: [
+            [5010, 55.29, 29.98, 30933],
+          ],
+        },
+      },
+    },
+    {
+      allyChampionKey: "235",
+      enemyChampionKey: "103",
+      fetchedAt: "2026-06-07T02:41:13.285Z",
+      role: "support",
+    },
+  );
+
+  assert.equal(parsed.totalGames, 103151);
+  assert.equal(parsed.runes.pageCandidates.length, 1);
+  assert.deepEqual(parsed.runes.pageCandidates[0].primaryRuneIds, [8992, 8226, 8234, 8236]);
+  assert.deepEqual(parsed.runes.pageCandidates[0].secondaryRuneIds, [8304, 8316]);
+  assert.equal(parsed.runes.pageCandidates[0].primaryStyleId, 8200);
+  assert.deepEqual(
+    parsed.runes.primarySlotOptions.map((slotOptions) =>
+      slotOptions.map((option) => option.id),
+    ),
+    [[8992], [8226], [8234], [8236]],
+  );
+});
+
 test("parseLolalyticsRenderedBuildPage restores current rendered page spells, items, and boots", () => {
   const parsed = parseLolalyticsRenderedBuildPage(
     createRenderedBuildPageHtml({
