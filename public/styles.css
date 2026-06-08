@@ -449,6 +449,61 @@ select {
   min-width: 0;
 }
 
+.role-build-action-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.role-build-action-wrap:focus {
+  outline: 2px solid rgba(211, 188, 124, 0.42);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+.role-build-action-wrap--disabled {
+  cursor: not-allowed;
+}
+
+.role-build-action-wrap--disabled .role-build-action {
+  pointer-events: none;
+}
+
+.role-build-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: max-content;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid rgba(211, 188, 124, 0.24);
+  border-radius: 8px;
+  background: rgba(8, 12, 18, 0.96);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.role-build-action-wrap:not(.role-build-action-wrap--disabled) .role-build-tooltip {
+  display: none;
+}
+
+.role-build-action-wrap--disabled:hover .role-build-tooltip,
+.role-build-action-wrap--disabled:focus .role-build-tooltip,
+.role-build-action-wrap--disabled:focus-within .role-build-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .role-build-action {
   min-width: 0;
   padding: 9px 12px;

@@ -240,6 +240,8 @@ That means all five allied champions are selected and all five allied roles are 
 
 ### The `Build` button is disabled
 
+Hover over the disabled `Build` button to see the missing requirement.
+
 The current UI only enables that flow when:
 
 - the ally has an assigned role

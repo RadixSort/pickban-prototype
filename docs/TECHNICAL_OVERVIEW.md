@@ -301,7 +301,7 @@ Flow:
    - `items`
    - `boots`
 
-The browser exposes this route from the `Build` button only when the selected ally already has a role and all five enemy slots are filled.
+The browser exposes this route from the `Build` button only when the selected ally already has a role and all five enemy slots are filled. Disabled Build buttons render a hover/focus tooltip from the same action-state helper that supplies the disabled reason and accessible label.
 
 Enemy-aware build recommendations are composition-aware aggregates over matchup-specific build data. They do not use the Lolalytics `counter` endpoint that powers role suggestions and draft outlook. For each selected enemy, the route requests the ally-vs-enemy build/rune sources, keeps successful matchups, records failed enemy matchups in `summary.partialFailures`, and aggregates the successful matchup records into one modal payload.
 

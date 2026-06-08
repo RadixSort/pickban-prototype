@@ -5,6 +5,9 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
+  getBuildSuggestionActionState,
+} = globalThis.buildActionState;
+const {
   renderDraftProjectionView,
 } = globalThis.draftProjectionView;
 const {
@@ -429,7 +432,6 @@ function renderAllyRoleAssignments() {
 
     const controls = document.createElement("div");
     controls.className = "role-row-controls";
-    controls.title = buildAction.tooltipText;
 
     const removeButton = document.createElement("button");
     removeButton.type = "button";
@@ -450,8 +452,24 @@ function renderAllyRoleAssignments() {
       "aria-label",
       buildAction.ariaLabel,
     );
+    const buildTooltipId = `build-tooltip-${ally.id}`;
+    const buildButtonWrap = document.createElement("span");
+    buildButtonWrap.className = "role-build-action-wrap";
+    if (buildAction.disabledReason) {
+      buildButtonWrap.classList.add("role-build-action-wrap--disabled");
+      buildButtonWrap.tabIndex = 0;
+      buildButtonWrap.setAttribute("aria-label", buildAction.tooltipText);
+      buildButton.setAttribute("aria-describedby", buildTooltipId);
+    }
+    const buildTooltip = document.createElement("span");
+    buildTooltip.id = buildTooltipId;
+    buildTooltip.className = "role-build-tooltip";
+    buildTooltip.setAttribute("role", "tooltip");
+    buildTooltip.textContent = buildAction.tooltipText;
     buildButton.addEventListener("click", () => handleOpenBuildSuggestions(ally.id));
-    controls.appendChild(buildButton);
+    buildButtonWrap.appendChild(buildButton);
+    buildButtonWrap.appendChild(buildTooltip);
+    controls.appendChild(buildButtonWrap);
     controls.appendChild(select);
     controls.appendChild(removeButton);
 
@@ -494,57 +512,13 @@ function canOpenBuildSuggestionsForAlly(ally) {
 }
 
 function getBuildSuggestionAction(ally) {
-  if (state.loading) {
-    return buildBuildActionState(
-      ally,
-      "Unavailable while role suggestions are loading.",
-      "Unavailable while role suggestions are loading.",
-    );
-  }
-
-  if (state.shuttingDown) {
-    return buildBuildActionState(
-      ally,
-      "Unavailable while the app is stopping.",
-      "Unavailable while the app is stopping.",
-    );
-  }
-
-  if (!ally?.role) {
-    return buildBuildActionState(
-      ally,
-      "Assign a role to unlock build suggestions.",
-      "Assign a role to unlock build suggestions.",
-    );
-  }
-
-  if (state.enemies.length < limits.enemies) {
-    return buildBuildActionState(
-      ally,
-      `Select ${limits.enemies - state.enemies.length} more enemy ${
-        limits.enemies - state.enemies.length === 1 ? "champion" : "champions"
-      } to unlock build suggestions.`,
-      "Build recommendations require all 5 enemy champions.",
-    );
-  }
-
-  return buildBuildActionState(
+  return getBuildSuggestionActionState({
     ally,
-    "",
-    `Open matchup build recommendation for ${ally.name}.`,
-  );
-}
-
-function buildBuildActionState(ally, disabledReason, tooltipText) {
-  const championName = ally?.name || "this champion";
-
-  return {
-    disabledReason,
-    tooltipText,
-    ariaLabel: disabledReason
-      ? `Build recommendation for ${championName}. ${disabledReason}`
-      : tooltipText,
-  };
+    enemyCount: state.enemies.length,
+    enemyLimit: limits.enemies,
+    loading: state.loading,
+    shuttingDown: state.shuttingDown,
+  });
 }
 
 async function handleOpenBuildSuggestions(allyId) {

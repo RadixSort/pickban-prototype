@@ -181,6 +181,7 @@ Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer.
 ### The `Build` button is disabled
 
 That button only works after the ally has an assigned role and all five enemy champions are selected.
+Hover over the disabled button to see which requirement is still missing.
 
 It combines matchup-specific build data for the full enemy team into one enemy-aware recommendation.
 
