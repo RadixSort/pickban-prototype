@@ -84,22 +84,119 @@ function assertBuildSuggestionSectionsArePopulated(payload) {
   assert.equal(payload.items.highestWinBuild.selections.length, 5);
 }
 
-test("POST /suggest rejects an empty draft before any upstream fetch", async (t) => {
-  const { baseUrl, mockServer } = await startServerWithMock(t, () => {
-    throw new Error("Unexpected upstream request.");
+test("POST /suggest returns first-pick tier lists for an empty draft", async (t) => {
+  const rowsByLane = {
+    top: [
+      {
+        championKey: "122",
+        lanePercent: 91.2,
+        winRate: 52,
+        pickRate: 5,
+        banRate: 0,
+      },
+    ],
+    jungle: [
+      {
+        championKey: "64",
+        lanePercent: 95.9,
+        winRate: 52.1,
+        pickRate: 7,
+        banRate: 0,
+      },
+    ],
+    middle: [
+      {
+        championKey: "103",
+        lanePercent: 96.7,
+        winRate: 52.2,
+        pickRate: 8,
+        banRate: 0,
+      },
+    ],
+    bottom: [
+      {
+        championKey: "222",
+        lanePercent: 99.7,
+        winRate: 52.3,
+        pickRate: 9,
+        banRate: 0,
+      },
+    ],
+    support: [
+      {
+        championKey: "412",
+        lanePercent: 99.6,
+        winRate: 53.5,
+        pickRate: 13.29,
+        banRate: 7.54,
+      },
+      {
+        championKey: "432",
+        lanePercent: 99.6,
+        winRate: 52.3,
+        pickRate: 7,
+        banRate: 0,
+      },
+    ],
+  };
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "tier") {
+      const lane = url.searchParams.get("lane");
+      return jsonResponse(
+        createTierMegaData(lane, rowsByLane[lane] || [], {
+          avgWinRate: 51.81,
+        }),
+      );
+    }
+
+    return textResponse("Not found.", 404);
   });
 
   const response = await postJson(baseUrl, "/suggest", {});
 
-  assert.equal(response.status, 400);
-  assert.deepEqual(response.body, {
-    error: "Choose at least one allied or enemy champion before fetching suggestions.",
-    requestStats: {
-      lolalyticsLiveAccessCount: 0,
-      lolalyticsLifetimeAccessCount: 0,
+  assert.equal(response.status, 200);
+  assert.equal(response.body.mode, "firstPick");
+  assert.deepEqual(response.body.roles, ["top", "jungle", "middle", "bottom", "support"]);
+  assert.deepEqual(response.body.resultsByRole.support, [
+    {
+      candidate: "Thresh",
+      candidateKey: "412",
+      support: "Thresh",
+      supportKey: "412",
+      icon: "https://cdn5.lolalytics.com/champ140/thresh.webp",
+      role: "support",
+      pbi: 24,
+      winRate: 53.5,
+      lanePercent: 99.6,
+      pickRate: 13.29,
     },
+    {
+      candidate: "Bard",
+      candidateKey: "432",
+      support: "Bard",
+      supportKey: "432",
+      icon: "https://cdn5.lolalytics.com/champ140/bard.webp",
+      role: "support",
+      pbi: 3,
+      winRate: 52.3,
+      lanePercent: 99.6,
+      pickRate: 7,
+    },
+  ]);
+  assert.deepEqual(response.body.metaByRole.support, {
+    rankFilter: "emerald_plus",
+    role: "support",
+    allyCount: 0,
+    enemyCount: 0,
+    assignedRoleCount: 0,
+    resultMode: "firstPick",
+    partialFailures: [],
   });
-  assert.equal(mockServer.countRequests(), 0);
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 5,
+    lolalyticsLifetimeAccessCount: 5,
+  });
+  assert.equal(mockServer.countRequests("/mega/"), 5);
 });
 
 test("POST /suggest rejects a fully assigned allied draft before any upstream fetch", async (t) => {
@@ -385,10 +482,18 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
     lolalyticsLifetimeAccessCount: 3,
   });
 
-  const emptyDraftResponse = await postJson(baseUrl, "/suggest", {});
+  const fullyAssignedDraftResponse = await postJson(baseUrl, "/suggest", {
+    allies: [
+      { champion: "Darius", role: "top" },
+      { champion: "Jarvan IV", role: "jungle" },
+      { champion: "Ahri", role: "mid" },
+      { champion: "Miss Fortune", role: "bot" },
+      { champion: "Leona", role: "support" },
+    ],
+  });
 
-  assert.equal(emptyDraftResponse.status, 400);
-  assert.deepEqual(emptyDraftResponse.body.requestStats, {
+  assert.equal(fullyAssignedDraftResponse.status, 400);
+  assert.deepEqual(fullyAssignedDraftResponse.body.requestStats, {
     lolalyticsLiveAccessCount: 0,
     lolalyticsLifetimeAccessCount: 3,
   });

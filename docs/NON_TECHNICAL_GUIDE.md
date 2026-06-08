@@ -23,6 +23,8 @@ You choose:
 
 Then the app fetches suggestions for every role that is still unassigned and lets you switch between those role results.
 
+If no champions have been selected yet, **Fetch Suggestions** shows first-pick tier lists for each role instead. Those rows use Lolalytics PBI and win rate, and the `+` button adds the champion as your pick for the role you are viewing.
+
 If you fill all five allied slots and assign every ally role, the main button switches to **Who will win?** and shows a projected team win rate instead of open-role suggestions.
 
 ## Before You Start
@@ -92,17 +94,18 @@ Leave that terminal window open while you use the app.
 
 ## How To Use The App
 
-1. Add allied champions on the left.
-2. Add enemy champions on the right.
-3. If you know some ally roles already, assign them in the middle panel.
-4. Click **Fetch Suggestions**.
-5. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
-6. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
-7. Results default to **Projected Win Rate**. Use **Rank by** if you want to switch to **Projected Agency**.
-8. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to combine matchup-specific build data for the full enemy team.
-9. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
-10. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
-11. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
+1. Before any champion is selected, click **Fetch Suggestions** to see first-pick tier lists by role.
+2. Add allied champions on the left.
+3. Add enemy champions on the right.
+4. If you know some ally roles already, assign them in the middle panel.
+5. Click **Fetch Suggestions**.
+6. Use the **Target role** dropdown in the results area to switch between the returned role suggestions.
+7. Click **+** on a result row if you want to add that recommendation into the allied draft for the role you are currently viewing.
+8. First-pick results can be sorted by clicking **PBI** or **Winrate**. Draft-aware results default to **Projected Win Rate** and can switch to **Projected Agency** with **Rank by**.
+9. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to combine matchup-specific build data for the full enemy team.
+10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
+11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
+12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
 
 ## Auto Import
 
@@ -118,14 +121,15 @@ If it cannot find a supported live draft, loses the connection, or sees another 
 - `Counter Score`: how well a candidate performs into your enemy champions
 - `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
 - `Projected Agency`: the blended score you can switch to in the **Rank by** dropdown
+- `PBI`: Lolalytics Pick Ban Influence for first-pick tier-list rows
 
-Rows that rank highly by projected win rate or projected agency are highlighted in the results table.
+Rows that rank highly by both active metrics are highlighted in the results table. Overlapping top results are highlighted in yellow.
 
 ## Limits
 
 - Up to 5 allied champions
 - Up to 5 enemy champions
-- At least 1 champion must be selected before fetching
+- With no champions selected, fetching shows first-pick tier lists instead of draft-aware suggestions
 - A champion can only appear once across both teams
 - Ally role assignment is optional
 - Build lookup needs 1 ally with an assigned role and all 5 enemy champions selected

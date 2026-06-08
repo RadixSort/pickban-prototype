@@ -66,12 +66,13 @@ Startup auto-update:
 ## Local Workflow
 
 1. Start the server with `npm start`.
-2. Open the app in a browser and build a draft with allied and enemy champions. The same champion cannot appear on both sides.
-3. Optionally assign known ally roles. The app will fetch every remaining role.
-4. Use `Fetch Suggestions` for role recommendations.
-5. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
-6. Use `Build` on an ally row after that ally has a role and all five enemies are selected. It opens enemy-aware build suggestions. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
-7. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
+2. Open the app in a browser. With no champions selected, `Fetch Suggestions` loads first-pick tier lists for each role, ranked by Lolalytics PBI.
+3. Build a draft with allied and enemy champions. The same champion cannot appear on both sides.
+4. Optionally assign known ally roles. The app will fetch every remaining role.
+5. Use `Fetch Suggestions` for draft-aware role recommendations after at least one champion is selected.
+6. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
+7. Use `Build` on an ally row after that ally has a role and all five enemies are selected. It opens enemy-aware build suggestions. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
+8. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
 
 Change feedback loops:
 
@@ -102,6 +103,7 @@ High-value files when you are new to the codebase:
 - `lib/server-route-helpers.js`: shared request normalization and response shaping for the Express routes
 - `lib/draft-projection.js`: aggregates full-team ally synergy and enemy counter rows into one projected matchup summary
 - `lib/lolalytics-tier-list.js`: normalizes Lolalytics tier data into role eligibility data
+- `lib/first-pick-results.js`: builds empty-draft first-pick tier-list results from role tier data
 - `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
 - `lib/lolalytics-build-parser.js`: normalizes Lolalytics build payloads into the build modal shape
 - `lib/build-suggestion-results.js`: aggregates matchup-specific build data across selected enemies into one summary payload
@@ -124,12 +126,13 @@ The three main request flows are:
 
 1. `public/app.js` collects `rankFilter`, `allies`, and `enemies`.
 2. `POST /suggest` uses `lib/server-route-helpers.js` to normalize the request and resolve target roles.
-3. For each requested role, the server fetches:
+3. With no champions selected, `/suggest` fetches role tier data only and returns first-pick rows with PBI and win rate.
+4. After at least one champion is selected, for each requested role, the server fetches:
    - role tier data from the Lolalytics mega endpoint
    - ally synergy data
    - enemy counter data from the Lolalytics mega endpoint
-4. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
-5. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
+5. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
+6. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
 
 ### Draft Outlook
 

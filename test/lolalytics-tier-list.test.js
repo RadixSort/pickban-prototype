@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildEligibleTierStats,
+  calculatePickBanInfluence,
   extractTierListRows,
   extractTierRowsFromMegaPayload,
 } = require("../lib/lolalytics-tier-list.js");
@@ -223,6 +224,61 @@ test("extractTierRowsFromMegaPayload parses current mega tier payloads by champi
   ]);
 });
 
+test("extractTierRowsFromMegaPayload calculates PBI from mega tier fields", () => {
+  const payload = {
+    avgWr: 51.81,
+    tier: {
+      1: {
+        lane: {
+          support: {
+            cid: {
+              412: {
+                pctLane: 99.64,
+                wr: 53.5,
+                pr: 13.29,
+                br: 7.54,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(extractTierRowsFromMegaPayload(payload, "support"), [
+    {
+      championKey: "412",
+      slug: "",
+      name: "",
+      lanePercent: 99.64,
+      winRate: 53.5,
+      pickRate: 13.29,
+      pbi: 24,
+    },
+  ]);
+});
+
+test("calculatePickBanInfluence mirrors Lolalytics tier-list PBI formula", () => {
+  assert.equal(
+    calculatePickBanInfluence({
+      winRate: 53.5,
+      averageWinRate: 51.81,
+      pickRate: 13.29,
+      banRate: 7.54,
+    }),
+    24,
+  );
+  assert.equal(
+    calculatePickBanInfluence({
+      winRate: 52,
+      averageWinRate: 51,
+      pickRate: 10,
+      banRate: 100,
+    }),
+    null,
+  );
+});
+
 test("buildEligibleTierStats filters rows with minimum lane and pick thresholds", () => {
   const rows = extractTierListRows(sampleTierListHtml);
   const championBySlug = new Map([
@@ -297,6 +353,7 @@ test("buildEligibleTierStats can join current mega tier rows by champion id", ()
         lanePercent: 99.92,
         winRate: 52.06,
         pickRate: 14.46,
+        pbi: 5,
       },
     ],
     new Map(),
@@ -316,6 +373,7 @@ test("buildEligibleTierStats can join current mega tier rows by champion id", ()
       lanePercent: 99.92,
       winRate: 52.06,
       pickRate: 14.46,
+      pbi: 5,
     },
   ]);
 });

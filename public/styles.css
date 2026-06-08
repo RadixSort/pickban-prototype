@@ -736,11 +736,39 @@ select {
   font-weight: 600;
 }
 
+.results-sort-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.results-sort-button:hover,
+.results-sort-button--active {
+  color: var(--text);
+}
+
+.results-sort-button--active {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 4px;
+}
+
 .results-table tbody tr.top-option--agency {
   background: var(--highlight-agency-bg);
 }
 
 .results-table tbody tr.top-option--agency td {
+  border-top-color: var(--highlight-agency-border);
+}
+
+.results-table tbody tr.top-option--pbi {
+  background: var(--highlight-agency-bg);
+}
+
+.results-table tbody tr.top-option--pbi td {
   border-top-color: var(--highlight-agency-border);
 }
 
@@ -798,6 +826,10 @@ select {
   color: var(--highlight-agency-text);
 }
 
+.metric-highlight--pbi {
+  color: var(--highlight-agency-text);
+}
+
 .metric-highlight--winrate {
   color: var(--highlight-winrate-text);
 }
@@ -820,6 +852,12 @@ select {
 
 .result-agency-score {
   flex: 0 0 auto;
+}
+
+.results-action-header,
+.result-action-cell {
+  width: 1%;
+  text-align: right;
 }
 
 .result-draft-action {

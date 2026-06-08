@@ -131,6 +131,11 @@ That means shared business rules often live in `public/`, not `lib/`.
   - normalize tier rows from Lolalytics mega JSON and older page HTML shapes
   - map parsed rows back to local champion metadata
   - enforce role eligibility thresholds
+  - calculate PBI from Lolalytics tier fields when the average tier win rate and ban rate are present
+
+- `lib/first-pick-results.js`
+  - build empty-draft first-pick results from tier-list eligibility maps
+  - return PBI and win-rate rows without matchup scoring
 
 - `lib/role-suggestion-results.js`
   - merge ally synergy rows and enemy counter rows
@@ -190,13 +195,17 @@ Flow:
 6. `resolveRequestedTargetRoles(...)` either:
    - uses explicit `roles`, `role`, or `targetRole`, or
    - infers every still-unassigned role from the current ally selections
-7. For each target role, the server fetches:
+7. If both `allies` and `enemies` are empty, `/suggest` enters first-pick mode:
+   - fetches role tier data only
+   - computes PBI as `(winRate - avgWr) * 100 * pickRate / (100 - banRate)` rounded to the nearest integer
+   - returns `mode: "firstPick"` with per-role rows containing `pbi` and `winRate`
+8. Otherwise, for each target role, the server fetches:
    - mega tier data for eligibility and live win rate
    - ally synergy rows
    - enemy counter rows
-8. `buildRoleSuggestionResults(...)` aggregates, filters, and sorts the candidates.
-9. `buildRoleSuggestionResponse(...)` shapes the final multi-role payload and legacy single-role fields.
-10. The response returns:
+9. `buildRoleSuggestionResults(...)` aggregates, filters, and sorts the candidates.
+10. `buildRoleSuggestionResponse(...)` shapes the final multi-role payload and legacy single-role fields.
+11. The response returns:
    - `roles`
    - `resultsByRole`
    - `metaByRole`
@@ -372,6 +381,13 @@ Score formulas:
 - `counterScore = average(enemy matchup values * -1)`
 - `projectedWinRate = average(ally matchup win rates + (100 - enemy matchup win rates))`
 - `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
+
+First-pick tier-list mode:
+
+- active only when no allies and no enemies are selected
+- uses Lolalytics tier-list rows directly instead of matchup rows
+- default sort is descending `pbi`
+- the browser can also sort descending `winRate`
 
 Backend sort order:
 

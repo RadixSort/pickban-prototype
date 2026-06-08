@@ -8,7 +8,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const PROJECTED_AGENCY_SORT_MODE = "projectedAgency";
   const PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate";
+  const PBI_SORT_MODE = "pbi";
+  const WIN_RATE_SORT_MODE = "winRate";
   const DEFAULT_SORT_MODE = PROJECTED_WIN_RATE_SORT_MODE;
+  const DEFAULT_FIRST_PICK_SORT_MODE = PBI_SORT_MODE;
   const DEFAULT_TOP_RESULT_LIMIT = 3;
 
   function average(values = []) {
@@ -53,6 +56,14 @@
     return toFiniteNumber(result?.projectedWinRate) ?? 0;
   }
 
+  function getPbi(result) {
+    return toFiniteNumber(result?.pbi) ?? 0;
+  }
+
+  function getWinRate(result) {
+    return toFiniteNumber(result?.winRate) ?? 0;
+  }
+
   function compareByProjectedAgency(left, right) {
     const agencyDifference = getProjectedAgency(right) - getProjectedAgency(left);
     if (agencyDifference !== 0) {
@@ -86,6 +97,34 @@
     const counterDifference = getNumericCounterScore(right) - getNumericCounterScore(left);
     if (counterDifference !== 0) {
       return counterDifference;
+    }
+
+    return compareSupportNames(left, right);
+  }
+
+  function compareByPbi(left, right) {
+    const pbiDifference = getPbi(right) - getPbi(left);
+    if (pbiDifference !== 0) {
+      return pbiDifference;
+    }
+
+    const winRateDifference = getWinRate(right) - getWinRate(left);
+    if (winRateDifference !== 0) {
+      return winRateDifference;
+    }
+
+    return compareSupportNames(left, right);
+  }
+
+  function compareByWinRate(left, right) {
+    const winRateDifference = getWinRate(right) - getWinRate(left);
+    if (winRateDifference !== 0) {
+      return winRateDifference;
+    }
+
+    const pbiDifference = getPbi(right) - getPbi(left);
+    if (pbiDifference !== 0) {
+      return pbiDifference;
     }
 
     return compareSupportNames(left, right);
@@ -168,6 +207,14 @@
   }
 
   function getSortComparator(sortMode) {
+    if (sortMode === PBI_SORT_MODE) {
+      return compareByPbi;
+    }
+
+    if (sortMode === WIN_RATE_SORT_MODE) {
+      return compareByWinRate;
+    }
+
     if (sortMode === PROJECTED_AGENCY_SORT_MODE) {
       return compareByProjectedAgency;
     }
@@ -216,19 +263,26 @@
   }
 
   return {
+    DEFAULT_FIRST_PICK_SORT_MODE,
     DEFAULT_TOP_RESULT_LIMIT,
     DEFAULT_SORT_MODE,
+    PBI_SORT_MODE,
     PROJECTED_AGENCY_SORT_MODE,
     PROJECTED_WIN_RATE_SORT_MODE,
+    WIN_RATE_SORT_MODE,
     average,
+    compareByPbi,
     compareByProjectedAgency,
     compareByProjectedWinRate,
+    compareByWinRate,
+    getPbi,
     getProjectedAgency,
     getProjectedWinRate,
     getResultKey,
     getResultName,
     getTopResultKeys,
     getTopSupportKeys,
+    getWinRate,
     sortResults,
   };
 });

@@ -3,15 +3,20 @@ const assert = require("node:assert/strict");
 
 const {
   average,
+  DEFAULT_FIRST_PICK_SORT_MODE,
   DEFAULT_SORT_MODE,
   DEFAULT_TOP_RESULT_LIMIT,
+  PBI_SORT_MODE,
   PROJECTED_AGENCY_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
+  WIN_RATE_SORT_MODE,
+  getPbi,
   getProjectedAgency,
   getProjectedWinRate,
   getResultKey,
   getResultName,
   getTopResultKeys,
+  getWinRate,
   sortResults,
 } = require("../public/result-ranking.js");
 
@@ -29,6 +34,13 @@ test("projected agency falls back to legacy finalScore", () => {
 test("projected win rate defaults to 0 when missing", () => {
   assert.equal(getProjectedWinRate({ projectedWinRate: 53.14 }), 53.14);
   assert.equal(getProjectedWinRate({}), 0);
+});
+
+test("first-pick metric helpers default to 0 when missing", () => {
+  assert.equal(getPbi({ pbi: 24 }), 24);
+  assert.equal(getPbi({}), 0);
+  assert.equal(getWinRate({ winRate: 53.5 }), 53.5);
+  assert.equal(getWinRate({}), 0);
 });
 
 test("sortResults defaults to projected win rate ordering", () => {
@@ -75,6 +87,39 @@ test("sortResults ranks projected win rate with projected agency as the first ti
   assert.deepEqual(
     ranked.map((result) => result.candidate),
     ["Janna", "Thresh", "Braum"],
+  );
+});
+
+test("sortResults ranks first-pick PBI with win rate as the first tie-breaker", () => {
+  const ranked = sortResults(
+    [
+      { candidate: "Bard", candidateKey: 432, pbi: 4, winRate: 52.3 },
+      { candidate: "Thresh", candidateKey: 412, pbi: 24, winRate: 53.5 },
+      { candidate: "Seraphine", candidateKey: 147, pbi: 24, winRate: 53.7 },
+    ],
+    PBI_SORT_MODE,
+  );
+
+  assert.equal(DEFAULT_FIRST_PICK_SORT_MODE, PBI_SORT_MODE);
+  assert.deepEqual(
+    ranked.map((result) => result.candidate),
+    ["Seraphine", "Thresh", "Bard"],
+  );
+});
+
+test("sortResults ranks first-pick win rate with PBI as the first tie-breaker", () => {
+  const ranked = sortResults(
+    [
+      { candidate: "Bard", candidateKey: 432, pbi: 4, winRate: 52.3 },
+      { candidate: "Thresh", candidateKey: 412, pbi: 24, winRate: 53.5 },
+      { candidate: "Seraphine", candidateKey: 147, pbi: 19, winRate: 53.5 },
+    ],
+    WIN_RATE_SORT_MODE,
+  );
+
+  assert.deepEqual(
+    ranked.map((result) => result.candidate),
+    ["Thresh", "Seraphine", "Bard"],
   );
 });
 

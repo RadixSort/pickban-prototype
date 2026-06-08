@@ -119,7 +119,7 @@ function createRoleBuildQData(enemyRowsByRole) {
   });
 }
 
-function createTierMegaData(lane, rows = []) {
+function createTierMegaData(lane, rows = [], options = {}) {
   const cid = {};
 
   rows.forEach((row, index) => {
@@ -128,11 +128,13 @@ function createTierMegaData(lane, rows = []) {
       pctLane: row.lanePercent,
       wr: row.winRate,
       pr: row.pickRate,
+      br: row.banRate ?? row.br ?? 0,
       games: row.games || 1000,
     };
   });
 
   return {
+    avgWr: options.avgWinRate ?? options.avgWr,
     tier: {
       1: {
         lane: {

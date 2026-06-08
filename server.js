@@ -20,6 +20,10 @@ const {
   buildBuildSuggestionResults,
 } = require("./lib/build-suggestion-results.js");
 const {
+  buildFirstPickMeta,
+  buildFirstPickTierListResults,
+} = require("./lib/first-pick-results.js");
+const {
   parseLolalyticsRenderedBuildPage,
   parseLolalyticsRuneBuildData,
 } = require("./lib/lolalytics-build-parser.js");
@@ -220,13 +224,6 @@ app.post("/suggest", async (request, response) =>
         buildSelectedChampionKeys,
       });
 
-      if (allies.length === 0 && enemies.length === 0) {
-        return response.status(400).json({
-          error: "Choose at least one allied or enemy champion before fetching suggestions.",
-          requestStats: buildLolalyticsRequestStats(),
-        });
-      }
-
       if (targetRoles.length === 0) {
         return response.status(400).json({
           error:
@@ -235,13 +232,20 @@ app.post("/suggest", async (request, response) =>
         });
       }
 
-      const roleSuggestions = await buildSuggestionsForRoles({
-        allies,
-        enemies,
-        rankFilter,
-        selectedChampionKeys,
-        targetRoles,
-      });
+      const isFirstPickRequest = allies.length === 0 && enemies.length === 0;
+      const roleSuggestions = isFirstPickRequest
+        ? await buildFirstPickSuggestionsForRoles({
+            rankFilter,
+            selectedChampionKeys,
+            targetRoles,
+          })
+        : await buildSuggestionsForRoles({
+            allies,
+            enemies,
+            rankFilter,
+            selectedChampionKeys,
+            targetRoles,
+          });
 
       const { statusCode, payload } = buildRoleSuggestionResponse({
         targetRoles,
@@ -251,6 +255,7 @@ app.post("/suggest", async (request, response) =>
         enemies,
         requestStats: buildLolalyticsRequestStats(),
         buildSuggestionMeta,
+        responseMode: isFirstPickRequest ? "firstPick" : "suggestions",
       });
 
       response.status(statusCode).json(payload);
@@ -523,6 +528,71 @@ async function buildSuggestionsForRoles({
       enemyTargetRoleRowResults,
     }),
   );
+}
+
+async function buildFirstPickSuggestionsForRoles({
+  rankFilter,
+  selectedChampionKeys,
+  targetRoles,
+}) {
+  const eligibleTierStatsResults = await Promise.allSettled(
+    targetRoles.map((targetRole) => fetchEligibleTierStats(targetRole, rankFilter)),
+  );
+
+  return targetRoles.map((targetRole, index) =>
+    buildFirstPickSuggestionOutcome({
+      rankFilter,
+      selectedChampionKeys,
+      targetRole,
+      eligibleTierStatsResult: eligibleTierStatsResults[index],
+    }),
+  );
+}
+
+function buildFirstPickSuggestionOutcome({
+  rankFilter,
+  selectedChampionKeys,
+  targetRole,
+  eligibleTierStatsResult,
+}) {
+  if (eligibleTierStatsResult.status !== "fulfilled") {
+    return {
+      status: "rejected",
+      reason: eligibleTierStatsResult.reason,
+    };
+  }
+
+  const {
+    partialFailures,
+    results,
+  } = buildFirstPickTierListResults({
+    eligibleTierStats: eligibleTierStatsResult.value,
+    selectedChampionKeys,
+    targetRole,
+    championByKey,
+  });
+  const meta = buildFirstPickMeta(rankFilter, targetRole, partialFailures);
+
+  if (results.length === 0) {
+    const error = createHttpError(
+      502,
+      `No ${getRoleLabel(targetRole).toLowerCase()} tier-list data was returned from Lolalytics for first pick.`,
+    );
+    error.meta = meta;
+
+    return {
+      status: "rejected",
+      reason: error,
+    };
+  }
+
+  return {
+    status: "fulfilled",
+    value: {
+      results,
+      meta,
+    },
+  };
 }
 
 function buildSuggestionOutcome({

@@ -27,15 +27,20 @@ const {
   renderBuildSuggestionBody,
 } = globalThis.buildSuggestionView;
 const {
+  DEFAULT_FIRST_PICK_SORT_MODE,
   DEFAULT_TOP_RESULT_LIMIT,
   DEFAULT_SORT_MODE,
+  PBI_SORT_MODE,
   PROJECTED_AGENCY_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
+  WIN_RATE_SORT_MODE,
+  getPbi,
   getProjectedAgency,
   getProjectedWinRate,
   getResultKey,
   getResultName,
   getTopResultKeys,
+  getWinRate,
   sortResults,
 } = globalThis.resultRanking;
 const {
@@ -63,6 +68,7 @@ const state = {
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
+  firstPickSortMode: DEFAULT_FIRST_PICK_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
   autoImport: createInitialAutoImportState(),
   buildSuggestionCache: {},
@@ -105,6 +111,7 @@ const allyRoleTitle = document.getElementById("ally-role-title");
 const errorText = document.getElementById("error-text");
 const emptyState = document.getElementById("empty-state");
 const resultsWrap = document.getElementById("results-table-wrap");
+const resultsHeaderRow = document.getElementById("results-header-row");
 const resultsBody = document.getElementById("results-body");
 const resultsMeta = document.getElementById("results-meta");
 const resultsTitle = document.getElementById("results-title");
@@ -316,6 +323,8 @@ function renderControls() {
   const selectedRole = syncSelectedResultRole();
   const availableRoleOptions = getAvailableResultRoleOptions();
   const isDraftProjectionMode = isDraftProjectionModeActive();
+  const currentBundle = getCurrentResultsBundle();
+  const isFirstPickBundle = currentBundle?.mode === "firstPick";
 
   rankFilterSelect.value = state.rankFilter;
   rankFilterSelect.disabled = isInteractionLocked();
@@ -326,11 +335,14 @@ function renderControls() {
   resultsRoleSelect.disabled =
     isInteractionLocked() || isDraftProjectionMode || availableRoleOptions.length === 0;
   resultsRoleControl.classList.toggle("hidden", isDraftProjectionMode);
-  sortControl.classList.toggle("hidden", isDraftProjectionMode);
+  sortControl.classList.toggle("hidden", isDraftProjectionMode || isFirstPickBundle);
 
   allyRoleTitle.textContent = "Assign known roles";
-  resultsTitle.textContent =
-    isDraftProjectionMode ? "Projected win rate" : `${getRoleLabel(selectedRole)} recommendations`;
+  resultsTitle.textContent = isDraftProjectionMode
+    ? "Projected win rate"
+    : isFirstPickBundle
+      ? `${getRoleLabel(selectedRole)} first-pick tier list`
+      : `${getRoleLabel(selectedRole)} recommendations`;
 }
 
 function renderAll() {
@@ -1214,14 +1226,10 @@ async function handleFetchSuggestions() {
     return;
   }
 
-  if (state.allies.length === 0 && state.enemies.length === 0) {
-    setError("Choose at least one allied or enemy champion before fetching suggestions.");
-    return;
-  }
-
   const cacheKey = getCurrentSuggestionCacheKey();
   const availableRoleOptions = getAvailableResultRoleOptions();
   const availableRoleValues = availableRoleOptions.map((option) => option.value);
+  const isFirstPickRequest = state.allies.length === 0 && state.enemies.length === 0;
 
   if (isDraftProjectionModeActive()) {
     await handleFetchDraftProjection(cacheKey);
@@ -1236,7 +1244,9 @@ async function handleFetchSuggestions() {
   setLoading(true);
   clearStatus();
   setStatus(
-    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} data for ${formatRoleLabels(availableRoleOptions)}...`,
+    isFirstPickRequest
+      ? `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} first-pick tier lists for ${formatRoleLabels(availableRoleOptions)}...`
+      : `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} data for ${formatRoleLabels(availableRoleOptions)}...`,
   );
 
   try {
@@ -1282,11 +1292,15 @@ async function handleFetchSuggestions() {
       .map((role) => getRoleLabel(role));
     const lolalyticsAccessCount = getLolalyticsLiveAccessCount(currentBundle);
     const lolalyticsAccessStatus = formatLolalyticsAccessStatus(lolalyticsAccessCount);
+    const fetchedResultSetLabel = getFetchedResultSetLabel(
+      successfulRoleCount,
+      isFirstPickRequest,
+    );
 
     setStatus(
       successfulRoleCount === availableRoleValues.length
-        ? `Fetched ${successfulRoleCount} ${successfulRoleCount === 1 ? "role result set" : "role result sets"} for the current draft. ${lolalyticsAccessStatus}`
-        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} role result sets. Unavailable: ${failedRoleLabels.join(", ")}. ${lolalyticsAccessStatus}`,
+        ? `Fetched ${successfulRoleCount} ${fetchedResultSetLabel}${isFirstPickRequest ? "." : " for the current draft."} ${lolalyticsAccessStatus}`
+        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} ${isFirstPickRequest ? "first-pick tier lists" : "role result sets"}. Unavailable: ${failedRoleLabels.join(", ")}. ${lolalyticsAccessStatus}`,
     );
   } catch (error) {
     setError(
@@ -1359,6 +1373,11 @@ function handleResetDraft() {
 
 function handleSortModeChange(event) {
   state.sortMode = normalizeSortMode(event.target.value);
+  renderResults();
+}
+
+function handleFirstPickSortModeChange(value) {
+  state.firstPickSortMode = normalizeFirstPickSortMode(value);
   renderResults();
 }
 
@@ -1689,28 +1708,38 @@ function renderResults() {
   const selectedRole = syncSelectedResultRole();
   const currentBundle = getCurrentResultsBundle();
   const isDraftProjectionBundle = currentBundle?.mode === "draftProjection";
+  const isFirstPickBundle = currentBundle?.mode === "firstPick";
   const currentMeta = currentBundle?.metaByRole?.[selectedRole] || null;
   const currentResults = currentBundle?.resultsByRole?.[selectedRole] || [];
-  const visibleResults = sortResults(getVisibleResults(currentResults), state.sortMode);
-  const topProjectedWinRateKeys = getTopResultKeys(
-    visibleResults,
-    PROJECTED_WIN_RATE_SORT_MODE,
-    DEFAULT_TOP_RESULT_LIMIT,
+  const visibleResults = sortResults(
+    getVisibleResults(currentResults),
+    isFirstPickBundle ? state.firstPickSortMode : state.sortMode,
   );
-  const topProjectedAgencyKeys = getTopResultKeys(
-    visibleResults,
-    PROJECTED_AGENCY_SORT_MODE,
-    DEFAULT_TOP_RESULT_LIMIT,
-  );
+  const topProjectedWinRateKeys = isFirstPickBundle
+    ? new Set()
+    : getTopResultKeys(
+        visibleResults,
+        PROJECTED_WIN_RATE_SORT_MODE,
+        DEFAULT_TOP_RESULT_LIMIT,
+      );
+  const topProjectedAgencyKeys = isFirstPickBundle
+    ? new Set()
+    : getTopResultKeys(
+        visibleResults,
+        PROJECTED_AGENCY_SORT_MODE,
+        DEFAULT_TOP_RESULT_LIMIT,
+      );
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
   draftProjectionWrap.innerHTML = "";
+  renderResultsTableHeader(isFirstPickBundle);
   sortSelect.value = state.sortMode;
   sortSelect.disabled =
     state.loading ||
     state.shuttingDown ||
     isDraftProjectionBundle ||
+    isFirstPickBundle ||
     currentResults.length === 0 ||
     Boolean(currentMeta?.error);
 
@@ -1762,7 +1791,15 @@ function renderResults() {
   emptyState.classList.add("hidden");
   draftProjectionWrap.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
-  resultsMeta.textContent = `${visibleResults.length} ranked ${getRoleLabel(selectedRole).toLowerCase()} options`;
+  resultsMeta.textContent = isFirstPickBundle
+    ? `${visibleResults.length} ${getRoleLabel(selectedRole).toLowerCase()} tier-list options`
+    : `${visibleResults.length} ranked ${getRoleLabel(selectedRole).toLowerCase()} options`;
+
+  if (isFirstPickBundle) {
+    renderFirstPickRows(visibleResults, selectedRole);
+    renderPartialFailures(currentMeta?.partialFailures || []);
+    return;
+  }
 
   visibleResults.forEach((result, index) => {
     const resultKey = getResultKey(result) || "";
@@ -1844,6 +1881,130 @@ function renderResults() {
   renderPartialFailures(currentMeta?.partialFailures || []);
 }
 
+function renderResultsTableHeader(isFirstPickBundle = false) {
+  if (isFirstPickBundle) {
+    resultsHeaderRow.innerHTML = `
+      <th>Rank</th>
+      <th>Champion</th>
+      <th>
+        <button
+          type="button"
+          class="${getFirstPickSortButtonClassName(PBI_SORT_MODE)}"
+          data-first-pick-sort="${PBI_SORT_MODE}"
+          title="Sort by PBI"
+          aria-label="Sort by PBI"
+        >
+          PBI
+        </button>
+      </th>
+      <th>
+        <button
+          type="button"
+          class="${getFirstPickSortButtonClassName(WIN_RATE_SORT_MODE)}"
+          data-first-pick-sort="${WIN_RATE_SORT_MODE}"
+          title="Sort by winrate"
+          aria-label="Sort by winrate"
+        >
+          Winrate
+        </button>
+      </th>
+      <th class="results-action-header" aria-label="Add champion"></th>
+    `;
+    resultsHeaderRow.querySelectorAll("[data-first-pick-sort]").forEach((button) => {
+      button.disabled = state.loading || state.shuttingDown;
+      button.addEventListener("click", () =>
+        handleFirstPickSortModeChange(button.dataset.firstPickSort),
+      );
+    });
+    return;
+  }
+
+  resultsHeaderRow.innerHTML = `
+    <th>Rank</th>
+    <th>Champion</th>
+    <th>Win Rate</th>
+    <th>Projected Win Rate</th>
+    <th>Synergy Score</th>
+    <th>Counter Score</th>
+    <th>Projected Agency</th>
+  `;
+}
+
+function renderFirstPickRows(visibleResults, selectedRole) {
+  const topPbiKeys = getTopResultKeys(
+    visibleResults,
+    PBI_SORT_MODE,
+    DEFAULT_TOP_RESULT_LIMIT,
+  );
+  const topWinRateKeys = getTopResultKeys(
+    visibleResults,
+    WIN_RATE_SORT_MODE,
+    DEFAULT_TOP_RESULT_LIMIT,
+  );
+
+  visibleResults.forEach((result, index) => {
+    const resultKey = getResultKey(result) || "";
+    const resultName = getResultName(result);
+    const isTopPbi = topPbiKeys.has(resultKey);
+    const isTopWinRate = topWinRateKeys.has(resultKey);
+    const topOptionTone = getFirstPickTopOptionTone(isTopPbi, isTopWinRate);
+    const rowClassNames = [];
+
+    if (topOptionTone) {
+      rowClassNames.push("top-option", `top-option--${topOptionTone}`);
+    }
+
+    const pbiClassName = getMetricClassName(
+      [],
+      isTopPbi,
+      topOptionTone === "overlap" ? "overlap" : "pbi",
+    );
+    const winRateClassName = getMetricClassName(
+      [],
+      isTopWinRate,
+      topOptionTone === "overlap" ? "overlap" : "winrate",
+    );
+    const selectForDraftHelperText = getSelectResultForDraftHelperText(selectedRole, result);
+    const selectForDraftDescription = selectForDraftHelperText
+      ? selectForDraftHelperText
+      : `Add ${resultName} to the allied draft as ${getRoleLabel(selectedRole)}.`;
+    const selectForDraftDisabled = Boolean(selectForDraftHelperText);
+
+    const row = document.createElement("tr");
+    row.className = rowClassNames.join(" ");
+    row.innerHTML = `
+      <td class="rank-cell">${index + 1}</td>
+      <td>
+        <div class="support-cell">
+          <img src="${result.icon}" alt="${resultName}" width="36" height="36" />
+          <span class="support-name">${resultName}</span>
+        </div>
+      </td>
+      <td class="${pbiClassName}">${formatPbi(getPbi(result))}</td>
+      <td class="${winRateClassName}">${formatRate(getWinRate(result))}</td>
+      <td class="result-action-cell">
+        <button
+          type="button"
+          class="result-draft-action"
+          data-action="select-for-draft"
+          title="${escapeHtml(selectForDraftDescription)}"
+          aria-label="${escapeHtml(selectForDraftDescription)}"
+          ${selectForDraftDisabled ? "disabled" : ""}
+        >
+          +
+        </button>
+      </td>
+    `;
+    const selectForDraftButton = row.querySelector('[data-action="select-for-draft"]');
+    if (selectForDraftButton) {
+      selectForDraftButton.addEventListener("click", () =>
+        handleSelectResultForDraft(selectedRole, result),
+      );
+    }
+    resultsBody.appendChild(row);
+  });
+}
+
 function renderPartialFailures(failures = []) {
   if (failures.length === 0) {
     return;
@@ -1865,6 +2026,7 @@ function renderPartialFailures(failures = []) {
 function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT_TARGET_ROLE) {
   const resultsByRole = {};
   const metaByRole = {};
+  const mode = payload?.mode === "firstPick" ? "firstPick" : "suggestions";
   const payloadRole =
     normalizeRole(payload?.meta?.role ?? null) ||
     (Array.isArray(payload?.roles) && payload.roles.length === 1 ? normalizeRole(payload.roles[0]) : null);
@@ -1881,7 +2043,7 @@ function buildResultsBundle(payload, requestedRoles = [], selectedRole = DEFAULT
   });
 
   return {
-    mode: "suggestions",
+    mode,
     roles: [...requestedRoles],
     resultsByRole,
     metaByRole,
@@ -1910,7 +2072,7 @@ function buildDraftProjectionBundle(payload) {
 
 function getPendingResultsMessage() {
   if (state.allies.length === 0 && state.enemies.length === 0) {
-    return "Select some champions, optionally assign known ally roles, then fetch suggestions to load every remaining role.";
+    return 'Click "Fetch Suggestions" before adding champions to load first-pick tier lists by role.';
   }
 
   if (isDraftProjectionModeActive()) {
@@ -1937,6 +2099,14 @@ function formatRoleLabels(roles = []) {
   }
 
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function getFetchedResultSetLabel(count, isFirstPickRequest) {
+  if (isFirstPickRequest) {
+    return count === 1 ? "first-pick tier list" : "first-pick tier lists";
+  }
+
+  return count === 1 ? "role result set" : "role result sets";
 }
 
 function getLolalyticsLiveAccessCount(resultsBundle = null) {
@@ -2035,6 +2205,14 @@ function formatRate(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+function formatPbi(value) {
+  if (!Number.isFinite(Number(value))) {
+    return "-";
+  }
+
+  return Number(value).toFixed(0);
+}
+
 function isLowWinRate(value) {
   return Number.isFinite(Number(value)) && Number(value) <= MIN_PROJECTED_WIN_RATE;
 }
@@ -2093,6 +2271,14 @@ function normalizeSortMode(value) {
   return DEFAULT_SORT_MODE;
 }
 
+function normalizeFirstPickSortMode(value) {
+  if (value === PBI_SORT_MODE || value === WIN_RATE_SORT_MODE) {
+    return value;
+  }
+
+  return DEFAULT_FIRST_PICK_SORT_MODE;
+}
+
 function getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate) {
   if (isTopProjectedAgency && isTopProjectedWinRate) {
     return "overlap";
@@ -2107,6 +2293,31 @@ function getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate) {
   }
 
   return "";
+}
+
+function getFirstPickTopOptionTone(isTopPbi, isTopWinRate) {
+  if (isTopPbi && isTopWinRate) {
+    return "overlap";
+  }
+
+  if (isTopPbi) {
+    return "pbi";
+  }
+
+  if (isTopWinRate) {
+    return "winrate";
+  }
+
+  return "";
+}
+
+function getFirstPickSortButtonClassName(sortMode) {
+  return [
+    "results-sort-button",
+    state.firstPickSortMode === sortMode ? "results-sort-button--active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getVisibleResults(results = []) {
@@ -2166,6 +2377,7 @@ function renderActionState() {
     state.loading ||
     state.shuttingDown ||
     isDraftProjectionMode ||
+    getCurrentResultsBundle()?.mode === "firstPick" ||
     (getCurrentResultsBundle()?.resultsByRole?.[getSelectedResultRole()] || []).length === 0 ||
     Boolean(getCurrentResultsBundle()?.metaByRole?.[getSelectedResultRole()]?.error);
 }
