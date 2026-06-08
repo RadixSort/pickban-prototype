@@ -10,8 +10,8 @@ const {
 } = require("../lib/startup-auto-update.js");
 
 const CWD = "/repo";
-const LOCAL_PACKAGE = JSON.stringify({ version: "0.6.3" });
-const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.4" });
+const LOCAL_PACKAGE = JSON.stringify({ version: "0.6.4" });
+const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.5" });
 
 test("startup auto-update can be disabled by env", async () => {
   const commands = [];
@@ -86,8 +86,8 @@ test("startup auto-update does nothing when remote main has the same version", a
   });
 
   assert.equal(result.status, "up-to-date");
-  assert.equal(result.localVersion, "0.6.3");
-  assert.equal(result.remoteVersion, "0.6.3");
+  assert.equal(result.localVersion, "0.6.4");
+  assert.equal(result.remoteVersion, "0.6.4");
 });
 
 test("startup auto-update fast-forwards and installs when remote main has a new version", async () => {
@@ -106,8 +106,8 @@ test("startup auto-update fast-forwards and installs when remote main has a new 
   });
 
   assert.equal(result.status, "updated");
-  assert.equal(result.localVersion, "0.6.3");
-  assert.equal(result.remoteVersion, "0.6.4");
+  assert.equal(result.localVersion, "0.6.4");
+  assert.equal(result.remoteVersion, "0.6.5");
   assert.deepEqual(
     commands.map((entry) => commandKey(entry.command, entry.args)),
     [
@@ -125,7 +125,7 @@ test("startup auto-update fast-forwards and installs when remote main has a new 
   );
 });
 
-test("startup auto-update installs a newer release zip when git is unavailable", async () => {
+test("startup auto-update installs a 0.6.5 release zip for no-git 0.6.4 installs", async () => {
   const commands = [];
   const writtenFiles = new Map();
   const createdDirs = [];
@@ -167,8 +167,8 @@ test("startup auto-update installs a newer release zip when git is unavailable",
 
   assert.equal(result.status, "updated");
   assert.equal(result.source, "zip");
-  assert.equal(result.localVersion, "0.6.3");
-  assert.equal(result.remoteVersion, "0.6.4");
+  assert.equal(result.localVersion, "0.6.4");
+  assert.equal(result.remoteVersion, "0.6.5");
   assert.equal(writtenFiles.get(`${CWD}/package.json`), REMOTE_PACKAGE);
   assert.equal(writtenFiles.get(`${CWD}/server.js`), "require('express');\n");
   assert.deepEqual(createdDirs, [CWD, CWD]);
@@ -208,7 +208,7 @@ test("zip extraction inflates deflated entries", () => {
 
 test("readPackageVersion normalizes invalid package text to an empty string", () => {
   assert.equal(readPackageVersion("{"), "");
-  assert.equal(readPackageVersion(JSON.stringify({ version: " 0.6.3 " })), "0.6.3");
+  assert.equal(readPackageVersion(JSON.stringify({ version: " 0.6.4 " })), "0.6.4");
 });
 
 function createCommandRunner(commands, overrides = {}) {

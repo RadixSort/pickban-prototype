@@ -61,6 +61,7 @@ Startup auto-update:
 - if the local package version differs from `origin/main`, the current branch is `main`, and the working tree is clean, the app fast-forwards to the fetched commit before starting
 - if Git is unavailable and the app is not running from a git worktree, startup downloads the `main.zip` release archive, extracts it automatically, and copies its files over the current app folder before starting
 - if `package.json` or `package-lock.json` changed during the update, startup runs `npm install --no-audit --no-fund`
+- release commits must bump `package.json` and `package-lock.json`; both git and no-git zip updates compare the package version to decide whether to replace the local app
 - local branches, dirty worktrees, fetch failures, and non-fast-forward states skip auto-update and start the current checkout
 
 ## Local Workflow

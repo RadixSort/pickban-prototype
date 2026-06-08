@@ -486,6 +486,7 @@ If the app suddenly stops returning data without a local code change, these assu
 - `npm start` checks the configured git remote/branch before loading `server.js`; it updates only when the local package version differs, the current branch matches the target branch, the working tree is clean, and the fetched commit can fast-forward
 - if Git is unavailable and no `.git` directory exists beside the app, startup falls back to the configured GitHub zip archive, extracts it with the built-in Node zip reader, and copies archive files into the app directory
 - if `package.json` or `package-lock.json` changes during startup auto-update, the bootstrap runs `npm install --no-audit --no-fund` before loading `server.js`
+- releases must bump both `package.json` and `package-lock.json`; the git and zip update paths compare package versions before replacing local files
 - static assets and API routes are served by the same process
 - static assets are served with `Cache-Control: no-store`
 - `/app-config` exposes the package version and `lolalyticsDataWindowDays`; the header uses that value to describe the current Lolalytics `patch=7` lookback window as `last 7 days`
