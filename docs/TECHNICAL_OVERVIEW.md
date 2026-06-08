@@ -357,11 +357,11 @@ Flow:
 
 1. `lib/riot-live-draft.js` finds the League Client lockfile. Tests and custom setups can override the path with `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`.
 2. The server authenticates to the local League Client API with the lockfile port/password.
-3. It reads `/lol-gameflow/v1/session` for phase and queue data, and `/lol-champ-select/v1/session` for visible picks and assigned positions.
+3. It reads `/lol-gameflow/v1/session` for phase and queue data, and `/lol-champ-select/v1/session` for visible picks, pending pick actions, and assigned positions.
 4. If the phase is not `ChampSelect`, the client is disconnected, or the queue is not Normal Draft/Ranked, the route returns a disabled payload and no draft selections.
-5. If the session is supported, the route returns visible allied picks with roles, visible enemy picks, the local player's assigned role, and queue metadata.
+5. If the session is supported, the route returns visible allied picks with roles, pending allied pick hovers as temporary allies, visible enemy picks, the local player's assigned role, and queue metadata.
 
-The browser polls this route only after the user clicks `Auto Import`. The server checks gameflow before reading champ-select details, so unsupported phases or queues stop after one local League Client request. The browser applies a changed live-draft signature once, then preserves manual edits until the League Client exposes new conflicting live data.
+The browser polls this route only after the user clicks `Auto Import`. The server checks gameflow before reading champ-select details, so unsupported phases or queues stop after one local League Client request. The browser applies a changed live-draft signature once, removes stale auto-imported temporary picks, then preserves manual edits until the League Client exposes new conflicting live data. If the resulting ally/enemy suggestion cache key changes, the browser immediately reuses the main fetch flow to refresh role suggestions or draft projection data.
 
 ## Scoring, Filtering, And Ranking
 

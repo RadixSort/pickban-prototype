@@ -13,7 +13,7 @@ The app helps a player make draft and build decisions during champion select by 
 - Suggest champions for unassigned allied roles based on selected allies, selected enemies, role eligibility, matchup synergy, and matchup counter data.
 - Project a full allied draft win-rate estimate once all five allied champions have assigned roles.
 - Show build recommendations for a selected allied champion and role after all five enemies are selected, including runes, summoner spells, items, and boots.
-- Optionally import visible champion-select picks and assigned allied roles from the local League Client after the user clicks `Auto Import`.
+- Optionally import visible champion-select picks, pending allied pick hovers, and assigned allied roles from the local League Client after the user clicks `Auto Import`.
 - Optionally import one displayed rune recommendation into the local League Client after the user clicks `Import Runes`.
 
 ## Riot/League Client API Usage
@@ -27,7 +27,7 @@ Current local League Client endpoints:
   - Used to check queue compatibility for champion pick import.
 - `GET /lol-champ-select/v1/session`
   - Used only after gameflow confirms a supported champion-select queue.
-  - Reads visible allied/enemy champion IDs, local player cell ID, and assigned positions.
+  - Reads visible allied/enemy champion IDs, pending pick actions, local player cell ID, and assigned positions.
 - `GET /lol-perks/v1/pages`
   - Used only when the user clicks `Import Runes` during champion select.
   - Reads saved rune pages to find the first editable user-created page.

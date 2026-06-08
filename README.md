@@ -73,7 +73,7 @@ Startup auto-update:
 5. Use `Fetch Suggestions` for draft-aware role recommendations after at least one champion is selected.
 6. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
 7. Use `Build` on an ally row after that ally has a role and all five enemies are selected. It opens enemy-aware build suggestions. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
-8. On Windows, click `Auto Import` during a League pick/ban phase to import visible picks from Normal Draft or Ranked champ select.
+8. On Windows, click `Auto Import` during a League pick/ban phase to import visible and hovered picks from Normal Draft or Ranked champ select.
 
 Change feedback loops:
 
@@ -160,7 +160,9 @@ The three main request flows are:
 
 `POST /rune-import` uses the same lockfile credentials for build-modal rune imports. It requires an active League champ-select phase, reads `/lol-perks/v1/pages`, chooses the first editable saved page by page order, and updates it through `/lol-perks/v1/pages/{id}` only when that page does not already match the requested import. Default Riot rune pages are skipped because they are not editable.
 
-If no live champ-select data is found, the connection drops, or the queue is unsupported, the UI shows the disabled banner and leaves current selections unchanged. While active, repeated polls preserve manual edits until the League Client exposes a changed live draft signature.
+If no live champ-select data is found, the connection drops, or the queue is unsupported, the UI shows the disabled banner and leaves current selections unchanged. While active, repeated polls preserve manual edits until the League Client exposes a changed live draft signature. Changed ally or enemy compositions automatically refresh the current suggestions or draft projection through the same main action.
+
+Pending allied pick hovers from the League Client are treated as temporary allied picks. A temporary hover is removed when that champion is banned, when the user hovers another intended pick for the same champ-select cell, or when a locked allied pick already owns that role.
 
 Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
 

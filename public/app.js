@@ -67,7 +67,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.5",
+  version: "0.6.6",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   sortMode: DEFAULT_SORT_MODE,
@@ -717,6 +717,9 @@ function createSelectedChampion(champion, side, options = {}) {
   if (options.autoImported) {
     selected.autoImported = true;
   }
+  if (options.temporary) {
+    selected.temporary = true;
+  }
 
   return selected;
 }
@@ -968,7 +971,7 @@ async function pollLiveDraftImport() {
       throw new Error(payload.message || payload.error || "Failed to connect to the League Client.");
     }
 
-    handleLiveDraftImportPayload(payload);
+    await handleLiveDraftImportPayload(payload);
   } catch (error) {
     disableAutoImport(
       "connection_lost",
@@ -981,7 +984,7 @@ async function pollLiveDraftImport() {
   }
 }
 
-function handleLiveDraftImportPayload(payload) {
+async function handleLiveDraftImportPayload(payload) {
   if (!payload || payload.status !== "active") {
     disableAutoImport(
       payload?.reason || "unavailable",
@@ -1002,8 +1005,9 @@ function handleLiveDraftImportPayload(payload) {
     typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString();
 
   const nextSignature = buildLiveDraftSignature(payload);
+  let shouldRefreshSuggestions = false;
   if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
-    applyLiveDraftImport(payload);
+    shouldRefreshSuggestions = applyLiveDraftImport(payload);
     state.autoImport.lastAppliedSignature = nextSignature;
   }
 
@@ -1015,14 +1019,29 @@ function handleLiveDraftImportPayload(payload) {
       currentBundle.selectedRole = assignedRole;
     }
   }
+
+  if (shouldRefreshSuggestions) {
+    await refreshAutoImportSuggestions();
+  }
+}
+
+async function refreshAutoImportSuggestions() {
+  if (!state.autoImport.active || state.shuttingDown) {
+    return;
+  }
+
+  await handleFetchSuggestions();
 }
 
 function applyLiveDraftImport(payload) {
+  const previousSuggestionCacheKey = getCurrentSuggestionCacheKey();
   const liveAllies = normalizeLiveDraftSelections(payload.allies, "allies");
   const liveEnemies = normalizeLiveDraftSelections(payload.enemies, "enemies");
   const liveAllyKeys = new Set(liveAllies.map((ally) => String(ally.key)));
   const liveEnemyKeys = new Set(liveEnemies.map((enemy) => String(enemy.key)));
 
+  state.allies = removeStaleAutoImportedSelections(state.allies, liveAllies);
+  state.enemies = removeStaleAutoImportedSelections(state.enemies, liveEnemies);
   state.enemies = state.enemies.filter((enemy) => !liveAllyKeys.has(String(enemy.key)));
   state.allies = state.allies.filter((ally) => !liveEnemyKeys.has(String(ally.key)));
 
@@ -1032,7 +1051,13 @@ function applyLiveDraftImport(payload) {
   state.allies = trimLiveDraftSelectionsToLimit(state.allies, limits.allies);
   state.enemies = trimLiveDraftSelectionsToLimit(state.enemies, limits.enemies);
   clearManualRolesConflictingWithLiveRoles();
-  closeBuildSuggestionModal();
+  const nextSuggestionCacheKey = getCurrentSuggestionCacheKey();
+  const didChangeSuggestionDraft = nextSuggestionCacheKey !== previousSuggestionCacheKey;
+  if (didChangeSuggestionDraft) {
+    closeBuildSuggestionModal();
+  }
+
+  return didChangeSuggestionDraft;
 }
 
 function normalizeLiveDraftSelections(entries = [], side) {
@@ -1057,6 +1082,7 @@ function normalizeLiveDraftSelections(entries = [], side) {
     const selection = createSelectedChampion(champion, side, {
       autoImported: true,
       liveCellId: Number.isInteger(Number(entry.cellId)) ? Number(entry.cellId) : null,
+      temporary: Boolean(entry.temporary),
     });
     if (side === "allies") {
       selection.role = normalizeRole(entry.role) || "";
@@ -1067,6 +1093,27 @@ function normalizeLiveDraftSelections(entries = [], side) {
   }
 
   return selections;
+}
+
+function removeStaleAutoImportedSelections(selections, liveSelections) {
+  const liveCellIds = new Set(
+    liveSelections
+      .map((selection) => selection.liveCellId)
+      .filter((liveCellId) => liveCellId != null),
+  );
+  const liveChampionKeys = new Set(liveSelections.map((selection) => String(selection.key)));
+
+  return selections.filter((selection) => {
+    if (!selection.autoImported) {
+      return true;
+    }
+
+    if (selection.liveCellId != null) {
+      return liveCellIds.has(selection.liveCellId);
+    }
+
+    return liveChampionKeys.has(String(selection.key));
+  });
 }
 
 function upsertLiveDraftSelection(side, liveSelection, liveChampionKeys) {

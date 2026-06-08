@@ -105,13 +105,15 @@ Leave that terminal window open while you use the app.
 9. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to combine matchup-specific build data for the full enemy team.
 10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
 11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft matchup.
-12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible champion picks and ally roles from the League Client.
+12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible and hovered champion picks plus ally roles from the League Client.
 
 ## Auto Import
 
 Auto Import works only while the League Client is running on the same Windows computer and the current pick/ban is Normal Draft or Ranked.
 
-If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app will leave those edits alone unless the League Client later reveals conflicting live pick data.
+If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app will leave those edits alone unless the League Client later reveals conflicting live pick data. When the imported ally or enemy composition changes, the app refreshes the current suggestions automatically.
+
+Hovered allied picks count as temporary allies while Auto Import is active. They disappear if that champion is banned, change when you hover a different intended pick, and give way to locked allied picks for the same role.
 
 If it cannot find a supported live draft, loses the connection, or sees another game mode, the banner says auto champion import is disabled and your current selections stay as they are.
 

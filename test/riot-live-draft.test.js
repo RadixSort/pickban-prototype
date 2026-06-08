@@ -87,6 +87,160 @@ test("buildLiveDraftImport returns visible champ-select picks and the local assi
   ]);
 });
 
+test("buildLiveDraftImport treats pending allied pick actions as temporary allies", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        queue: {
+          id: 420,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      myTeam: [
+        {
+          cellId: 1,
+          championId: 0,
+          assignedPosition: "middle",
+        },
+      ],
+      theirTeam: [],
+      actions: [
+        [
+          {
+            actorCellId: 1,
+            championId: 103,
+            completed: false,
+            isAllyAction: true,
+            type: "pick",
+          },
+        ],
+      ],
+    },
+  });
+
+  assert.equal(payload.status, "active");
+  assert.deepEqual(payload.allies.map(({ champion, championKey, role, temporary }) => ({
+    champion,
+    championKey,
+    role,
+    temporary,
+  })), [
+    {
+      champion: "Ahri",
+      championKey: "103",
+      role: "middle",
+      temporary: true,
+    },
+  ]);
+});
+
+test("buildLiveDraftImport removes temporary hovers once the champion is banned", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        queue: {
+          id: 420,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      myTeam: [
+        {
+          cellId: 1,
+          championId: 0,
+          assignedPosition: "top",
+        },
+      ],
+      theirTeam: [],
+      actions: [
+        [
+          {
+            actorCellId: 1,
+            championId: 122,
+            completed: false,
+            isAllyAction: true,
+            type: "pick",
+          },
+          {
+            actorCellId: 6,
+            championId: 122,
+            completed: true,
+            isAllyAction: false,
+            type: "ban",
+          },
+        ],
+      ],
+    },
+  });
+
+  assert.equal(payload.status, "active");
+  assert.deepEqual(payload.allies, []);
+});
+
+test("buildLiveDraftImport removes temporary hovers when a locked ally owns the role", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        queue: {
+          id: 420,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      myTeam: [
+        {
+          cellId: 1,
+          championId: 0,
+          assignedPosition: "middle",
+        },
+        {
+          cellId: 2,
+          championId: 103,
+          assignedPosition: "middle",
+        },
+      ],
+      theirTeam: [],
+      actions: [
+        [
+          {
+            actorCellId: 1,
+            championId: 99,
+            completed: false,
+            isAllyAction: true,
+            type: "pick",
+          },
+        ],
+      ],
+    },
+  });
+
+  assert.equal(payload.status, "active");
+  assert.deepEqual(payload.allies.map(({ champion, championKey, role }) => ({
+    champion,
+    championKey,
+    role,
+  })), [
+    {
+      champion: "Ahri",
+      championKey: "103",
+      role: "middle",
+    },
+  ]);
+});
+
 test("buildLiveDraftImport disables unsupported queues without returning picks", () => {
   const payload = buildLiveDraftImport({
     championByKey,
