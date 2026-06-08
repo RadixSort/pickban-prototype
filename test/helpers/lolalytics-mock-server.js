@@ -256,6 +256,10 @@ function createRenderedBuildPageHtml({
   thirdCoreWinRate = 83.33,
   spellGames = 48,
   spellWinRate = 53.63,
+  startingGames = 36,
+  startingWinRate = 54.17,
+  secondStartingGames = 18,
+  secondStartingWinRate = 57.22,
   bootItemId = 3170,
   bootName = "Gluttonous Greaves",
   splitStats = false,
@@ -288,6 +292,16 @@ function createRenderedBuildPageHtml({
         <img src="https://cdn5.lolalytics.com/spell64/14.webp" alt="Ignite" />
         ${renderSpellStats(spellWinRate, spellGames)}
         <h2>Skill Order</h2>
+      </section>
+      <section>
+        <h2>Starting Build</h2>
+        <img src="https://cdn5.lolalytics.com/item64/1056.webp" alt="Doran's Ring" />
+        <img src="https://cdn5.lolalytics.com/item64/2003.webp" alt="Health Potion" />
+        ${renderItemStats(startingWinRate, startingGames)}
+        <p>OR</p>
+        <img src="https://cdn5.lolalytics.com/item64/1082.webp" alt="Dark Seal" />
+        <img src="https://cdn5.lolalytics.com/item64/2031.webp" alt="Refillable Potion" />
+        ${renderItemStats(secondStartingWinRate, secondStartingGames)}
       </section>
       <section>
         <h2>Core Build</h2>

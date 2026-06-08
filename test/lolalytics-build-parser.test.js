@@ -457,6 +457,15 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
     ["Flash", "Ignite"],
   );
   assert.deepEqual(
+    parsed.startingItems.options.map((option) => option.selections.map((selection) => selection.name)),
+    [
+      ["Doran's Ring", "Health Potion"],
+      ["Dark Seal", "Refillable Potion"],
+    ],
+  );
+  assert.equal(parsed.startingItems.options[0].games, 36);
+  assert.equal(Number(parsed.startingItems.options[1].winRate.toFixed(2)), 57.22);
+  assert.deepEqual(
     parsed.items.slotOptions.map((slotOptions) => slotOptions.map((option) => option.name)),
     [
       ["Dusk and Dawn"],

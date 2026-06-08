@@ -11,7 +11,7 @@ const {
 
 const CWD = "/repo";
 const LOCAL_PACKAGE = JSON.stringify({ version: "0.6.4" });
-const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.6" });
+const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.7" });
 
 test("startup auto-update can be disabled by env", async () => {
   const commands = [];
@@ -107,7 +107,7 @@ test("startup auto-update fast-forwards and installs when remote main has a new 
 
   assert.equal(result.status, "updated");
   assert.equal(result.localVersion, "0.6.4");
-  assert.equal(result.remoteVersion, "0.6.6");
+  assert.equal(result.remoteVersion, "0.6.7");
   assert.deepEqual(
     commands.map((entry) => commandKey(entry.command, entry.args)),
     [
@@ -125,7 +125,7 @@ test("startup auto-update fast-forwards and installs when remote main has a new 
   );
 });
 
-test("startup auto-update installs a 0.6.6 release zip for no-git 0.6.4 installs", async () => {
+test("startup auto-update installs a 0.6.7 release zip for no-git 0.6.4 installs", async () => {
   const commands = [];
   const writtenFiles = new Map();
   const createdDirs = [];
@@ -168,7 +168,7 @@ test("startup auto-update installs a 0.6.6 release zip for no-git 0.6.4 installs
   assert.equal(result.status, "updated");
   assert.equal(result.source, "zip");
   assert.equal(result.localVersion, "0.6.4");
-  assert.equal(result.remoteVersion, "0.6.6");
+  assert.equal(result.remoteVersion, "0.6.7");
   assert.equal(writtenFiles.get(`${CWD}/package.json`), REMOTE_PACKAGE);
   assert.equal(writtenFiles.get(`${CWD}/server.js`), "require('express');\n");
   assert.deepEqual(createdDirs, [CWD, CWD]);

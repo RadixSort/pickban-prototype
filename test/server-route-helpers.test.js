@@ -231,6 +231,16 @@ test("build suggestion helper payloads preserve request and summary fields", () 
           spellIds: [4, 14],
         },
       },
+      startingItems: {
+        mostPickedSet: {
+          setKey: "1056-2003",
+          itemIds: [1056, 2003],
+        },
+        highestWinSet: {
+          setKey: "1082-2031",
+          itemIds: [1082, 2031],
+        },
+      },
       items: {
         highestWinBuild: {
           selections: [
@@ -302,6 +312,16 @@ test("build suggestion helper payloads preserve request and summary fields", () 
     highestWinSet: {
       setKey: "4-14",
       spellIds: [4, 14],
+    },
+  });
+  assert.deepEqual(payload.startingItems, {
+    mostPickedSet: {
+      setKey: "1056-2003",
+      itemIds: [1056, 2003],
+    },
+    highestWinSet: {
+      setKey: "1082-2031",
+      itemIds: [1082, 2031],
     },
   });
   assert.equal(hasUsableBuildSuggestions(payload), true);

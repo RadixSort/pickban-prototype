@@ -150,7 +150,7 @@ The three main request flows are:
 
 1. The UI enables `Build` only when an ally role is assigned and all five enemy champions are selected.
 2. `POST /build-suggestions` fetches one Lolalytics mega rune payload and matching rendered matchup build page per enemy, then treats the successful enemy matchups as the selected enemy-composition sample.
-3. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, and `lib/build-suggestion-results.js` sums games and wins across the matchup records into most-picked and highest-win rune, spell, item, and boot recommendations.
+3. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, and `lib/build-suggestion-results.js` sums games and wins across the matchup records into most-picked and highest-win rune, spell, starting item, core item, and boot recommendations.
 4. The route only returns success when runes, summoner spells, boots, and both five-item build paths can populate the popup.
 5. The browser renders `Import Runes` for each displayed rune page. `POST /rune-import` accepts one complete page recommendation, verifies the League Client is in champ select, then overwrites the first editable saved rune page with the recommended selections and the name `import - {Champion}`.
 

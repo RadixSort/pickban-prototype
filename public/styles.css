@@ -1560,6 +1560,23 @@ select {
   gap: 8px;
 }
 
+.build-starting-item-chip {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(9, 13, 20, 0.88);
+  display: grid;
+  place-items: center;
+}
+
+.build-starting-item-chip img {
+  display: block;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
 .build-items-panel {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 22px;

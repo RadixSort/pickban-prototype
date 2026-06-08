@@ -11,7 +11,7 @@ The app helps you compare champion options for any role that is still open in yo
 It also has:
 
 - a full-draft win-rate projection once all five allied roles are assigned
-- a build view for one ally with current Lolalytics runes, summoner spells, items, and boots
+- a build view for one ally with current Lolalytics runes, summoner spells, starting items, core items, and boots
 - a League Client rune import button for displayed build-view rune pages
 - an optional Windows auto import for League pick/ban in Normal Draft and Ranked games
 

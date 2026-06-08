@@ -237,6 +237,33 @@ function createPayload() {
         notes: [],
       },
     },
+    startingItems: {
+      highestWinSet: {
+        setKey: "1082-2031",
+        itemIds: [1082, 2031],
+        winRate: 57.2,
+        pickRate: 18.4,
+        games: 304,
+        selections: [
+          { id: 1082, itemId: 1082, icon: "1082.webp", name: "Dark Seal" },
+          { id: 2031, itemId: 2031, icon: "2031.webp", name: "Refillable Potion" },
+        ],
+      },
+      mostPickedSet: {
+        setKey: "1056-2003",
+        itemIds: [1056, 2003],
+        winRate: 53.6,
+        pickRate: 62.1,
+        games: 1022,
+        selections: [
+          { id: 1056, itemId: 1056, icon: "1056.webp", name: "Doran's Ring" },
+          { id: 2003, itemId: 2003, icon: "2003.webp", name: "Health Potion" },
+        ],
+      },
+      highlighting: {
+        notes: [],
+      },
+    },
     items: {
       highestWinBuild: {
         selections: [
@@ -395,6 +422,7 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.equal(countMatches(html, /Import Runes/g), 2);
   assert.equal(countMatches(html, /data-rune-import-key=/g), 2);
   assert.match(html, /Summoner Spells/);
+  assert.match(html, /Starting Items/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
   assert.match(html, /Most picked and highest win build options are shown below when available\./);
@@ -402,6 +430,8 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Precision \+ Resolve/);
   assert.match(html, /Flash \+ Ignite/);
   assert.match(html, /Flash \+ Teleport/);
+  assert.match(html, /Dark Seal \+ Refillable Potion/);
+  assert.match(html, /Doran(?:&#39;|')s Ring \+ Health Potion/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves/);
   assert.match(html, /Ionian Boots of Lucidity/);
   assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
@@ -422,9 +452,9 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Nimbus Cloak[\s\S]*Gathering Storm/);
   assert.match(
     html,
-    /Runes[\s\S]*Precision \+ Sorcery[\s\S]*Precision \+ Resolve[\s\S]*Summoner Spells[\s\S]*Flash \+ Ignite[\s\S]*Flash \+ Teleport[\s\S]*Boots/,
+    /Runes[\s\S]*Precision \+ Sorcery[\s\S]*Precision \+ Resolve[\s\S]*Summoner Spells[\s\S]*Flash \+ Ignite[\s\S]*Flash \+ Teleport[\s\S]*Starting Items[\s\S]*Dark Seal \+ Refillable Potion[\s\S]*Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*Boots/,
   );
-  assert.match(html, /Summoner Spells[\s\S]*Boots[\s\S]*Items/);
+  assert.match(html, /Summoner Spells[\s\S]*Starting Items[\s\S]*Boots[\s\S]*Items/);
   assert.match(html, /build-summary-side-stack/);
   assert.equal(
     countMatches(
@@ -438,12 +468,16 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Most picked and highest win completed boots\./);
   assert.doesNotMatch(html, /<span class="build-summary-kicker">Runes<\/span>/);
   assert.doesNotMatch(html, /<span class="build-summary-kicker">Summoner Spells<\/span>/);
+  assert.doesNotMatch(html, /<span class="build-summary-kicker">Starting Items<\/span>/);
   assert.doesNotMatch(html, /<span class="build-summary-kicker">Boots<\/span>/);
   assert.doesNotMatch(html, /<span class="build-summary-kicker">Items<\/span>/);
   assert.match(html, /Flash \+ Ignite[\s\S]*53\.6%[\s\S]*42\.1%[\s\S]*1,197/);
   assert.match(html, /Flash \+ Teleport[\s\S]*51\.6%[\s\S]*56\.4%[\s\S]*1,604/);
+  assert.match(html, /Dark Seal \+ Refillable Potion[\s\S]*57\.2%[\s\S]*18\.4%[\s\S]*304/);
+  assert.match(html, /Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*53\.6%[\s\S]*62\.1%[\s\S]*1,022/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves[\s\S]*Most Picked/);
   assert.match(html, /Ionian Boots of Lucidity[\s\S]*Highest Win/);
+  assert.match(html, /Items[\s\S]*Most Picked[\s\S]*Malignance[\s\S]*Highest Win[\s\S]*Luden(?:&#39;|')?s Companion/);
   assert.match(html, /Malignance[\s\S]*52\.4% win[\s\S]*71\.8% pick[\s\S]*11 min/);
   assert.match(html, /Luden(?:&#39;|')?s Companion[\s\S]*56\.5% win[\s\S]*28\.4% pick[\s\S]*11 min/);
   assert.doesNotMatch(html, /Primary Tree/);
@@ -467,6 +501,7 @@ test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and 
   const payload = createPayload();
   payload.runes.mostPickedPage = payload.runes.highestWinPage;
   payload.spells.mostPickedSet = payload.spells.highestWinSet;
+  payload.startingItems.mostPickedSet = payload.startingItems.highestWinSet;
   payload.boots.options = [
     {
       itemId: 3020,
@@ -495,6 +530,7 @@ test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and 
   assert.match(html, /build-summary-board--single/);
   assert.equal(countMatches(html, /Precision \+ Sorcery/g), 1);
   assert.equal(countMatches(html, /Flash \+ Ignite/g), 1);
+  assert.equal(countMatches(html, /Dark Seal \+ Refillable Potion/g), 1);
   assert.equal(countMatches(html, /Sorcerer(?:&#39;|')s Shoes/g), 2);
   assert.match(html, /Highest Win \+ Most Picked/);
   assert.equal(countMatches(html, /Import Runes/g), 1);

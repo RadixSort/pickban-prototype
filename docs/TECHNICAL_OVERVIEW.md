@@ -150,7 +150,7 @@ That means shared business rules often live in `public/`, not `lib/`.
 
 - `lib/lolalytics-build-parser.js`
   - normalize current Lolalytics mega rune payloads into build-modal rune data
-  - parse rendered Lolalytics build pages for visible summoner spells, core items, and completed boots
+  - parse rendered Lolalytics build pages for visible summoner spells, starting items, core items, and completed boots
 
 - `lib/build-suggestion-results.js`
   - aggregate matchup-specific build records across selected enemies into one summary payload
@@ -289,15 +289,17 @@ Flow:
    - exact page candidates
 4. `parseLolalyticsRenderedBuildPage(...)` converts the visible build page into:
    - summoner spell set options
+   - starting item set options
    - core item slot options
    - completed boot options
 5. The server merges rune data with the rendered-page build sections for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
-6. `hasUsableBuildSuggestions(...)` only accepts responses that include most-picked and highest-win runes, summoner spells, both five-item paths, and at least one boot option.
+6. `hasUsableBuildSuggestions(...)` only accepts responses that include most-picked and highest-win runes, summoner spells, both five-item paths, and at least one boot option. Starting items render when Lolalytics exposes that matchup section, but missing starting-item rows do not fail the build popup.
 7. The response returns:
    - `request`
    - `summary`
    - `runes`
    - `spells`
+   - `startingItems`
    - `items`
    - `boots`
 
@@ -406,9 +408,9 @@ Important behavioral details:
 
 Build-suggestion aggregation:
 
-- games and wins are summed by rune style, rune slot, exact rune page, summoner spell set, item ID per item slot, and completed boot
+- games and wins are summed by rune style, rune slot, exact rune page, summoner spell set, starting item set, item ID per item slot, and completed boot
 - most-picked selections use the highest aggregated game count
-- highest-win rune pages, summoner spell sets, item choices, and boots default to a `1%` sample threshold before ranking by win rate
+- highest-win rune pages, summoner spell sets, starting item sets, item choices, and boots default to a `1%` sample threshold before ranking by win rate
 - ordered item paths are built slot-by-slot from non-boot items
 - only completed boots are kept
 
@@ -468,7 +470,7 @@ The most fragile dependencies are external:
 - League Client rune import depends on `/lol-gameflow/v1/session` and `/lol-perks/v1/pages` staying compatible
 - Lolalytics mega tier, synergy, and counter payloads must continue exposing the currently parsed fields
 - Lolalytics mega rune payloads must continue exposing `header`, `summary.runes`, `summary.pick`, and `summary.win`
-- Lolalytics rendered build pages must continue exposing recognizable `Summoner Spells` and `Core Build` sections with item/spell image metadata and nearby win-rate/game-count text
+- Lolalytics rendered build pages must continue exposing recognizable `Summoner Spells`, `Starting Build` or `Starting Items`, and `Core Build` sections with item/spell image metadata and nearby win-rate/game-count text
 
 If the app suddenly stops returning data without a local code change, these assumptions are the first place to investigate.
 

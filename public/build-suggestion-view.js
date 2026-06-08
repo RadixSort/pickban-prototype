@@ -35,6 +35,9 @@
     const spellNotes = Array.isArray(payload?.spells?.highlighting?.notes)
       ? payload.spells.highlighting.notes
       : [];
+    const startingItemNotes = Array.isArray(payload?.startingItems?.highlighting?.notes)
+      ? payload.startingItems.highlighting.notes
+      : [];
     const slotGroups = Array.isArray(payload?.runes?.overview?.slotGroups)
       ? payload.runes.overview.slotGroups
       : [];
@@ -42,6 +45,8 @@
     const mostPickedPage = payload?.runes?.mostPickedPage || null;
     const highestWinSpellSet = payload?.spells?.highestWinSet || null;
     const mostPickedSpellSet = payload?.spells?.mostPickedSet || null;
+    const highestWinStartingItemSet = payload?.startingItems?.highestWinSet || null;
+    const mostPickedStartingItemSet = payload?.startingItems?.mostPickedSet || null;
     const highestWinItemBuild = payload?.items?.highestWinBuild || null;
     const mostPickedItemBuild = payload?.items?.mostPickedBuild || null;
     const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
@@ -51,10 +56,12 @@
       mostPickedPage,
       highestWinSpellSet,
       mostPickedSpellSet,
+      highestWinStartingItemSet,
+      mostPickedStartingItemSet,
       highestWinItemBuild,
       mostPickedItemBuild,
       boots,
-      notes: [...runeNotes, ...spellNotes],
+      notes: [...runeNotes, ...spellNotes, ...startingItemNotes],
       runeImportStatesByPageKey: normalizeRuneImportStates(options?.runeImportStatesByPageKey),
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
@@ -65,6 +72,8 @@
     mostPickedPage,
     highestWinSpellSet,
     mostPickedSpellSet,
+    highestWinStartingItemSet,
+    mostPickedStartingItemSet,
     highestWinItemBuild,
     mostPickedItemBuild,
     boots,
@@ -77,10 +86,15 @@
       highestWinSpellSet,
       mostPickedSpellSet,
     );
+    const startingItemRecommendations = buildRecommendedStartingItemSets(
+      highestWinStartingItemSet,
+      mostPickedStartingItemSet,
+    );
     const highlightedBoots = getHighlightedOptions(boots, "itemId");
     const hasAnyContent =
       runeRecommendations.length > 0 ||
       spellRecommendations.length > 0 ||
+      startingItemRecommendations.length > 0 ||
       highestWinItemBuild ||
       mostPickedItemBuild ||
       highlightedBoots.length > 0;
@@ -106,6 +120,7 @@
           )}
           <div class="build-summary-side-stack">
             ${renderSpellRecommendationsSection(spellRecommendations)}
+            ${renderStartingItemsSection(startingItemRecommendations)}
             ${renderBootsSection(highlightedBoots)}
           </div>
         </div>
@@ -250,6 +265,36 @@
     `;
   }
 
+  function renderStartingItemsSection(recommendations) {
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return `
+        <section class="build-items-panel" aria-label="Recommended starting items">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
+              <h3>Starting Items</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">
+            No starting item recommendations were available.
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-items-panel" aria-label="Recommended starting items">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <h3>Starting Items</h3>
+          </div>
+        </header>
+        <div class="build-spell-card-list">
+          ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderBootsSection(boots) {
     if (!Array.isArray(boots) || boots.length === 0) {
       return `
@@ -306,16 +351,16 @@
         </header>
         <div class="build-items-grid">
           ${renderItemBuildColumn({
-            title: "Highest Win",
-            tone: "highest-win",
-            build: highestWinBuild,
-            emptyMessage: "No highest-win item path was available.",
-          })}
-          ${renderItemBuildColumn({
             title: "Most Picked",
             tone: "most-picked",
             build: mostPickedBuild,
             emptyMessage: "No most-picked item path was available.",
+          })}
+          ${renderItemBuildColumn({
+            title: "Highest Win",
+            tone: "highest-win",
+            build: highestWinBuild,
+            emptyMessage: "No highest-win item path was available.",
           })}
         </div>
       </section>
@@ -544,6 +589,45 @@
     `;
   }
 
+  function renderStartingItemSetCard(itemSet) {
+    const selections = Array.isArray(itemSet?.selections)
+      ? itemSet.selections.filter((selection) => selection && (selection.icon || selection.name))
+      : [];
+
+    return `
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", itemSet)}">
+        <div class="build-spell-card-top">
+          <div class="build-spell-card-icons">
+            ${selections.map((selection) => renderStartingItemSelection(selection)).join("")}
+          </div>
+          <div class="build-spell-card-copy">
+            <h4>${escapeHtml(getStartingItemSetTitle(itemSet))}</h4>
+            ${renderHighlightLegend(itemSet)}
+          </div>
+        </div>
+        <div class="build-summary-metric-grid">
+          ${renderSummaryMetric("Win", formatPercent(itemSet?.winRate), "win")}
+          ${renderSummaryMetric("Pick", formatPercent(itemSet?.pickRate), "pick")}
+          ${renderSummaryMetric("Games", formatCount(itemSet?.games), "games")}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderStartingItemSelection(selection) {
+    return `
+      <article class="build-starting-item-chip" title="${escapeAttribute(selection?.name || "Item")}">
+        <img
+          src="${escapeAttribute(selection?.icon || "")}"
+          alt="${escapeAttribute(selection?.name || "Item")}"
+          width="38"
+          height="38"
+        />
+        <span class="sr-only">${escapeHtml(selection?.name || "Unknown")}</span>
+      </article>
+    `;
+  }
+
   function renderSpellSetCard(spellSet) {
     const selections = Array.isArray(spellSet?.selections)
       ? spellSet.selections.filter((selection) => selection && (selection.icon || selection.name))
@@ -599,6 +683,14 @@
       : [];
 
     return spellNames.length > 0 ? spellNames.join(" + ") : "Summoner spells";
+  }
+
+  function getStartingItemSetTitle(itemSet) {
+    const itemNames = Array.isArray(itemSet?.selections)
+      ? itemSet.selections.map((selection) => selection?.name).filter(Boolean)
+      : [];
+
+    return itemNames.length > 0 ? itemNames.join(" + ") : "Starting items";
   }
 
   function renderSummaryMetric(label, value, tone) {
@@ -743,6 +835,35 @@
     return [...setsByKey.values()].sort(compareHighlightedOptions);
   }
 
+  function buildRecommendedStartingItemSets(highestWinSet, mostPickedSet) {
+    const setsByKey = new Map();
+
+    [
+      { option: highestWinSet, isHighestWin: true, isMostPicked: false },
+      { option: mostPickedSet, isHighestWin: false, isMostPicked: true },
+    ].forEach(({ option, isHighestWin, isMostPicked }) => {
+      const recommendationKey = getRecommendationStartingItemSetKey(option);
+      if (!recommendationKey) {
+        return;
+      }
+
+      const existing = setsByKey.get(recommendationKey);
+      if (existing) {
+        existing.isHighestWin = existing.isHighestWin || isHighestWin;
+        existing.isMostPicked = existing.isMostPicked || isMostPicked;
+        return;
+      }
+
+      setsByKey.set(recommendationKey, {
+        ...option,
+        isHighestWin,
+        isMostPicked,
+      });
+    });
+
+    return [...setsByKey.values()].sort(compareHighlightedOptions);
+  }
+
   function getHighlightedOptions(options, keyField) {
     if (!Array.isArray(options)) {
       return [];
@@ -805,6 +926,18 @@
     }
 
     return getSelectionIds(spellSet?.selections).join("|");
+  }
+
+  function getRecommendationStartingItemSetKey(itemSet) {
+    if (!itemSet || typeof itemSet !== "object") {
+      return null;
+    }
+
+    if (itemSet.setKey) {
+      return String(itemSet.setKey);
+    }
+
+    return getSelectionIds(itemSet?.selections).join("|");
   }
 
   function getSelectionIds(selections) {
