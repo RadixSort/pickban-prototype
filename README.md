@@ -1,293 +1,197 @@
 # PickBan Prototype
 
-PickBan Prototype is a local Node/Express web app for live draft assistance workflows:
+PickBan Prototype is a local League of Legends draft helper. It runs on your computer, opens in your browser, and uses live Lolalytics data to help compare picks during champion select.
 
-- draft pick recommendations for every unassigned allied role
-- full-draft win-rate projection once all five allied roles are assigned
-- enemy-aware build recommendations for an assigned ally role
-- League Client rune-page import from displayed rune recommendations during pick/ban
-- opt-in League Client pick/ban import on Windows for Normal Draft and Ranked queues
+The app can:
 
-It runs as one local process, serves plain browser JavaScript from `public/`, and has no build step, database, auth, or hosted deployment flow.
+- show first-pick tier lists before any champions are selected
+- suggest champions for allied roles that are still open
+- estimate the full draft once all five allied roles are assigned
+- show enemy-aware runes, summoner spells, items, and boots for one ally
+- import a displayed rune page into the League Client during pick/ban
+- on Windows, optionally import visible and hovered League pick/ban champions in Normal Draft or Ranked queues
 
-The app header credits Lolalytics and shows the current last-7-days data window plus lifetime live-hit count. The Riot Games non-endorsement/trademark notice is kept as an unframed footnote at the bottom of the app.
+This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
 
-## Quick Start
+## Before You Start
 
-Requirements:
+You need:
 
-- Node.js 18 or newer
-- npm
-- internet access while fetching live data
-- a modern browser
+- this project folder on your computer
+- internet access
+- a web browser
+- Node.js installed
 
-Install and run:
+## Install Node.js
+
+1. Go to [https://nodejs.org](https://nodejs.org).
+2. Download the LTS version.
+3. Run the installer.
+
+You only need to do this once per computer.
+
+## Open The Project Folder
+
+On macOS:
+
+1. Open Terminal.
+2. Type `cd `.
+3. Drag the project folder into the Terminal window.
+4. Press `Enter`.
+
+Example:
+
+```bash
+cd /Users/your-name/Downloads/pickban-prototype
+```
+
+On Windows:
+
+1. Open the project folder in File Explorer.
+2. Click the address bar.
+3. Type `powershell`.
+4. Press `Enter`.
+
+## Install The App
+
+Run:
 
 ```bash
 npm install
+```
+
+You usually only need this the first time, or again after the app has updated its dependencies.
+
+## Start The App
+
+Run:
+
+```bash
 npm start
 ```
 
-Open `http://localhost:3000`.
+Then open:
 
-Run the test suite:
-
-```bash
-npm test
+```text
+http://localhost:3000
 ```
 
-Useful variants:
+Leave the terminal window open while you use the app.
+
+## How To Use It
+
+1. Before any champion is selected, click **Fetch Suggestions** to see first-pick tier lists by role.
+2. Add allied champions on the left.
+3. Add enemy champions on the right.
+4. If you know some ally roles already, assign them in the middle panel.
+5. Click **Fetch Suggestions**.
+6. Use the **Target role** dropdown in the results area to switch between returned role suggestions.
+7. Click **+** on a result row to add that recommendation to the allied draft for the role you are viewing.
+8. Sort first-pick rows with **PBI** or **Winrate**. Sort draft-aware rows with **Projected Win Rate** or **Projected Agency**.
+9. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to see matchup-aware build recommendations.
+10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
+11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft.
+12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible and hovered champion picks plus ally roles from the League Client.
+
+## Auto Import
+
+Auto Import only works while the League Client is running on the same Windows computer and the current pick/ban is Normal Draft or Ranked.
+
+If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app leaves manual edits alone unless the League Client later reveals conflicting live pick data. When the imported ally or enemy composition changes, the app refreshes the current suggestions automatically.
+
+Hovered allied picks count as temporary allies while Auto Import is active. They disappear if that champion is banned, change when you hover a different intended pick, and give way to locked allied picks for the same role.
+
+If Auto Import cannot find a supported live draft, loses the connection, or sees another game mode, the banner says import is disabled and your current selections stay as they are.
+
+## What The Scores Mean
+
+- `Synergy Score`: how well a candidate fits your allied champions
+- `Counter Score`: how well a candidate performs into your enemy champions
+- `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
+- `Projected Agency`: the blended score available in the **Rank by** dropdown
+- `PBI`: Lolalytics Pick Ban Influence for first-pick tier-list rows
+
+Rows that rank highly by both active metrics are highlighted in yellow.
+
+## Limits
+
+- Up to 5 allied champions
+- Up to 5 enemy champions
+- A champion can only appear once across both teams
+- Ally role assignment is optional until you want a full-draft projection
+- With no champions selected, **Fetch Suggestions** shows first-pick tier lists instead of draft-aware suggestions
+- **Build** needs 1 ally with an assigned role and all 5 enemy champions selected
+- **Import Runes** needs League pick/ban and at least 1 editable saved rune page
+- **Who will win?** needs all 5 allies plus 5 unique ally roles
+- **Auto Import** needs the Windows League Client in Normal Draft or Ranked champ select
+
+## Next Time
+
+After the first setup, you usually only need:
 
 ```bash
-PORT=3001 npm start
-npm run bench:efficiency
+npm start
 ```
 
-Supported runtime overrides:
-
-- `PORT`: override the local listen port
-- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0`: skip the startup update check
-- `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH`: override the checked git remote and branch; defaults are `origin` and `main`
-- `PICKBAN_AUTO_UPDATE_ZIP_URL`: override the no-git release zip URL; defaults to `https://github.com/RadixSort/pickban-prototype/archive/refs/heads/main.zip`
-- `LOLALYTICS_BASE_URL`: override the rendered Lolalytics page origin
-- `LOLALYTICS_MEGA_URL`: override the mega endpoint origin
-- `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: override the League Client lockfile path for auto import and rune import
-
-There is no build, lint, or bundling command in this repo.
-
-Startup auto-update:
-
-- `npm start` runs `start.js`, which checks `origin/main` before loading `server.js`
-- if the local package version differs from `origin/main`, the current branch is `main`, and the working tree is clean, the app fast-forwards to the fetched commit before starting
-- if Git is unavailable and the app is not running from a git worktree, startup downloads the `main.zip` release archive, extracts it automatically, and copies its files over the current app folder before starting
-- if `package.json` or `package-lock.json` changed during the update, startup runs `npm install --no-audit --no-fund`
-- release commits must bump `package.json` and `package-lock.json`; both git and no-git zip updates compare the package version to decide whether to replace the local app
-- local branches, dirty worktrees, fetch failures, and non-fast-forward states skip auto-update and start the current checkout
+Then open `http://localhost:3000`.
 
-## Local Workflow
+## Stop The App
 
-1. Start the server with `npm start`.
-2. Open the app in a browser. With no champions selected, `Fetch Suggestions` loads first-pick tier lists for each role, ranked by Lolalytics PBI.
-3. Build a draft with allied and enemy champions. The same champion cannot appear on both sides.
-4. Optionally assign known ally roles. The app will fetch every remaining role.
-5. Use `Fetch Suggestions` for draft-aware role recommendations after at least one champion is selected.
-6. When all five allies have unique roles, the main action changes to `Who will win?` and fetches the full-draft outlook instead of open-role suggestions.
-7. Use `Build` on an ally row after that ally has a role and all five enemies are selected. It opens enemy-aware build suggestions. During League pick/ban, use `Import Runes` on a displayed rune page to overwrite the first editable saved League rune page as `import - {Champion}`.
-8. On Windows, click `Auto Import` during a League pick/ban phase to import visible and hovered picks from Normal Draft or Ranked champ select.
+Preferred method:
 
-Change feedback loops:
+1. Click the red `X` in the top-right corner of the app.
+2. Close the browser tab if you want.
 
-- frontend changes in `public/` usually need a browser refresh
-- `server.js` and `lib/` changes require restarting `npm start`
-- static assets are served with `Cache-Control: no-store`, so a normal refresh is usually enough after frontend edits
-
-## Repo Map
-
-Entry points:
-
-- `start.js`: `npm start` bootstrap that runs the clean-main auto-update check before loading the server
-- `server.js`: Express startup, `GET /app-config`, `GET /live-draft`, `POST /rune-import`, `POST /suggest`, `POST /draft-outlook`, `POST /build-suggestions`, `POST /shutdown`, Lolalytics fetch/caching, request validation, and shutdown handling
-- `public/index.html`: browser entry point
-- `public/app.js`: frontend controller, draft state, fetch flows, modal state, and rendering
-
-Core module groups:
-
-- `public/*.js`: browser-loaded helper modules that are also reusable from Node via `require(...)`
-- `lib/*.js`: Node-only request normalization, parsing, aggregation, and scoring helpers
-- `test/*.test.js`: Node test suite for shared helpers, parsers, rendering helpers, and server HTTP/startup coverage
-- `bench/efficiency.js`: synthetic benchmark for aggregation and top-result selection
-
-High-value files when you are new to the codebase:
-
-- `lib/request-normalization.js`: validates and normalizes `/suggest`, `/draft-outlook`, and `/build-suggestions` payloads
-- `lib/requested-target-roles.js`: resolves explicit roles or infers unassigned roles from ally assignments
-- `lib/server-route-helpers.js`: shared request normalization and response shaping for the Express routes
-- `lib/draft-projection.js`: aggregates full-team ally synergy and enemy counter rows into one projected matchup summary
-- `lib/lolalytics-tier-list.js`: normalizes Lolalytics tier data into role eligibility data
-- `lib/first-pick-results.js`: builds empty-draft first-pick tier-list results from role tier data
-- `lib/role-suggestion-results.js`: merges ally/enemy rows into ranked role suggestions
-- `lib/lolalytics-build-parser.js`: normalizes Lolalytics build payloads into the build modal shape
-- `lib/build-suggestion-results.js`: aggregates matchup-specific build data across selected enemies into one summary payload
-- `lib/riot-live-draft.js`: reads the local League Client lockfile, normalizes visible champ-select picks, and rewrites the first editable saved rune page for rune import
-- `public/result-ranking.js`: shared ranking and top-N helpers
-- `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
-- `public/build-suggestion-view.js`: HTML rendering for the build recommendation modal
-
-## Architecture Overview
-
-The app has three code layers:
-
-1. `server.js` is the only HTTP entry point. It serves the static UI and exposes the local API routes.
-2. `public/` contains the browser shell plus small shared modules that both the browser and Node can import.
-3. `lib/` contains the Node-only logic for normalization, parsing, and result aggregation.
-
-The three main request flows are:
-
-### Role Suggestions
-
-1. `public/app.js` collects `rankFilter`, `allies`, and `enemies`.
-2. `POST /suggest` uses `lib/server-route-helpers.js` to normalize the request and resolve target roles.
-3. With no champions selected, `/suggest` fetches role tier data only and returns first-pick rows with PBI and win rate.
-4. After at least one champion is selected, for each requested role, the server fetches:
-   - role tier data from the Lolalytics mega endpoint
-   - ally synergy data
-   - enemy counter data from the Lolalytics mega endpoint
-5. `lib/role-suggestion-results.js` filters out in-draft champions, applies tier-list eligibility, computes scores, and sorts the results.
-6. The response returns `roles`, `resultsByRole`, `metaByRole`, and `requestStats`.
-
-### Draft Outlook
-
-1. When all five allied champions are selected and every ally has a unique role, the main action switches to `Who will win?`.
-2. `POST /draft-outlook` validates the five-ally full-draft request.
-3. The server fetches:
-   - ally synergy rows across the full allied lineup
-   - enemy counter rows for each ally-role matchup
-4. `lib/draft-projection.js` combines those rows into one team-vs-team projection.
-5. If Lolalytics returns no usable win-rate samples, the route fails closed instead of returning a misleading 0%-vs-100% projection.
-6. The response returns `request`, `summary`, `projection`, and `requestStats`.
+Fallback:
 
-### Build Recommendations
+1. Return to the terminal.
+2. Press `Ctrl+C`.
 
-1. The UI enables `Build` only when an ally role is assigned and all five enemy champions are selected.
-2. `POST /build-suggestions` fetches one Lolalytics mega rune payload and matching rendered matchup build page per enemy, then treats the successful enemy matchups as the selected enemy-composition sample.
-3. `lib/lolalytics-build-parser.js` normalizes Lolalytics data, and `lib/build-suggestion-results.js` sums games and wins across the matchup records into most-picked and highest-win rune, spell, starting item, core item, and boot recommendations.
-4. The route only returns success when runes, summoner spells, boots, and both five-item build paths can populate the popup.
-5. The browser renders `Import Runes` for each displayed rune page. `POST /rune-import` accepts one complete page recommendation, verifies the League Client is in champ select, then overwrites the first editable saved rune page with the recommended selections and the name `import - {Champion}`.
+## Common Problems
 
-### Auto Import
+### `npm` Is Not Recognized
 
-`GET /live-draft` supports the `Auto Import` button. It reads the Windows League Client lockfile, checks local gameflow/champ-select state, and only returns active data for Normal Draft (`400`), Ranked Solo/Duo (`420`), or Ranked Flex (`440`).
+Node.js is probably missing or was not installed correctly. Reinstall it from [https://nodejs.org](https://nodejs.org), then reopen the terminal.
 
-`POST /rune-import` uses the same lockfile credentials for build-modal rune imports. It requires an active League champ-select phase, reads `/lol-perks/v1/pages`, chooses the first editable saved page by page order, and updates it through `/lol-perks/v1/pages/{id}` only when that page does not already match the requested import. Default Riot rune pages are skipped because they are not editable.
+### The Browser Page Does Not Open
 
-If no live champ-select data is found, the connection drops, or the queue is unsupported, the UI shows the disabled banner and leaves current selections unchanged. While active, repeated polls preserve manual edits until the League Client exposes a changed live draft signature. Changed ally or enemy compositions automatically refresh the current suggestions or draft projection through the same main action.
+- Make sure `npm start` is still running.
+- Make sure you opened `http://localhost:3000`.
 
-Pending allied pick hovers from the League Client are treated as temporary allied picks. A temporary hover is removed when that champion is banned, when the user hovers another intended pick for the same champ-select cell, or when a locked allied pick already owns that role.
+### Port 3000 Is Already In Use
 
-Important implementation detail: several modules in `public/` are intentionally shared with Node. If logic must stay consistent between browser state and server/test code, check `public/` before adding a new duplicate helper in `lib/`.
+Ask someone technical to start the app on a different port.
 
-## Practical API Checks
+### Data Fails To Load
 
-Sanity-check role suggestions:
+The app needs internet access and working Lolalytics responses. Wait a moment and try again.
 
-```bash
-curl -s http://localhost:3000/suggest \
-  -H 'content-type: application/json' \
-  -d '{
-    "rankFilter": "emerald_plus",
-    "allies": [
-      { "champion": "Ahri", "role": "middle" },
-      { "champion": "Jarvan IV" }
-    ],
-    "enemies": ["Jinx", "Nautilus"]
-  }'
-```
+### Auto Import Says It Is Disabled
 
-Sanity-check build recommendations:
+Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer. Other modes, no active champ select, or a disconnected League Client disable import without changing your current picks.
 
-```bash
-curl -s http://localhost:3000/build-suggestions \
-  -H 'content-type: application/json' \
-  -d '{
-    "rankFilter": "emerald_plus",
-    "ally": { "champion": "Ahri", "role": "middle" },
-    "enemies": ["Zed", "Sejuani"]
-  }'
-```
+### The `Build` Button Is Disabled
 
-Sanity-check full-draft projection:
+The button only works after the ally has an assigned role and all five enemy champions are selected. Hover over the disabled button to see which requirement is still missing.
 
-```bash
-curl -s http://localhost:3000/draft-outlook \
-  -H 'content-type: application/json' \
-  -d '{
-    "rankFilter": "emerald_plus",
-    "allies": [
-      { "champion": "Darius", "role": "top" },
-      { "champion": "Jarvan IV", "role": "jungle" },
-      { "champion": "Ahri", "role": "middle" },
-      { "champion": "Miss Fortune", "role": "bottom" },
-      { "champion": "Leona", "role": "support" }
-    ],
-    "enemies": ["Jinx", "Lux"]
-  }'
-```
+### Import Runes Fails
 
-## Troubleshooting
+Make sure League is currently in pick/ban and that your League account has at least one editable saved rune page. The app skips default Riot rune pages and only rewrites the first editable saved page.
 
-### `npm start` fails immediately
+### I Expected One Role, But The App Shows Others
 
-Run `node -v`. This repo expects Node 18+ because it uses built-in `fetch` and `node:test`.
+The app fetches every role that is still unassigned. Assign more ally roles before fetching if you want fewer result roles.
 
-### `http://localhost:3000` does not load
+### The Main Button Says `Who will win?`
 
-- confirm `npm start` is still running
-- confirm the port matches the one you started with
-- if port `3000` is busy, start with `PORT=3001 npm start`
+That is expected when all five allied champions are selected and all five ally roles are assigned.
 
-### Frontend changes are not showing up
+## Developer Details
 
-- refresh the browser after editing files in `public/`
-- restart the server after editing `server.js` or files imported by the server
-
-### Role results are missing or only some roles load
-
-- the backend uses live Lolalytics responses, so timeouts and upstream parse changes can fail by role
-- partial role failures are surfaced in the UI and in `metaByRole[role].partialFailures`
-- if every requested role fails, `/suggest` returns an HTTP error
-
-### The main button says `Who will win?`
-
-That means all five allied champions are selected and all five allied roles are assigned. Clear one role or remove one ally if you want to go back to role suggestions.
-
-### The `Build` button is disabled
-
-Hover over the disabled `Build` button to see the missing requirement.
-
-The current UI only enables that flow when:
-
-- the ally has an assigned role
-- all five enemy champions are selected
-- the app is not already loading role suggestions or shutting down
-
-It opens one enemy-aware build recommendation by aggregating the selected ally's five Lolalytics matchups.
-
-### `Import Runes` fails
-
-Rune import only works while the League Client is in pick/ban and at least one editable saved rune page exists. It overwrites the first editable saved page and skips default Riot rune pages.
-
-### Requests fail immediately before any live fetches
-
-The server rejects invalid local input first. Common causes are:
-
-- the same champion was selected on both allied and enemy sides
-- a role alias could not be normalized
-- the request exceeded the ally or enemy limits
-
-### The top-right close button is missing
-
-The button is only shown after `GET /app-config` succeeds and the browser receives the per-process shutdown token. `Ctrl+C` in the terminal always remains the fallback.
-
-## Related Docs
-
-- developer architecture: [`docs/TECHNICAL_OVERVIEW.md`](docs/TECHNICAL_OVERVIEW.md)
-- non-technical setup and usage: [`docs/NON_TECHNICAL_GUIDE.md`](docs/NON_TECHNICAL_GUIDE.md)
-- Riot registration summary: [`docs/RIOT_APPLICATION_SUMMARY.md`](docs/RIOT_APPLICATION_SUMMARY.md)
-
-## Current Limitations
-
-- live role and draft behavior depends on Lolalytics mega tier, synergy, and counter payloads staying structurally compatible
-- enemy-aware build recommendations depend on Lolalytics matchup rune payloads and rendered matchup build-page sections staying structurally compatible
-- auto import depends on Riot's local League Client API and the Windows League Client lockfile staying compatible
-- rune import depends on Riot's local League Client `/lol-perks/v1/pages` API staying compatible
-- runtime settings such as patch window, queue, region, request timeout, and eligibility thresholds are hard-coded in `server.js`; the UI displays the current Lolalytics patch window as a last-7-days lookback
-- the supported runtime overrides are `PORT`, the startup auto-update vars, `LOLALYTICS_BASE_URL`, `LOLALYTICS_MEGA_URL`, and the League Client lockfile path vars listed above
-- there is no persistence, auth, or deployment story in this repository
+For the technical map of the project, read [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md).
 
 ## License
 
 This repository is open source under the [MIT License](LICENSE).
 
 The MIT license applies only to the original code in this repository. It does not grant rights to third-party names, trademarks, data, or media, including Riot Games and League of Legends marks or any Lolalytics data, site content, or icon URLs referenced by the app.
-
-This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
