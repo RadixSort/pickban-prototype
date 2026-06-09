@@ -488,6 +488,61 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
   );
 });
 
+test("parseLolalyticsRenderedBuildPage reads starting items from both build tabs", () => {
+  const parsed = parseLolalyticsRenderedBuildPage(
+    `
+      <main>
+        <h2>Highest Win Build</h2>
+        <h2>Starting Items</h2>
+        <img src="https://cdn5.lolalytics.com/item64/1082.webp" alt="Dark Seal" />
+        <img src="https://cdn5.lolalytics.com/item64/2031.webp" alt="Refillable Potion" />
+        <p>54.88% Win Rate 82 Games</p>
+        <h2>Core Build</h2>
+        <img src="https://cdn5.lolalytics.com/item64/4646.webp" alt="Stormsurge" />
+        <p>59.21%</p>
+        <p>152</p>
+        <h2>Most Common Build</h2>
+        <h2>Starting Items</h2>
+        <img src="https://cdn5.lolalytics.com/item64/1056.webp" alt="Doran's Ring" />
+        <img src="https://cdn5.lolalytics.com/item64/2003.webp" alt="Health Potion" />
+        <span>50.64</span>
+        <span>% Win Rate</span>
+        <span>312 Games</span>
+        <h2>Core Build</h2>
+        <img src="https://cdn5.lolalytics.com/item64/3118.webp" alt="Malignance" />
+        <p>52.2%</p>
+        <p>401</p>
+      </main>
+    `,
+    {
+      allyChampionKey: "8",
+      enemyChampionKey: "254",
+      fetchedAt: "2026-06-08T12:00:00.000Z",
+      role: "middle",
+    },
+  );
+
+  assert.deepEqual(
+    parsed.startingItems.options.map((option) => ({
+      itemIds: option.itemIds,
+      games: option.games,
+      names: option.selections.map((selection) => selection.name),
+    })),
+    [
+      {
+        itemIds: [1082, 2031],
+        games: 82,
+        names: ["Dark Seal", "Refillable Potion"],
+      },
+      {
+        itemIds: [1056, 2003],
+        games: 312,
+        names: ["Doran's Ring", "Health Potion"],
+      },
+    ],
+  );
+});
+
 test("parseLolalyticsRenderedBuildPage isolates missing rendered build rows", () => {
   assert.throws(
     () => parseLolalyticsRenderedBuildPage("<section><h2>Core Build</h2></section>"),

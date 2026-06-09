@@ -292,7 +292,7 @@ Flow:
    - starting item set options
    - core item slot options
    - completed boot options
-5. The server merges rune data with the rendered-page build sections for each matchup, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
+5. The server merges rune data with the rendered-page build sections for each matchup, including rendered `spells`, `startingItems`, `items`, and `boots`, then `buildBuildSuggestionResults(...)` aggregates the successful records into one enemy-composition summary response.
 6. `hasUsableBuildSuggestions(...)` only accepts responses that include most-picked and highest-win runes, summoner spells, both five-item paths, and at least one boot option. Starting items render when Lolalytics exposes that matchup section, but missing starting-item rows do not fail the build popup.
 7. The response returns:
    - `request`
@@ -471,6 +471,7 @@ The most fragile dependencies are external:
 - Lolalytics mega tier, synergy, and counter payloads must continue exposing the currently parsed fields
 - Lolalytics mega rune payloads must continue exposing `header`, `summary.runes`, `summary.pick`, and `summary.win`
 - Lolalytics rendered build pages must continue exposing recognizable `Summoner Spells`, `Starting Build` or `Starting Items`, and `Core Build` sections with item/spell image metadata and nearby win-rate/game-count text
+- rendered build sections must survive the rune/rendered source merge; parser tests cover multiple starting-item sections and server API tests cover `startingItems` in `/build-suggestions`
 
 If the app suddenly stops returning data without a local code change, these assumptions are the first place to investigate.
 

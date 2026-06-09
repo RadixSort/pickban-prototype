@@ -1124,6 +1124,9 @@ function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
     spells: hasBuildList(renderedBuildData.spells?.options)
       ? renderedBuildData.spells
       : primaryBuildData.spells,
+    startingItems: hasBuildList(renderedBuildData.startingItems?.options)
+      ? renderedBuildData.startingItems
+      : primaryBuildData.startingItems,
     items: hasNestedBuildList(renderedBuildData.items?.slotOptions)
       ? renderedBuildData.items
       : primaryBuildData.items,

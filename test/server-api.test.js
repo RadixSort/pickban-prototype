@@ -79,6 +79,8 @@ function assertBuildSuggestionSectionsArePopulated(payload) {
   assert.ok(payload.runes.highestWinPage);
   assert.ok(payload.spells.mostPickedSet);
   assert.ok(payload.spells.highestWinSet);
+  assert.ok(payload.startingItems.mostPickedSet);
+  assert.ok(payload.startingItems.highestWinSet);
   assert.ok(payload.boots.options.length > 0);
   assert.equal(payload.items.mostPickedBuild.selections.length, 5);
   assert.equal(payload.items.highestWinBuild.selections.length, 5);
@@ -917,6 +919,8 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   );
   assert.deepEqual(firstResponse.body.spells.mostPickedSet.spellIds, [4, 14]);
   assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
+  assert.deepEqual(firstResponse.body.startingItems.mostPickedSet.itemIds, [1056, 2003]);
+  assert.deepEqual(firstResponse.body.startingItems.highestWinSet.itemIds, [1082, 2031]);
   assert.deepEqual(
     firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
     [2510, 3115, 3089, 4645, 3135],
