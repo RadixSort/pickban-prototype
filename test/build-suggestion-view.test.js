@@ -477,7 +477,9 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*53\.6%[\s\S]*62\.1%[\s\S]*1,022/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves[\s\S]*Most Picked/);
   assert.match(html, /Ionian Boots of Lucidity[\s\S]*Highest Win/);
-  assert.match(html, /Items[\s\S]*Most Picked[\s\S]*Malignance[\s\S]*Highest Win[\s\S]*Luden(?:&#39;|')?s Companion/);
+  assert.match(html, /Items[\s\S]*Highest Win[\s\S]*Luden(?:&#39;|')?s Companion[\s\S]*Most Picked[\s\S]*Malignance/);
+  assert.doesNotMatch(html, /build-item-column[\s\S]*build-summary-kicker">Highest Win/);
+  assert.doesNotMatch(html, /build-item-column[\s\S]*build-summary-kicker">Most Picked/);
   assert.match(html, /Malignance[\s\S]*52\.4% win[\s\S]*71\.8% pick[\s\S]*11 min/);
   assert.match(html, /Luden(?:&#39;|')?s Companion[\s\S]*56\.5% win[\s\S]*28\.4% pick[\s\S]*11 min/);
   assert.doesNotMatch(html, /Primary Tree/);

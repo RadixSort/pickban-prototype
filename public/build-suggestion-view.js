@@ -351,16 +351,16 @@
         </header>
         <div class="build-items-grid">
           ${renderItemBuildColumn({
-            title: "Most Picked",
-            tone: "most-picked",
-            build: mostPickedBuild,
-            emptyMessage: "No most-picked item path was available.",
-          })}
-          ${renderItemBuildColumn({
             title: "Highest Win",
             tone: "highest-win",
             build: highestWinBuild,
             emptyMessage: "No highest-win item path was available.",
+          })}
+          ${renderItemBuildColumn({
+            title: "Most Picked",
+            tone: "most-picked",
+            build: mostPickedBuild,
+            emptyMessage: "No most-picked item path was available.",
           })}
         </div>
       </section>
@@ -374,7 +374,6 @@
       return `
         <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
           <header class="build-item-column-header">
-            <span class="build-summary-kicker">${escapeHtml(title)}</span>
             <h4>${escapeHtml(title)}</h4>
           </header>
           <div class="build-summary-column-empty">${escapeHtml(emptyMessage)}</div>
@@ -385,7 +384,6 @@
     return `
       <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
         <header class="build-item-column-header">
-          <span class="build-summary-kicker">${escapeHtml(title)}</span>
           <h4>${escapeHtml(title)}</h4>
         </header>
         <div class="build-item-list">
