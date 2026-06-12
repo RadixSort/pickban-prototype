@@ -240,6 +240,24 @@ function getSelectedChampionKeys() {
   return buildSelectedChampionKeys(state.allies, state.enemies);
 }
 
+function buildAllyRequestSelections() {
+  return state.allies.map((champion) => {
+    const selection = {
+      champion: champion.name,
+    };
+
+    if (champion.role) {
+      selection.role = champion.role;
+    }
+
+    return selection;
+  });
+}
+
+function getEnemyChampionNames() {
+  return state.enemies.map((champion) => champion.name);
+}
+
 function getCurrentSuggestionCacheKey() {
   return buildSuggestionCacheKey(state.rankFilter, state.allies, state.enemies);
 }
@@ -551,21 +569,14 @@ async function handleOpenBuildSuggestions(allyId) {
   }
 
   try {
-    const response = await fetch("/build-suggestions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
+    const { response, payload } = await postJson("/build-suggestions", {
+      rankFilter: state.rankFilter,
+      ally: {
+        champion: ally.name,
+        role: ally.role,
       },
-      body: JSON.stringify({
-        rankFilter: state.rankFilter,
-        ally: {
-          champion: ally.name,
-          role: ally.role,
-        },
-        enemies: state.enemies.map((enemy) => enemy.name),
-      }),
+      enemies: getEnemyChampionNames(),
     });
-    const payload = await parseJsonSafely(response);
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(payload.error || "Failed to load build recommendations.");
@@ -1250,7 +1261,6 @@ async function handleFetchSuggestions() {
   const cacheKey = getCurrentSuggestionCacheKey();
   const availableRoleOptions = getAvailableResultRoleOptions();
   const availableRoleValues = availableRoleOptions.map((option) => option.value);
-  const isFirstPickRequest = state.allies.length === 0 && state.enemies.length === 0;
 
   if (isDraftProjectionModeActive()) {
     await handleFetchDraftProjection(cacheKey);
@@ -1264,36 +1274,13 @@ async function handleFetchSuggestions() {
 
   setLoading(true);
   clearStatus();
-  setStatus(
-    isFirstPickRequest
-      ? `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} first-pick tier lists for ${formatRoleLabels(availableRoleOptions)}...`
-      : `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} data for ${formatRoleLabels(availableRoleOptions)}...`,
-  );
 
   try {
-    const response = await fetch("/suggest", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        rankFilter: state.rankFilter,
-        allies: state.allies.map((champion) => {
-          const selection = {
-            champion: champion.name,
-          };
-
-          if (champion.role) {
-            selection.role = champion.role;
-          }
-
-          return selection;
-        }),
-        enemies: state.enemies.map((champion) => champion.name),
-      }),
+    const { response, payload } = await postJson("/suggest", {
+      rankFilter: state.rankFilter,
+      allies: buildAllyRequestSelections(),
+      enemies: getEnemyChampionNames(),
     });
-
-    const payload = await response.json();
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(
@@ -1304,25 +1291,6 @@ async function handleFetchSuggestions() {
 
     const selectedRole = syncSelectedResultRole();
     state.resultsCache[cacheKey] = buildResultsBundle(payload, availableRoleValues, selectedRole);
-    const currentBundle = state.resultsCache[cacheKey];
-    const successfulRoleCount = availableRoleValues.filter(
-      (role) => !currentBundle.metaByRole[role]?.error,
-    ).length;
-    const failedRoleLabels = availableRoleValues
-      .filter((role) => currentBundle.metaByRole[role]?.error)
-      .map((role) => getRoleLabel(role));
-    const lolalyticsAccessCount = getLolalyticsLiveAccessCount(currentBundle);
-    const lolalyticsAccessStatus = formatLolalyticsAccessStatus(lolalyticsAccessCount);
-    const fetchedResultSetLabel = getFetchedResultSetLabel(
-      successfulRoleCount,
-      isFirstPickRequest,
-    );
-
-    setStatus(
-      successfulRoleCount === availableRoleValues.length
-        ? `Fetched ${successfulRoleCount} ${fetchedResultSetLabel}${isFirstPickRequest ? "." : " for the current draft."} ${lolalyticsAccessStatus}`
-        : `Fetched ${successfulRoleCount} of ${availableRoleValues.length} ${isFirstPickRequest ? "first-pick tier lists" : "role result sets"}. Unavailable: ${failedRoleLabels.join(", ")}. ${lolalyticsAccessStatus}`,
-    );
   } catch (error) {
     setError(
       error.message ||
@@ -1337,37 +1305,19 @@ async function handleFetchSuggestions() {
 async function handleFetchDraftProjection(cacheKey = getCurrentSuggestionCacheKey()) {
   setLoading(true);
   clearStatus();
-  setStatus(
-    `Fetching live Lolalytics ${getRankFilterDisplayLabel().toLowerCase()} draft win-rate data...`,
-  );
 
   try {
-    const response = await fetch("/draft-outlook", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        rankFilter: state.rankFilter,
-        allies: state.allies.map((champion) => ({
-          champion: champion.name,
-          role: champion.role,
-        })),
-        enemies: state.enemies.map((champion) => champion.name),
-      }),
+    const { response, payload } = await postJson("/draft-outlook", {
+      rankFilter: state.rankFilter,
+      allies: buildAllyRequestSelections(),
+      enemies: getEnemyChampionNames(),
     });
-    const payload = await parseJsonSafely(response);
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
       throw new Error(payload.error || "Failed to project the current draft win rates.");
     }
 
     state.resultsCache[cacheKey] = buildDraftProjectionBundle(payload);
-    const lolalyticsAccessCount = getLolalyticsLiveAccessCount(state.resultsCache[cacheKey]);
-
-    setStatus(
-      `Projected the current draft win rates. ${formatLolalyticsAccessStatus(lolalyticsAccessCount)}`,
-    );
   } catch (error) {
     setError(error.message || "Failed to project the current draft win rates.");
   } finally {
@@ -1451,23 +1401,18 @@ async function handleCloseApp() {
 
   state.shuttingDown = true;
   clearStatus();
-  setStatus("Stopping the local server...");
   renderAll();
 
   try {
-    const response = await fetch("/shutdown", {
-      method: "POST",
+    const { response, payload } = await postJson("/shutdown", null, {
+      contentType: null,
       headers: {
         "x-shutdown-token": state.shutdownToken,
       },
     });
-
-    const payload = await parseJsonSafely(response);
     if (!response.ok) {
       throw new Error(payload.error || "Failed to stop the app.");
     }
-
-    setStatus(payload.message || "PickBan is closing. You can close this browser tab.");
   } catch (error) {
     state.shuttingDown = false;
     setError(error.message || "Failed to stop the app.");
@@ -1589,17 +1534,10 @@ async function handleImportBuildSuggestionRunes(payload, pageKey) {
   });
 
   try {
-    const response = await fetch("/rune-import", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        champion: ally.name,
-        page,
-      }),
+    const { response, payload: importPayload } = await postJson("/rune-import", {
+      champion: ally.name,
+      page,
     });
-    const importPayload = await parseJsonSafely(response);
     if (!response.ok || importPayload?.status !== "imported") {
       throw new Error(
         importPayload?.message ||
@@ -1853,7 +1791,6 @@ function renderResults() {
       isTopProjectedAgency,
       topOptionTone === "overlap" ? "overlap" : "agency",
     );
-    const overlapBadgeMarkup = getOverlapBadgeMarkup(topOptionTone);
     const selectForDraftHelperText = getSelectResultForDraftHelperText(selectedRole, result);
     const selectForDraftDescription = selectForDraftHelperText
       ? selectForDraftHelperText
@@ -1866,7 +1803,6 @@ function renderResults() {
           <img src="${result.icon}" alt="${resultName}" width="36" height="36" />
           <span class="support-name">
             <span>${resultName}</span>
-            ${overlapBadgeMarkup}
           </span>
         </div>
       </td>
@@ -2122,32 +2058,12 @@ function formatRoleLabels(roles = []) {
   return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
-function getFetchedResultSetLabel(count, isFirstPickRequest) {
-  if (isFirstPickRequest) {
-    return count === 1 ? "first-pick tier list" : "first-pick tier lists";
-  }
-
-  return count === 1 ? "role result set" : "role result sets";
-}
-
-function getLolalyticsLiveAccessCount(resultsBundle = null) {
-  return Number(resultsBundle?.requestStats?.lolalyticsLiveAccessCount || 0);
-}
-
 function updateLolalyticsRequestStats(requestStats = null) {
   const lifetimeAccessCount = Number(requestStats?.lolalyticsLifetimeAccessCount);
   if (Number.isFinite(lifetimeAccessCount)) {
     state.lolalyticsLifetimeAccessCount = Math.max(0, lifetimeAccessCount);
     renderResultsRequestStat();
   }
-}
-
-function formatLolalyticsAccessStatus(accessCount) {
-  if (accessCount === 0) {
-    return "No new live Lolalytics hits were needed.";
-  }
-
-  return `Lolalytics was contacted ${accessCount} ${accessCount === 1 ? "time" : "times"}.`;
 }
 
 function formatLolalyticsAccessStat(accessCount) {
@@ -2212,10 +2128,6 @@ function getMetricClassName(baseClasses = [], isHighlighted = false, tone = "") 
   }
 
   return classNames.join(" ");
-}
-
-function getOverlapBadgeMarkup(topOptionTone) {
-  return "";
 }
 
 function formatRate(value) {
@@ -2362,10 +2274,6 @@ function renderVersion() {
   versionText.textContent = formatVersion(state.version);
 }
 
-function setStatus(message) {
-  void message;
-}
-
 function setError(message) {
   errorText.textContent = formatDisplayMessage(message);
 }
@@ -2429,4 +2337,21 @@ async function parseJsonSafely(response) {
   } catch (_error) {
     return {};
   }
+}
+
+async function postJson(path, body = null, options = {}) {
+  const headers = {
+    ...(options.contentType === null ? {} : { "content-type": "application/json" }),
+    ...(options.headers || {}),
+  };
+  const response = await fetch(path, {
+    method: "POST",
+    headers,
+    ...(body == null ? {} : { body: JSON.stringify(body) }),
+  });
+
+  return {
+    response,
+    payload: await parseJsonSafely(response),
+  };
 }

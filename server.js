@@ -139,27 +139,17 @@ app.get("/app-config", (_request, response) => {
   });
 });
 
-app.get("/ally-role-likelihoods", async (request, response) =>
-  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
-    try {
-      const rankFilter = normalizeRankFilter(request.query?.rankFilter) || DEFAULT_RANK_FILTER;
-      const championRoleLikelihoods = await fetchAllyRoleLikelihoods(rankFilter);
+app.get("/ally-role-likelihoods", withLolalyticsRequestStats(async (request, response) => {
+  const rankFilter = normalizeRankFilter(request.query?.rankFilter) || DEFAULT_RANK_FILTER;
+  const championRoleLikelihoods = await fetchAllyRoleLikelihoods(rankFilter);
 
-      response.set("Cache-Control", "no-store");
-      response.json({
-        rankFilter,
-        championRoleLikelihoods,
-        requestStats: buildLolalyticsRequestStats(),
-      });
-    } catch (error) {
-      const statusCode = error.statusCode || 500;
-      response.status(statusCode).json({
-        error: error.message || "Unexpected server error.",
-        requestStats: buildLolalyticsRequestStats(),
-      });
-    }
-  }),
-);
+  response.set("Cache-Control", "no-store");
+  response.json({
+    rankFilter,
+    championRoleLikelihoods,
+    requestStats: buildLolalyticsRequestStats(),
+  });
+}));
 
 app.get("/live-draft", async (_request, response) => {
   const payload = await fetchLiveDraftImport({
@@ -205,152 +195,152 @@ function getKnownChampionFromImportRequest(body = {}) {
   return champion;
 }
 
-app.post("/suggest", async (request, response) =>
-  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
-    try {
-      const {
+function withLolalyticsRequestStats(handler) {
+  return async (request, response) =>
+    lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
+      try {
+        await handler(request, response);
+      } catch (error) {
+        sendJsonError(response, error, {
+          requestStats: buildLolalyticsRequestStats(),
+        });
+      }
+    });
+}
+
+function sendJsonError(response, error, extraPayload = {}) {
+  response.status(error.statusCode || 500).json({
+    error: error.message || "Unexpected server error.",
+    ...extraPayload,
+  });
+}
+
+app.post("/suggest", withLolalyticsRequestStats(async (request, response) => {
+  const {
+    rankFilter,
+    allies,
+    enemies,
+    targetRoles,
+    selectedChampionKeys,
+  } = normalizeSuggestRequest(request.body, {
+    championByName,
+    defaultRankFilter: DEFAULT_RANK_FILTER,
+    normalizeRankFilter,
+    normalizeRole,
+    createError: createHttpError,
+    resolveRequestedTargetRoles,
+    buildSelectedChampionKeys,
+  });
+
+  if (targetRoles.length === 0) {
+    return response.status(400).json({
+      error:
+        "All five allied roles are already assigned. Remove one ally or clear a role to fetch suggestions.",
+      requestStats: buildLolalyticsRequestStats(),
+    });
+  }
+
+  const isFirstPickRequest = allies.length === 0 && enemies.length === 0;
+  const roleSuggestions = isFirstPickRequest
+    ? await buildFirstPickSuggestionsForRoles({
         rankFilter,
-        allies,
-        enemies,
-        targetRoles,
         selectedChampionKeys,
-      } = normalizeSuggestRequest(request.body, {
-        championByName,
-        defaultRankFilter: DEFAULT_RANK_FILTER,
-        normalizeRankFilter,
-        normalizeRole,
-        createError: createHttpError,
-        resolveRequestedTargetRoles,
-        buildSelectedChampionKeys,
-      });
-
-      if (targetRoles.length === 0) {
-        return response.status(400).json({
-          error:
-            "All five allied roles are already assigned. Remove one ally or clear a role to fetch suggestions.",
-          requestStats: buildLolalyticsRequestStats(),
-        });
-      }
-
-      const isFirstPickRequest = allies.length === 0 && enemies.length === 0;
-      const roleSuggestions = isFirstPickRequest
-        ? await buildFirstPickSuggestionsForRoles({
-            rankFilter,
-            selectedChampionKeys,
-            targetRoles,
-          })
-        : await buildSuggestionsForRoles({
-            allies,
-            enemies,
-            rankFilter,
-            selectedChampionKeys,
-            targetRoles,
-          });
-
-      const { statusCode, payload } = buildRoleSuggestionResponse({
         targetRoles,
-        roleSuggestions,
-        rankFilter,
+      })
+    : await buildSuggestionsForRoles({
         allies,
         enemies,
-        requestStats: buildLolalyticsRequestStats(),
-        buildSuggestionMeta,
-        responseMode: isFirstPickRequest ? "firstPick" : "suggestions",
+        rankFilter,
+        selectedChampionKeys,
+        targetRoles,
       });
 
-      response.status(statusCode).json(payload);
-    } catch (error) {
-      const statusCode = error.statusCode || 500;
-      response.status(statusCode).json({
-        error: error.message || "Unexpected server error.",
-        requestStats: buildLolalyticsRequestStats(),
-      });
-    }
-  }),
-);
+  const { statusCode, payload } = buildRoleSuggestionResponse({
+    targetRoles,
+    roleSuggestions,
+    rankFilter,
+    allies,
+    enemies,
+    requestStats: buildLolalyticsRequestStats(),
+    buildSuggestionMeta,
+    responseMode: isFirstPickRequest ? "firstPick" : "suggestions",
+  });
 
-app.post("/draft-outlook", async (request, response) =>
-  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
-    try {
-      const normalizedRequest = normalizeDraftProjectionRequest(request.body, {
-        championByName,
-        defaultRankFilter: DEFAULT_RANK_FILTER,
-        normalizeRankFilter,
-        normalizeRole,
-        createError: createHttpError,
-      });
-      const cacheKey = buildSuggestionCacheKey(
-        normalizedRequest.rankFilter,
-        normalizedRequest.allies,
-        normalizedRequest.enemies,
-      );
-      const cachedPayload = getCachedData(draftProjectionQueryCache, cacheKey);
-      if (cachedPayload) {
-        return response.json({
-          ...cachedPayload,
-          requestStats: buildLolalyticsRequestStats(),
-        });
-      }
+  response.status(statusCode).json(payload);
+}));
 
-      const [
-        allySynergyResults,
-        enemyCounterResults,
-      ] = await Promise.all([
-        buildDraftSynergyResults(normalizedRequest.allies, normalizedRequest.rankFilter),
-        buildDraftCounterResults(
-          normalizedRequest.allies,
-          normalizedRequest.enemies,
-          normalizedRequest.rankFilter,
-        ),
-      ]);
-      const projection = buildDraftProjection({
-        allySynergyResults,
-        enemyCounterResults,
-      });
+app.post("/draft-outlook", withLolalyticsRequestStats(async (request, response) => {
+  const normalizedRequest = normalizeDraftProjectionRequest(request.body, {
+    championByName,
+    defaultRankFilter: DEFAULT_RANK_FILTER,
+    normalizeRankFilter,
+    normalizeRole,
+    createError: createHttpError,
+  });
+  const cacheKey = buildSuggestionCacheKey(
+    normalizedRequest.rankFilter,
+    normalizedRequest.allies,
+    normalizedRequest.enemies,
+  );
+  const cachedPayload = getCachedData(draftProjectionQueryCache, cacheKey);
+  if (cachedPayload) {
+    return response.json({
+      ...cachedPayload,
+      requestStats: buildLolalyticsRequestStats(),
+    });
+  }
 
-      if (!hasUsableDraftProjection(projection)) {
-        return response.status(502).json({
-          error:
-            "No projected draft win-rate data was returned from Lolalytics for the selected team compositions.",
-          request: {
-            allies: normalizedRequest.allies.map(({ champion, role }) => ({
-              champion: champion.name,
-              championKey: String(champion.key),
-              role,
-            })),
-            enemies: normalizedRequest.enemies.map((champion) => champion.name),
-            rankFilter: normalizedRequest.rankFilter,
-          },
-          summary: {
-            allyCount: normalizedRequest.allies.length,
-            enemyCount: normalizedRequest.enemies.length,
-            synergyMatchupCount: projection.synergyMatchupCount,
-            counterMatchupCount: projection.counterMatchupCount,
-            sourceMatchups: projection.sourceMatchups,
-            projectedWinRateMatchupCount: projection.projectedWinRateMatchupCount,
-            partialFailures: projection.partialFailures,
-          },
-          requestStats: buildLolalyticsRequestStats(),
-        });
-      }
+  const [
+    allySynergyResults,
+    enemyCounterResults,
+  ] = await Promise.all([
+    buildDraftSynergyResults(normalizedRequest.allies, normalizedRequest.rankFilter),
+    buildDraftCounterResults(
+      normalizedRequest.allies,
+      normalizedRequest.enemies,
+      normalizedRequest.rankFilter,
+    ),
+  ]);
+  const projection = buildDraftProjection({
+    allySynergyResults,
+    enemyCounterResults,
+  });
 
-      const payload = buildDraftProjectionPayload({
-        normalizedRequest,
-        projection,
-        requestStats: buildLolalyticsRequestStats(),
-      });
+  if (!hasUsableDraftProjection(projection)) {
+    return response.status(502).json({
+      error:
+        "No projected draft win-rate data was returned from Lolalytics for the selected team compositions.",
+      request: {
+        allies: normalizedRequest.allies.map(({ champion, role }) => ({
+          champion: champion.name,
+          championKey: String(champion.key),
+          role,
+        })),
+        enemies: normalizedRequest.enemies.map((champion) => champion.name),
+        rankFilter: normalizedRequest.rankFilter,
+      },
+      summary: {
+        allyCount: normalizedRequest.allies.length,
+        enemyCount: normalizedRequest.enemies.length,
+        synergyMatchupCount: projection.synergyMatchupCount,
+        counterMatchupCount: projection.counterMatchupCount,
+        sourceMatchups: projection.sourceMatchups,
+        projectedWinRateMatchupCount: projection.projectedWinRateMatchupCount,
+        partialFailures: projection.partialFailures,
+      },
+      requestStats: buildLolalyticsRequestStats(),
+    });
+  }
 
-      setCachedData(draftProjectionQueryCache, cacheKey, payload);
-      response.json(payload);
-    } catch (error) {
-      const statusCode = error.statusCode || 500;
-      response.status(statusCode).json({
-        error: error.message || "Unexpected server error.",
-        requestStats: buildLolalyticsRequestStats(),
-      });
-    }
-  }),
-);
+  const payload = buildDraftProjectionPayload({
+    normalizedRequest,
+    projection,
+    requestStats: buildLolalyticsRequestStats(),
+  });
+
+  setCachedData(draftProjectionQueryCache, cacheKey, payload);
+  response.json(payload);
+}));
 
 app.post("/shutdown", (request, response) => {
   if (!isAuthorizedShutdownRequest(request)) {
@@ -374,86 +364,77 @@ app.post("/shutdown", (request, response) => {
   });
 });
 
-app.post("/build-suggestions", async (request, response) =>
-  lolalyticsRequestStatsStorage.run(createLolalyticsRequestStats(), async () => {
-    try {
-      const normalizedRequest = normalizeBuildSuggestionRequest(request.body, {
-        championByName,
-        defaultRankFilter: DEFAULT_RANK_FILTER,
-        normalizeRankFilter,
-        normalizeRole,
-        createError: createHttpError,
-      });
-      const aggregatedCacheKey = buildBuildSuggestionCacheKey(
-        normalizedRequest.rankFilter,
-        {
-          key: normalizedRequest.ally.champion.key,
-          role: normalizedRequest.ally.role,
-        },
-        normalizedRequest.enemies,
-      );
-      const cachedPayload = getCachedData(buildSuggestionQueryCache, aggregatedCacheKey);
-      if (cachedPayload) {
-        return response.json(cachedPayload);
-      }
+app.post("/build-suggestions", withLolalyticsRequestStats(async (request, response) => {
+  const normalizedRequest = normalizeBuildSuggestionRequest(request.body, {
+    championByName,
+    defaultRankFilter: DEFAULT_RANK_FILTER,
+    normalizeRankFilter,
+    normalizeRole,
+    createError: createHttpError,
+  });
+  const aggregatedCacheKey = buildBuildSuggestionCacheKey(
+    normalizedRequest.rankFilter,
+    {
+      key: normalizedRequest.ally.champion.key,
+      role: normalizedRequest.ally.role,
+    },
+    normalizedRequest.enemies,
+  );
+  const cachedPayload = getCachedData(buildSuggestionQueryCache, aggregatedCacheKey);
+  if (cachedPayload) {
+    return response.json(cachedPayload);
+  }
 
-      const matchupResults = await Promise.allSettled(
-        normalizedRequest.enemies.map((enemyChampion) =>
-          fetchNormalizedMatchupBuildData({
-            allyChampion: normalizedRequest.ally.champion,
-            enemyChampion,
-            rankFilter: normalizedRequest.rankFilter,
-            role: normalizedRequest.ally.role,
-          }),
-        ),
-      );
-      const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
-        matchupResults,
-        normalizedRequest.enemies,
-      );
+  const matchupResults = await Promise.allSettled(
+    normalizedRequest.enemies.map((enemyChampion) =>
+      fetchNormalizedMatchupBuildData({
+        allyChampion: normalizedRequest.ally.champion,
+        enemyChampion,
+        rankFilter: normalizedRequest.rankFilter,
+        role: normalizedRequest.ally.role,
+      }),
+    ),
+  );
+  const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
+    matchupResults,
+    normalizedRequest.enemies,
+  );
 
-      if (matchupBuilds.length === 0) {
-        return response.status(502).json({
-          error:
-            "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
-          summary: {
-            enemyCount: normalizedRequest.enemies.length,
-            sourceMatchups: 0,
-            lastUpdatedAt: new Date().toISOString(),
-            partialFailures,
-          },
-        });
-      }
-
-      const aggregatedResults = buildBuildSuggestionResults({
-        matchupBuilds,
-      });
-      const payload = buildBuildSuggestionsPayload({
-        normalizedRequest,
-        aggregatedResults,
-        sourceMatchups: matchupBuilds.length,
+  if (matchupBuilds.length === 0) {
+    return response.status(502).json({
+      error:
+        "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
+      summary: {
+        enemyCount: normalizedRequest.enemies.length,
+        sourceMatchups: 0,
+        lastUpdatedAt: new Date().toISOString(),
         partialFailures,
-      });
+      },
+    });
+  }
 
-      if (!hasUsableBuildSuggestions(payload)) {
-        return response.status(502).json({
-          error:
-            "Lolalytics returned build data, but it did not include usable build recommendations.",
-          request: payload.request,
-          summary: payload.summary,
-        });
-      }
+  const aggregatedResults = buildBuildSuggestionResults({
+    matchupBuilds,
+  });
+  const payload = buildBuildSuggestionsPayload({
+    normalizedRequest,
+    aggregatedResults,
+    sourceMatchups: matchupBuilds.length,
+    partialFailures,
+  });
 
-      setCachedData(buildSuggestionQueryCache, aggregatedCacheKey, payload);
-      response.json(payload);
-    } catch (error) {
-      const statusCode = error.statusCode || 500;
-      response.status(statusCode).json({
-        error: error.message || "Unexpected server error.",
-      });
-    }
-  }),
-);
+  if (!hasUsableBuildSuggestions(payload)) {
+    return response.status(502).json({
+      error:
+        "Lolalytics returned build data, but it did not include usable build recommendations.",
+      request: payload.request,
+      summary: payload.summary,
+    });
+  }
+
+  setCachedData(buildSuggestionQueryCache, aggregatedCacheKey, payload);
+  response.json(payload);
+}));
 
 server = app.listen(PORT, () => {
   console.log(
@@ -1179,68 +1160,6 @@ async function fetchLolalyticsJson(url, label) {
 
 async function fetchLolalyticsText(url, label) {
   return fetchLolalyticsResource(url, label, "text");
-}
-
-async function fetchExternalText(url, label, sourceName, headers = {}) {
-  const cached = requestCache.get(url);
-  if (cached) {
-    if (cached.data != null && cached.expiresAt > Date.now()) {
-      return cached.data;
-    }
-
-    if (cached.promise) {
-      return cached.promise;
-    }
-
-    requestCache.delete(url);
-  }
-
-  const requestPromise = (async () => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers,
-      });
-
-      if (!res.ok) {
-        throw createHttpError(
-          502,
-          `${sourceName} request failed for ${label} with status ${res.status}.`,
-        );
-      }
-
-      const data = await res.text();
-      requestCache.set(url, {
-        data,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
-      return data;
-    } catch (error) {
-      requestCache.delete(url);
-
-      if (error.name === "AbortError") {
-        throw createHttpError(504, `Timed out while fetching ${label} from ${sourceName}.`);
-      }
-
-      if (error.statusCode) {
-        throw error;
-      }
-
-      throw createHttpError(502, `Failed to fetch ${label} from ${sourceName}.`);
-    } finally {
-      clearTimeout(timeout);
-    }
-  })();
-
-  requestCache.set(url, {
-    promise: requestPromise,
-    expiresAt: Date.now() + REQUEST_TIMEOUT_MS,
-  });
-
-  return requestPromise;
 }
 
 function buildTierListDataUrl(targetRole, rankFilter) {
