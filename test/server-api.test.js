@@ -251,12 +251,16 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       });
     }
 
-    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "counter" &&
+      url.searchParams.get("vslane") === "support"
+    ) {
       return jsonResponse(
         createCounterMegaData([
           {
             championKey: "111",
-            role: "support",
+            role: "middle",
             candidateWinRate: 53,
             candidateCounterScore: -48,
           },
@@ -285,10 +289,10 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       icon: "https://cdn5.lolalytics.com/champ140/nautilus.webp",
       role: "support",
       synergyScore: 60,
-      counterScore: -48,
+      counterScore: 48,
       projectedWinRate: 53,
-      projectedAgency: 6,
-      finalScore: 6,
+      projectedAgency: 54,
+      finalScore: 54,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
@@ -315,6 +319,15 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   );
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=counter")),
+    1,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "counter" &&
+        new URLSearchParams(entry.search).get("vslane") === "support",
+    ),
     1,
   );
 });
@@ -455,7 +468,11 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
       });
     }
 
-    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "counter" &&
+      url.searchParams.get("vslane") === "support"
+    ) {
       return jsonResponse(
         createCounterMegaData([
           {
@@ -540,7 +557,8 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
     if (
       url.pathname === "/mega/" &&
       url.searchParams.get("ep") === "counter" &&
-      url.searchParams.get("c") === "leona"
+      url.searchParams.get("c") === "leona" &&
+      ["support", "bottom"].includes(url.searchParams.get("vslane"))
     ) {
       return jsonResponse(
         createCounterMegaData([
@@ -557,7 +575,8 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
     if (
       url.pathname === "/mega/" &&
       url.searchParams.get("ep") === "counter" &&
-      url.searchParams.get("c") === "jinx"
+      url.searchParams.get("c") === "jinx" &&
+      ["support", "bottom"].includes(url.searchParams.get("vslane"))
     ) {
       return textResponse("Service unavailable.", 503);
     }
@@ -583,10 +602,10 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
       icon: "https://cdn5.lolalytics.com/champ140/nautilus.webp",
       role: "support",
       synergyScore: 60,
-      counterScore: -48,
+      counterScore: 48,
       projectedWinRate: 53,
-      projectedAgency: 6,
-      finalScore: 6,
+      projectedAgency: 54,
+      finalScore: 54,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
@@ -599,24 +618,57 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
   assert.equal(response.body.metaByRole.support.partialFailures.length, 1);
   assert.match(
     response.body.metaByRole.support.partialFailures[0],
-    /jinx counter data .*status 503/i,
+    /jinx support counter data .*status 503/i,
   );
   assert.equal(
     response.body.metaByRole.bottom.error,
     "Lolalytics bot tier data was missing champion rows.",
   );
   assert.deepEqual(response.body.requestStats, {
-    lolalyticsLiveAccessCount: 6,
-    lolalyticsLifetimeAccessCount: 6,
+    lolalyticsLiveAccessCount: 5,
+    lolalyticsLifetimeAccessCount: 5,
   });
-  assert.equal(mockServer.countRequests("/mega/"), 6);
+  assert.equal(mockServer.countRequests("/mega/"), 5);
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=tier")),
     2,
   );
   assert.equal(
+    mockServer.countRequests(
+      (entry) => entry.pathname === "/mega/" && entry.search.includes("ep=build-team"),
+    ),
+    1,
+  );
+  assert.equal(
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=counter")),
     2,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "counter" &&
+        ["support", "bottom"].includes(new URLSearchParams(entry.search).get("vslane")),
+    ),
+    2,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "counter" &&
+        new URLSearchParams(entry.search).get("vslane") === "support",
+    ),
+    2,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "counter" &&
+        new URLSearchParams(entry.search).get("vslane") === "bottom",
+    ),
+    0,
   );
 });
 
@@ -725,8 +777,8 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
   assert.equal(validResponse.body.projection.allyWinRate, 54);
   assert.equal(validResponse.body.projection.enemyWinRate, 46);
   assert.equal(validResponse.body.projection.synergyScore, 10);
-  assert.equal(validResponse.body.projection.counterScore, -7);
-  assert.equal(validResponse.body.projection.projectedAgency, 1.5);
+  assert.equal(validResponse.body.projection.counterScore, 7);
+  assert.equal(validResponse.body.projection.projectedAgency, 8.5);
   assert.deepEqual(validResponse.body.requestStats, {
     lolalyticsLiveAccessCount: 7,
     lolalyticsLifetimeAccessCount: 7,

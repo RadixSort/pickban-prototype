@@ -88,7 +88,7 @@ Validation:
 - duplicate ally role assignments are rejected
 - explicit target roles cannot overlap assigned ally roles
 
-With no selected champions, `/suggest` returns first-pick tier-list rows by role. With a draft state, it fetches Lolalytics tier, ally-synergy, and enemy-counter data for each target role, then `lib/role-suggestion-results.js` aggregates and sorts candidates.
+With no selected champions, `/suggest` returns first-pick tier-list rows by role. With a draft state, it fetches Lolalytics tier data first, then fetches ally-synergy and `vslane`-scoped enemy-counter data only for target roles with usable tier rows.
 
 Response shape includes `roles`, `resultsByRole`, `metaByRole`, `requestStats`, and legacy `results`/`meta` fields when exactly one role was requested.
 
@@ -193,7 +193,7 @@ Release commits must bump both `package.json` and `package-lock.json` because bo
 
 ## External Assumptions
 
-- Lolalytics mega tier, synergy, counter, and rune payloads must keep exposing the parsed fields.
+- Lolalytics mega tier, synergy, counter, and rune payloads must keep exposing the parsed fields; counter requests must keep honoring `vslane` for target-role-specific matchups.
 - Lolalytics rendered matchup build pages must keep recognizable spell, starting item, core item, and boot sections.
 - The League Client lockfile must be readable while the Windows client is running.
 - Local League Client gameflow, champ-select, and perks endpoints must remain compatible.

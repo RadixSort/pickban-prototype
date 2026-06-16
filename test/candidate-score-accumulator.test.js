@@ -8,7 +8,7 @@ const {
   finalizeCandidateScores,
 } = require("../lib/candidate-score-accumulator.js");
 
-test("candidate score accumulator averages synergy, counter, and projected win rate inputs", () => {
+test("candidate score accumulator flips enemy-facing counter values", () => {
   const accumulator = createCandidateScoreAccumulator({
     key: "117",
     name: "Lulu",
@@ -17,13 +17,13 @@ test("candidate score accumulator averages synergy, counter, and projected win r
 
   addSynergyRow(accumulator, { value: 60, winRate: 57 });
   addSynergyRow(accumulator, { value: 54, winRate: Number.NaN });
-  addCounterRow(accumulator, { value: 40, winRate: 48 }, (winRate) => 100 - winRate);
+  addCounterRow(accumulator, { value: -40, winRate: 48 }, (winRate) => 100 - winRate);
 
   assert.deepEqual(finalizeCandidateScores(accumulator), {
     synergyScore: 57,
-    counterScore: -40,
+    counterScore: 40,
     projectedWinRate: 54.5,
-    projectedAgency: 8.5,
+    projectedAgency: 48.5,
   });
 });
 
