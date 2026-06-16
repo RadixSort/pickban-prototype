@@ -142,7 +142,7 @@ Candidate filters:
 Scores:
 
 - `synergyScore = average(ally matchup values)`
-- `counterScore = average(enemy matchup values * -1)`
+- `counterScore = average(Lolalytics counter d2/delta2 values * -1)`
 - `projectedWinRate = average(ally matchup win rates + (100 - enemy matchup win rates))`
 - `projectedAgency = 0.5 * synergyScore + 0.5 * counterScore`
 - first-pick `pbi = (winRate - avgWr) * 100 * pickRate / (100 - banRate)`, rounded to the nearest integer

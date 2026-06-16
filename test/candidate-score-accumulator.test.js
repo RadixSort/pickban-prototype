@@ -8,7 +8,7 @@ const {
   finalizeCandidateScores,
 } = require("../lib/candidate-score-accumulator.js");
 
-test("candidate score accumulator flips enemy-facing counter values", () => {
+test("candidate score accumulator applies counter values directly to agency", () => {
   const accumulator = createCandidateScoreAccumulator({
     key: "117",
     name: "Lulu",
@@ -21,9 +21,9 @@ test("candidate score accumulator flips enemy-facing counter values", () => {
 
   assert.deepEqual(finalizeCandidateScores(accumulator), {
     synergyScore: 57,
-    counterScore: 40,
+    counterScore: -40,
     projectedWinRate: 54.5,
-    projectedAgency: 48.5,
+    projectedAgency: 8.5,
   });
 });
 

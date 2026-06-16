@@ -239,6 +239,12 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
             winRate: 51.1,
             pickRate: 4.4,
           },
+          {
+            championKey: "412",
+            lanePercent: 80.4,
+            winRate: 50.1,
+            pickRate: 3.2,
+          },
         ]),
       );
     }
@@ -246,7 +252,10 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
       return jsonResponse({
         team: {
-          support: [[111, 53, 0, 60]],
+          support: [
+            [111, 53, 0, 60],
+            [412, 47, 0, 40],
+          ],
         },
       });
     }
@@ -261,8 +270,16 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
           {
             championKey: "111",
             role: "middle",
-            candidateWinRate: 53,
-            candidateCounterScore: -48,
+            enemyWinRate: 47,
+            delta1Score: -999,
+            delta2Score: 48,
+          },
+          {
+            championKey: "412",
+            role: "middle",
+            enemyWinRate: 53,
+            delta1Score: 999,
+            delta2Score: -48,
           },
         ]),
       );
@@ -289,13 +306,29 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       icon: "https://cdn5.lolalytics.com/champ140/nautilus.webp",
       role: "support",
       synergyScore: 60,
-      counterScore: 48,
+      counterScore: -48,
       projectedWinRate: 53,
-      projectedAgency: 54,
-      finalScore: 54,
+      projectedAgency: 6,
+      finalScore: 6,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
+    },
+    {
+      candidate: "Thresh",
+      candidateKey: "412",
+      support: "Thresh",
+      supportKey: "412",
+      icon: "https://cdn5.lolalytics.com/champ140/thresh.webp",
+      role: "support",
+      synergyScore: 40,
+      counterScore: 48,
+      projectedWinRate: 47,
+      projectedAgency: 44,
+      finalScore: 44,
+      lanePercent: 80.4,
+      pickRate: 3.2,
+      winRate: 50.1,
     },
   ]);
   assert.deepEqual(response.body.metaByRole.support, {
@@ -478,8 +511,8 @@ test("POST /suggest preserves the lifetime Lolalytics hit count across later zer
           {
             championKey: "111",
             role: "support",
-            candidateWinRate: 53,
-            candidateCounterScore: -48,
+            enemyWinRate: 47,
+            delta2Score: 48,
           },
         ]),
       );
@@ -565,8 +598,8 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
           {
             championKey: "111",
             role: "support",
-            candidateWinRate: 53,
-            candidateCounterScore: -48,
+            enemyWinRate: 47,
+            delta2Score: 48,
           },
         ]),
       );
@@ -602,10 +635,10 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
       icon: "https://cdn5.lolalytics.com/champ140/nautilus.webp",
       role: "support",
       synergyScore: 60,
-      counterScore: 48,
+      counterScore: -48,
       projectedWinRate: 53,
-      projectedAgency: 54,
-      finalScore: 54,
+      projectedAgency: 6,
+      finalScore: 6,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
@@ -706,11 +739,11 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
     },
   };
   const enemyCounterRows = [
-    { championKey: "122", role: "top", candidateWinRate: 54, candidateCounterScore: -7 },
-    { championKey: "59", role: "jungle", candidateWinRate: 54, candidateCounterScore: -7 },
-    { championKey: "103", role: "middle", candidateWinRate: 54, candidateCounterScore: -7 },
-    { championKey: "21", role: "bottom", candidateWinRate: 54, candidateCounterScore: -7 },
-    { championKey: "89", role: "support", candidateWinRate: 54, candidateCounterScore: -7 },
+    { championKey: "122", role: "top", enemyWinRate: 46, delta2Score: 7 },
+    { championKey: "59", role: "jungle", enemyWinRate: 46, delta2Score: 7 },
+    { championKey: "103", role: "middle", enemyWinRate: 46, delta2Score: 7 },
+    { championKey: "21", role: "bottom", enemyWinRate: 46, delta2Score: 7 },
+    { championKey: "89", role: "support", enemyWinRate: 46, delta2Score: 7 },
   ];
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {
@@ -777,8 +810,8 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
   assert.equal(validResponse.body.projection.allyWinRate, 54);
   assert.equal(validResponse.body.projection.enemyWinRate, 46);
   assert.equal(validResponse.body.projection.synergyScore, 10);
-  assert.equal(validResponse.body.projection.counterScore, 7);
-  assert.equal(validResponse.body.projection.projectedAgency, 8.5);
+  assert.equal(validResponse.body.projection.counterScore, -7);
+  assert.equal(validResponse.body.projection.projectedAgency, 1.5);
   assert.deepEqual(validResponse.body.requestStats, {
     lolalyticsLiveAccessCount: 7,
     lolalyticsLifetimeAccessCount: 7,
@@ -854,11 +887,11 @@ test("POST /draft-outlook rejects projections that have no usable win-rate input
     },
   };
   const enemyCounterRows = [
-    { championKey: "122", role: "top", candidateWinRate: null, candidateCounterScore: -7 },
-    { championKey: "59", role: "jungle", candidateWinRate: null, candidateCounterScore: -7 },
-    { championKey: "103", role: "middle", candidateWinRate: null, candidateCounterScore: -7 },
-    { championKey: "21", role: "bottom", candidateWinRate: null, candidateCounterScore: -7 },
-    { championKey: "89", role: "support", candidateWinRate: null, candidateCounterScore: -7 },
+    { championKey: "122", role: "top", enemyWinRate: null, delta2Score: 7 },
+    { championKey: "59", role: "jungle", enemyWinRate: null, delta2Score: 7 },
+    { championKey: "103", role: "middle", enemyWinRate: null, delta2Score: 7 },
+    { championKey: "21", role: "bottom", enemyWinRate: null, delta2Score: 7 },
+    { championKey: "89", role: "support", enemyWinRate: null, delta2Score: 7 },
   ];
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "build-team") {

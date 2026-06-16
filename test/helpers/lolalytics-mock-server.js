@@ -152,8 +152,9 @@ function createCounterMegaData(rows = []) {
     counters: rows.map((row) => ({
       cid: Number(row.championKey),
       defaultLane: row.role,
-      vsWr: row.candidateWinRate,
-      d1: row.candidateCounterScore,
+      vsWr: row.enemyWinRate ?? row.candidateWinRate,
+      d1: row.delta1Score,
+      d2: row.delta2Score,
       n: row.games || 1000,
     })),
   };

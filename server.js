@@ -924,12 +924,12 @@ function extractCounterRoleValues(payload, targetRoles) {
 }
 
 function buildCounterRow(row) {
-  const counterValue = parseFiniteNumber(row?.d1);
-  const candidateWinRate = parseFiniteNumber(row?.vsWr);
+  const counterValue = parseFiniteNumber(row?.d2);
+  const enemyWinRate = parseFiniteNumber(row?.vsWr);
 
   return {
-    value: counterValue,
-    winRate: candidateWinRate == null ? null : 100 - candidateWinRate,
+    value: counterValue == null ? null : -counterValue,
+    winRate: enemyWinRate,
   };
 }
 

@@ -48,8 +48,8 @@ test("buildDraftProjection aggregates ally synergy and enemy counter win rates",
   assert.ok(Math.abs(projection.allyWinRate - 54.666666666666664) < 1e-12);
   assert.ok(Math.abs(projection.enemyWinRate - 45.333333333333336) < 1e-12);
   assert.equal(projection.synergyScore, 10);
-  assert.equal(projection.counterScore, 6);
-  assert.equal(projection.projectedAgency, 8);
+  assert.equal(projection.counterScore, -6);
+  assert.equal(projection.projectedAgency, 2);
   assert.equal(projection.synergyMatchupCount, 2);
   assert.equal(projection.counterMatchupCount, 1);
   assert.equal(projection.sourceMatchups, 3);
@@ -87,7 +87,7 @@ test("buildDraftProjection rejects projections without any usable win-rate sampl
   assert.equal(projection.allyWinRate, null);
   assert.equal(projection.enemyWinRate, null);
   assert.equal(projection.synergyScore, 12);
-  assert.equal(projection.counterScore, 6);
+  assert.equal(projection.counterScore, -6);
   assert.equal(projection.projectedWinRateMatchupCount, 0);
   assert.equal(projection.sourceMatchups, 2);
   assert.equal(hasUsableDraftProjection(projection), false);
@@ -144,5 +144,5 @@ test("buildDraftProjection clamps malformed win rates and falls back to a generi
   assert.equal(lowerBoundProjection.allyWinRate, 0);
   assert.equal(lowerBoundProjection.enemyWinRate, 100);
   assert.equal(lowerBoundProjection.projectedWinRateMatchupCount, 1);
-  assert.equal(lowerBoundProjection.counterScore, 6);
+  assert.equal(lowerBoundProjection.counterScore, -6);
 });
