@@ -111,7 +111,7 @@ test("validateNoOpposingChampionSelections rejects champions selected on both si
   );
 });
 
-test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank filter", () => {
+test("normalizeBuildSuggestionRequest validates ally role, partial enemies, and rank filter", () => {
   const request = normalizeBuildSuggestionRequest(
     {
       rankFilter: "diamond+",
@@ -119,7 +119,7 @@ test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank fil
         champion: "Ahri",
         role: "mid",
       },
-      enemies: ["Jarvan IV", "Miss Fortune", "Leona", "Jinx", "Darius"],
+      enemies: ["Jarvan IV"],
     },
     {
       championByName,
@@ -135,17 +135,11 @@ test("normalizeBuildSuggestionRequest validates ally role, enemies, and rank fil
       champion: championByName.get("ahri"),
       role: "middle",
     },
-    enemies: [
-      championByName.get("jarvaniv"),
-      championByName.get("missfortune"),
-      championByName.get("leona"),
-      championByName.get("jinx"),
-      championByName.get("darius"),
-    ],
+    enemies: [championByName.get("jarvaniv")],
   });
 });
 
-test("normalizeBuildSuggestionRequest requires a full enemy team", () => {
+test("normalizeBuildSuggestionRequest requires at least one enemy champion", () => {
   assert.throws(
     () =>
       normalizeBuildSuggestionRequest(
@@ -163,7 +157,7 @@ test("normalizeBuildSuggestionRequest requires a full enemy team", () => {
           normalizeRole,
         },
       ),
-    /exactly 5 enemy champions/i,
+    /at least 1 enemy champion/i,
   );
 });
 
@@ -195,7 +189,7 @@ test("normalizeBuildSuggestionRequest rejects missing ally role and opposing pic
             champion: "Ahri",
             role: "mid",
           },
-          enemies: ["Ahri", "Jarvan IV", "Miss Fortune", "Leona", "Jinx"],
+          enemies: ["Ahri"],
         },
         {
           championByName,
