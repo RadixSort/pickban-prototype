@@ -10,6 +10,7 @@ The app can:
 - show enemy-aware runes, summoner spells, items, and boots for one ally
 - import a displayed rune page into the League Client during pick/ban
 - on Windows, optionally import visible and hovered League pick/ban champions in Normal Draft or Ranked queues
+- during Auto Import bans, show one ban recommendation for Top, Jungle, Mid, ADC, and Support
 
 This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
 
@@ -91,7 +92,7 @@ Leave the terminal window open while you use the app.
 9. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to see matchup-aware build recommendations.
 10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
 11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft.
-12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to let the app fill visible and hovered champion picks plus ally roles from the League Client.
+12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to import the live phase, visible and hovered picks, and ally roles from the League Client.
 
 ## Auto Import
 
@@ -100,6 +101,13 @@ Auto Import only works while the League Client is running on the same Windows co
 If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app leaves manual edits alone unless the League Client later reveals conflicting live pick data. When the imported ally or enemy composition changes, the app refreshes the current suggestions automatically.
 
 Hovered allied picks count as temporary allies while Auto Import is active. They disappear if that champion is banned, change when you hover a different intended pick, and give way to locked allied picks for the same role.
+
+During the ban phase, a separate panel shows exactly one recommendation for Top, Jungle, Mid, ADC, and Support. Each lane follows this decision order:
+
+1. If the allied player assigned to that lane is hovering an intended champion, recommend the highest-ranked counter to that champion for the same lane.
+2. Otherwise, recommend the lane's highest-ranked PBI champion.
+
+Missing or invalid lane and hover data uses the PBI fallback. Hover changes replace the affected recommendation, and the entire panel disappears as soon as Auto Import observes that the ban phase has ended. Normal pick-phase recommendations continue to use the existing draft-aware flow.
 
 If Auto Import cannot find a supported live draft, loses the connection, or sees another game mode, the banner says import is disabled and your current selections stay as they are.
 
@@ -124,6 +132,7 @@ Rows that rank highly by both active metrics are highlighted in yellow.
 - **Import Runes** needs League pick/ban and at least 1 editable saved rune page
 - **Who will win?** needs all 5 allies plus 5 unique ally roles
 - **Auto Import** needs the Windows League Client in Normal Draft or Ranked champ select
+- Ban recommendations require Auto Import and are visible only during the detected ban phase
 
 ## Next Time
 
@@ -169,6 +178,10 @@ The app needs internet access and working Lolalytics responses. Wait a moment an
 ### Auto Import Says It Is Disabled
 
 Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer. Other modes, no active champ select, or a disconnected League Client disable import without changing your current picks.
+
+### Ban Recommendations Are Not Visible
+
+The five-lane ban panel appears only while Auto Import detects an active ban turn. It is intentionally hidden during planning, picking, finalization, and after champion select ends.
 
 ### The `Build` Button Is Disabled
 

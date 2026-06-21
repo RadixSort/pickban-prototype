@@ -7,6 +7,7 @@ const {
 } = require("../public/roles.js");
 const {
   buildLiveDraftImport,
+  detectChampSelectPhase,
   parseLeagueClientLockfile,
 } = require("../lib/riot-live-draft.js");
 
@@ -270,4 +271,123 @@ test("buildLiveDraftImport disables unsupported queues without returning picks",
   assert.equal(payload.reason, "unsupported_queue");
   assert.deepEqual(payload.allies, []);
   assert.deepEqual(payload.enemies, []);
+});
+
+test("buildLiveDraftImport exposes ban phase and lane-assigned ally hover intents", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        gameId: 9876,
+        queue: {
+          id: 420,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      timer: {
+        phase: "BAN_PICK",
+      },
+      myTeam: [
+        {
+          cellId: 1,
+          championId: 0,
+          championPickIntent: 103,
+          assignedPosition: "middle",
+        },
+        {
+          cellId: 2,
+          championId: 0,
+          championPickIntent: 122,
+          assignedPosition: "top",
+        },
+      ],
+      theirTeam: [],
+      actions: [
+        [
+          {
+            actorCellId: 1,
+            championId: 0,
+            completed: false,
+            isAllyAction: true,
+            isInProgress: true,
+            type: "ban",
+          },
+        ],
+      ],
+    },
+  });
+
+  assert.equal(payload.champSelectPhase, "ban");
+  assert.equal(payload.sessionId, "9876");
+  assert.deepEqual(
+    payload.allyHovers.map(({ champion, championKey, role }) => ({
+      champion,
+      championKey,
+      role,
+    })),
+    [
+      { champion: "Ahri", championKey: "103", role: "middle" },
+      { champion: "Darius", championKey: "122", role: "top" },
+    ],
+  );
+});
+
+test("invalid ally hover lanes are omitted without affecting phase detection", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        queue: {
+          id: 400,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      timer: {
+        phase: "BAN_PICK",
+      },
+      myTeam: [
+        {
+          cellId: 1,
+          championPickIntent: 103,
+          assignedPosition: "invalid",
+        },
+      ],
+      theirTeam: [],
+      actions: [
+        [
+          {
+            actorCellId: 1,
+            completed: false,
+            isInProgress: true,
+            type: "ban",
+          },
+        ],
+      ],
+    },
+  });
+
+  assert.equal(payload.champSelectPhase, "ban");
+  assert.deepEqual(payload.allyHovers, []);
+});
+
+test("detectChampSelectPhase distinguishes pick actions and finalization from bans", () => {
+  assert.equal(
+    detectChampSelectPhase({
+      timer: { phase: "BAN_PICK" },
+      actions: [
+        [{ type: "ban", completed: true }],
+        [{ type: "pick", completed: false, isInProgress: true }],
+      ],
+    }),
+    "pick",
+  );
+  assert.equal(detectChampSelectPhase({ timer: { phase: "FINALIZATION" } }), "finalization");
 });

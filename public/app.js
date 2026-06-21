@@ -5,6 +5,12 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
+  completeBanSuggestionRequest,
+  createInitialBanSuggestionState,
+  failBanSuggestionRequest,
+  reconcileBanSuggestionState,
+} = globalThis.banSuggestionState;
+const {
   getBuildSuggestionActionState,
 } = globalThis.buildActionState;
 const {
@@ -74,6 +80,8 @@ const state = {
   firstPickSortMode: DEFAULT_FIRST_PICK_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
   autoImport: createInitialAutoImportState(),
+  banSuggestions: createInitialBanSuggestionState(),
+  banSuggestionRequestsByKey: {},
   buildSuggestionCache: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
   lolalyticsDataWindowDays: 7,
@@ -106,6 +114,9 @@ const rankFilterSelect = document.getElementById("rank-filter");
 const fetchButton = document.getElementById("fetch-button");
 const autoImportButton = document.getElementById("auto-import-button");
 const autoImportBanner = document.getElementById("auto-import-banner");
+const banSuggestions = document.getElementById("ban-suggestions");
+const banSuggestionsList = document.getElementById("ban-suggestions-list");
+const banSuggestionsStatus = document.getElementById("ban-suggestions-status");
 const resetButton = document.getElementById("reset-button");
 const closeButton = document.getElementById("close-button");
 const allyRolePanel = document.getElementById("ally-role-panel");
@@ -376,6 +387,7 @@ function renderAll() {
   renderResults();
   renderActionState();
   renderAutoImportBanner();
+  renderBanSuggestions();
   renderBuildSuggestionModal();
   renderVersion();
 }
@@ -513,13 +525,16 @@ function createInitialBuildSuggestionModalState() {
 function createInitialAutoImportState() {
   return {
     active: false,
+    allyHovers: [],
     assignedRole: "",
+    champSelectPhase: "unknown",
     lastAppliedSignature: "",
     lastUpdatedAt: "",
     message: "",
     polling: false,
     queueDescription: "",
     requested: false,
+    sessionId: "",
     status: "idle",
     timerId: null,
   };
@@ -957,8 +972,12 @@ async function handleStartAutoImport() {
   state.autoImport.active = false;
   state.autoImport.status = "connecting";
   state.autoImport.message = "Looking for an active League pick/ban phase...";
+  state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
+    active: false,
+  });
   renderActionState();
   renderAutoImportBanner();
+  renderBanSuggestions();
 
   await pollLiveDraftImport();
 }
@@ -1009,11 +1028,16 @@ async function handleLiveDraftImportPayload(payload) {
   state.autoImport.status = "active";
   state.autoImport.message =
     payload.message || "Champion picks are automatically being imported from the League Client.";
+  state.autoImport.champSelectPhase =
+    typeof payload.champSelectPhase === "string" ? payload.champSelectPhase : "unknown";
+  state.autoImport.allyHovers = Array.isArray(payload.allyHovers) ? payload.allyHovers : [];
+  state.autoImport.sessionId = typeof payload.sessionId === "string" ? payload.sessionId : "";
   state.autoImport.assignedRole = normalizeRole(payload.assignedRole) || "";
   state.autoImport.queueDescription =
     typeof payload?.queue?.description === "string" ? payload.queue.description : "";
   state.autoImport.lastUpdatedAt =
     typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString();
+  syncBanSuggestions();
 
   const nextSignature = buildLiveDraftSignature(payload);
   let shouldRefreshSuggestions = false;
@@ -1034,6 +1058,68 @@ async function handleLiveDraftImportPayload(payload) {
   if (shouldRefreshSuggestions) {
     await refreshAutoImportSuggestions();
   }
+}
+
+function syncBanSuggestions() {
+  state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
+    active: state.autoImport.active,
+    champSelectPhase: state.autoImport.champSelectPhase,
+    hovers: state.autoImport.allyHovers,
+    rankFilter: state.rankFilter,
+    sessionId: state.autoImport.sessionId,
+  });
+  renderBanSuggestions();
+
+  if (!state.banSuggestions.visible || !state.banSuggestions.loading) {
+    return;
+  }
+
+  const key = state.banSuggestions.activeKey;
+  const requestVersion = state.banSuggestions.requestVersion;
+  const requestIdentity = [
+    state.autoImport.sessionId,
+    key,
+    requestVersion,
+  ].join("|");
+  if (state.banSuggestionRequestsByKey[requestIdentity]) {
+    return;
+  }
+
+  const requestPromise = (async () => {
+    try {
+      const { response, payload: suggestionPayload } = await postJson("/ban-suggestions", {
+        rankFilter: state.rankFilter,
+        hovers: state.autoImport.allyHovers.map((hover) => ({
+          champion: hover.champion,
+          role: hover.role,
+        })),
+      });
+      updateLolalyticsRequestStats(suggestionPayload?.requestStats);
+      if (!response.ok) {
+        throw new Error(
+          suggestionPayload.error || "Failed to load ban recommendations.",
+        );
+      }
+
+      state.banSuggestions = completeBanSuggestionRequest(state.banSuggestions, {
+        key,
+        payload: suggestionPayload,
+        requestVersion,
+      });
+    } catch (error) {
+      state.banSuggestions = failBanSuggestionRequest(state.banSuggestions, {
+        error: error.message || "Failed to load ban recommendations.",
+        key,
+        requestVersion,
+      });
+    } finally {
+      delete state.banSuggestionRequestsByKey[requestIdentity];
+      renderBanSuggestions();
+      renderResultsRequestStat();
+    }
+  })();
+
+  state.banSuggestionRequestsByKey[requestIdentity] = requestPromise;
 }
 
 async function refreshAutoImportSuggestions() {
@@ -1226,10 +1312,17 @@ function disableAutoImport(reason, message) {
   state.autoImport.active = false;
   state.autoImport.status = "disabled";
   state.autoImport.message = formatDisplayMessage(message);
+  state.autoImport.allyHovers = [];
   state.autoImport.assignedRole = "";
+  state.autoImport.champSelectPhase = "unknown";
   state.autoImport.queueDescription = "";
   state.autoImport.lastUpdatedAt = new Date().toISOString();
   state.autoImport.reason = reason;
+  state.autoImport.sessionId = "";
+  state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
+    active: false,
+  });
+  renderBanSuggestions();
 }
 
 function scheduleAutoImportPoll() {
@@ -1361,6 +1454,7 @@ function handleRankFilterChange(event) {
   state.rankFilter = normalizedRankFilter;
   closeBuildSuggestionModal();
   clearStatus();
+  syncBanSuggestions();
   renderAll();
 }
 
@@ -2099,6 +2193,98 @@ function renderAutoImportBanner() {
   autoImportBanner.textContent = buildAutoImportBannerMessage();
 }
 
+function renderBanSuggestions() {
+  const banState = state.banSuggestions;
+  if (!banState.visible) {
+    banSuggestions.classList.add("hidden");
+    banSuggestionsList.innerHTML = "";
+    banSuggestionsStatus.textContent = "";
+    return;
+  }
+
+  banSuggestions.classList.remove("hidden");
+  const roleOptions = getTargetRoleOptions().map((option) => ({
+    ...option,
+    label: option.value === "bottom" ? "ADC" : option.label,
+  }));
+
+  if (banState.loading && !banState.payload) {
+    banSuggestionsStatus.textContent = "Ranking counters and PBI fallbacks...";
+    banSuggestionsList.innerHTML = roleOptions
+      .map(
+        (option) => `
+          <article class="ban-suggestion">
+            <span class="ban-suggestion-role">${escapeHtml(option.label)}</span>
+            <p class="ban-suggestion-placeholder">Finding the best ban...</p>
+          </article>
+        `,
+      )
+      .join("");
+    return;
+  }
+
+  if (banState.error) {
+    banSuggestionsStatus.textContent = "Ban data unavailable";
+    banSuggestionsList.innerHTML = roleOptions
+      .map(
+        (option) => `
+          <article class="ban-suggestion">
+            <span class="ban-suggestion-role">${escapeHtml(option.label)}</span>
+            <p class="ban-suggestion-placeholder">${escapeHtml(banState.error)}</p>
+          </article>
+        `,
+      )
+      .join("");
+    return;
+  }
+
+  const suggestionsByRole = new Map(
+    (Array.isArray(banState.payload?.suggestions) ? banState.payload.suggestions : []).map(
+      (suggestion) => [normalizeRole(suggestion?.role), suggestion],
+    ),
+  );
+  const counterCount = Number(banState.payload?.summary?.counterSuggestionCount || 0);
+  banSuggestionsStatus.textContent =
+    counterCount > 0
+      ? `${counterCount} hover ${counterCount === 1 ? "counter" : "counters"}; PBI elsewhere.`
+      : "Highest PBI pick for every lane.";
+  banSuggestionsList.innerHTML = roleOptions
+    .map((option) => renderBanSuggestion(option, suggestionsByRole.get(option.value) || null))
+    .join("");
+}
+
+function renderBanSuggestion(roleOption, suggestion) {
+  if (!suggestion) {
+    return `
+      <article class="ban-suggestion">
+        <span class="ban-suggestion-role">${escapeHtml(roleOption.label)}</span>
+        <p class="ban-suggestion-placeholder">Recommendation unavailable.</p>
+      </article>
+    `;
+  }
+
+  const strategyText =
+    suggestion.strategy === "counter" && suggestion.hoveredChampion
+      ? `Counter to ${suggestion.hoveredChampion}`
+      : "Highest PBI for this lane";
+
+  return `
+    <article class="ban-suggestion" data-role="${escapeHtml(roleOption.value)}">
+      <span class="ban-suggestion-role">${escapeHtml(roleOption.label)}</span>
+      <div class="ban-suggestion-champion">
+        <img
+          src="${escapeHtml(suggestion.icon)}"
+          alt="${escapeHtml(suggestion.champion)}"
+          width="42"
+          height="42"
+        />
+        <strong title="${escapeHtml(suggestion.champion)}">${escapeHtml(suggestion.champion)}</strong>
+      </div>
+      <p class="ban-suggestion-reason">${escapeHtml(strategyText)}</p>
+    </article>
+  `;
+}
+
 function buildAutoImportBannerMessage() {
   const parts = [state.autoImport.message].filter(Boolean);
 
@@ -2107,9 +2293,13 @@ function buildAutoImportBannerMessage() {
       parts.push(`${state.autoImport.queueDescription}.`);
     }
 
-    const assignedRole = normalizeRole(state.autoImport.assignedRole);
-    if (assignedRole && getAutoImportSuggestedRole()) {
-      parts.push(`Showing ${getRoleLabel(assignedRole)} suggestions.`);
+    if (state.autoImport.champSelectPhase === "ban") {
+      parts.push("Ban recommendations are active.");
+    } else {
+      const assignedRole = normalizeRole(state.autoImport.assignedRole);
+      if (assignedRole && getAutoImportSuggestedRole()) {
+        parts.push(`Showing ${getRoleLabel(assignedRole)} suggestions.`);
+      }
     }
   }
 

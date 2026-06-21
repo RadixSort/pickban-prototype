@@ -94,6 +94,21 @@
           </button>
         </div>
         <div id="auto-import-banner" class="auto-import-banner hidden" aria-live="polite"></div>
+        <section
+          id="ban-suggestions"
+          class="ban-suggestions hidden"
+          aria-label="Ban recommendations"
+          aria-live="polite"
+        >
+          <header class="ban-suggestions-header">
+            <div>
+              <p class="picker-kicker">Ban phase</p>
+              <h2>Ban recommendations</h2>
+            </div>
+            <p id="ban-suggestions-status" class="ban-suggestions-status"></p>
+          </header>
+          <div id="ban-suggestions-list" class="ban-suggestions-list"></div>
+        </section>
         <p id="error-text" class="error-text" aria-live="polite"></p>
       </section>
 
@@ -210,6 +225,7 @@
     <script src="/suggestion-filters.js" defer></script>
     <script src="/suggestion-cache.js" defer></script>
     <script src="/build-suggestion-cache.js" defer></script>
+    <script src="/ban-suggestion-state.js" defer></script>
     <script src="/draft-projection-view.js" defer></script>
     <script src="/rune-metadata.js" defer></script>
     <script src="/build-suggestion-view.js" defer></script>

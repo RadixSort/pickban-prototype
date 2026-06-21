@@ -20,6 +20,11 @@ const {
   buildBuildSuggestionResults,
 } = require("./lib/build-suggestion-results.js");
 const {
+  buildBanSuggestion,
+  buildBanSuggestionCacheKey,
+  normalizeBanSuggestionRequest,
+} = require("./lib/ban-suggestion-results.js");
+const {
   buildFirstPickMeta,
   buildFirstPickTierListResults,
 } = require("./lib/first-pick-results.js");
@@ -101,6 +106,7 @@ const allyRoleLikelihoodsCache = new Map();
 const normalizedMatchupBuildCache = new Map();
 const buildSuggestionQueryCache = new Map();
 const draftProjectionQueryCache = new Map();
+const banSuggestionQueryCache = new Map();
 const extractedRoleValuesCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
 let lolalyticsLifetimeAccessCount = 0;
@@ -185,6 +191,75 @@ app.post("/rune-import", async (request, response) => {
     });
   }
 });
+
+app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response) => {
+  const normalizedRequest = normalizeBanSuggestionRequest(request.body, {
+    championByName,
+    defaultRankFilter: DEFAULT_RANK_FILTER,
+    normalizeChampionName,
+    normalizeRankFilter,
+    normalizeRole,
+    roleOptions: ROLE_OPTIONS,
+    createError: createHttpError,
+  });
+  const cacheKey = buildBanSuggestionCacheKey({
+    hoversByRole: normalizedRequest.hoversByRole,
+    patch: PATCH_WINDOW,
+    rankFilter: normalizedRequest.rankFilter,
+    roleOptions: ROLE_OPTIONS,
+  });
+  const cachedPayload = getCachedData(banSuggestionQueryCache, cacheKey);
+  if (cachedPayload) {
+    return response.json({
+      ...cachedPayload,
+      requestStats: buildLolalyticsRequestStats(),
+    });
+  }
+
+  const selectedChampionKeys = new Set(
+    Array.from(normalizedRequest.hoversByRole.values()).map((champion) => String(champion.key)),
+  );
+  const roleOutcomes = await Promise.all(
+    ROLE_OPTIONS.map(({ value: role }) =>
+      buildBanSuggestionForRole({
+        hoverChampion: normalizedRequest.hoversByRole.get(role) || null,
+        rankFilter: normalizedRequest.rankFilter,
+        role,
+        selectedChampionKeys,
+      }),
+    ),
+  );
+  const suggestions = roleOutcomes.map((outcome) => outcome.suggestion).filter(Boolean);
+  const partialFailures = roleOutcomes.flatMap((outcome) => outcome.partialFailures);
+
+  if (suggestions.length !== ROLE_OPTIONS.length) {
+    throw createHttpError(
+      502,
+      "Lolalytics did not return a usable ban recommendation for every lane.",
+    );
+  }
+
+  const payload = {
+    mode: "ban",
+    rankFilter: normalizedRequest.rankFilter,
+    roles: ROLE_OPTIONS.map((option) => option.value),
+    suggestions,
+    summary: {
+      hoverCount: normalizedRequest.hoversByRole.size,
+      counterSuggestionCount: suggestions.filter((suggestion) => suggestion.strategy === "counter")
+        .length,
+      fallbackSuggestionCount: suggestions.filter((suggestion) => suggestion.strategy === "pbi")
+        .length,
+      partialFailures,
+    },
+  };
+
+  setCachedData(banSuggestionQueryCache, cacheKey, payload);
+  response.json({
+    ...payload,
+    requestStats: buildLolalyticsRequestStats(),
+  });
+}));
 
 function getKnownChampionFromImportRequest(body = {}) {
   const championName = body?.champion ?? body?.championName;
@@ -535,6 +610,70 @@ async function buildFirstPickSuggestionsForRoles({
       eligibleTierStatsResult: eligibleTierStatsResults[index],
     }),
   );
+}
+
+async function buildBanSuggestionForRole({
+  hoverChampion,
+  rankFilter,
+  role,
+  selectedChampionKeys,
+}) {
+  const eligibleTierStats = await fetchEligibleTierStats(role, rankFilter);
+  const fallbackOutcome = buildFirstPickTierListResults({
+    eligibleTierStats,
+    selectedChampionKeys,
+    targetRole: role,
+    championByKey,
+  });
+  const partialFailures = [];
+  let counterResults = [];
+
+  if (hoverChampion) {
+    try {
+      const counterRows = await fetchRoleCounterRowsForTargetRole(
+        hoverChampion,
+        role,
+        rankFilter,
+      );
+      const counterOutcome = buildRoleSuggestionResults({
+        allyResults: [],
+        enemyResults: [
+          {
+            status: "fulfilled",
+            value: {
+              rows: counterRows,
+            },
+          },
+        ],
+        eligibleTierStats,
+        selectedChampionKeys,
+        targetRole: role,
+        championByKey,
+      });
+      counterResults = counterOutcome.results;
+      partialFailures.push(...counterOutcome.partialFailures);
+
+      if (counterResults.length === 0) {
+        partialFailures.push(
+          `No ${getRoleLabel(role).toLowerCase()} counter rows were available for ${hoverChampion.name}; used the PBI fallback.`,
+        );
+      }
+    } catch (error) {
+      partialFailures.push(
+        `${hoverChampion.name} ${getRoleLabel(role)} counter data was unavailable; used the PBI fallback. ${error.message || ""}`.trim(),
+      );
+    }
+  }
+
+  return {
+    suggestion: buildBanSuggestion({
+      counterResults,
+      fallbackResults: fallbackOutcome.results,
+      hoverChampion,
+      role,
+    }),
+    partialFailures,
+  };
 }
 
 function buildFirstPickSuggestionOutcome({
