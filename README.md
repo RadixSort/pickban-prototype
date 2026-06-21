@@ -89,7 +89,7 @@ Leave the terminal window open while you use the app.
 6. Use the **Target role** dropdown in the results area to switch between returned role suggestions.
 7. Click **+** on a result row to add that recommendation to the allied draft for the role you are viewing.
 8. Sort first-pick rows with **PBI** or **Winrate**. Sort draft-aware rows with **Projected Win Rate** or **Projected Agency**.
-9. After one ally has a role and all five enemy champions are selected, click **Build** on that ally row to see matchup-aware build recommendations.
+9. After one ally has a role and at least one enemy champion is selected, click **Build** on that ally row to see matchup-aware build recommendations.
 10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
 11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft.
 12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to import the live phase, visible and hovered picks, and ally roles from the League Client.
@@ -128,7 +128,7 @@ Rows that rank highly by both active metrics are highlighted in yellow.
 - A champion can only appear once across both teams
 - Ally role assignment is optional until you want a full-draft projection
 - With no champions selected, **Fetch Suggestions** shows first-pick tier lists instead of draft-aware suggestions
-- **Build** needs 1 ally with an assigned role and all 5 enemy champions selected
+- **Build** needs 1 ally with an assigned role and 1 to 5 enemy champions selected
 - **Import Runes** needs League pick/ban and at least 1 editable saved rune page
 - **Who will win?** needs all 5 allies plus 5 unique ally roles
 - **Auto Import** needs the Windows League Client in Normal Draft or Ranked champ select
@@ -185,7 +185,7 @@ The five-lane ban panel appears only while Auto Import detects an active ban tur
 
 ### The `Build` Button Is Disabled
 
-The button only works after the ally has an assigned role and all five enemy champions are selected. Hover over the disabled button to see which requirement is still missing.
+The button only works after the ally has an assigned role and at least one enemy champion is selected. Hover over the disabled button to see which requirement is still missing.
 
 ### Import Runes Fails
 

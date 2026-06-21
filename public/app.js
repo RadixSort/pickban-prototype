@@ -541,14 +541,13 @@ function createInitialAutoImportState() {
 }
 
 function canOpenBuildSuggestionsForAlly(ally) {
-  return Boolean(ally?.role) && state.enemies.length === limits.enemies && !isInteractionLocked();
+  return Boolean(ally?.role) && state.enemies.length > 0 && !isInteractionLocked();
 }
 
 function getBuildSuggestionAction(ally) {
   return getBuildSuggestionActionState({
     ally,
     enemyCount: state.enemies.length,
-    enemyLimit: limits.enemies,
     loading: state.loading,
     shuttingDown: state.shuttingDown,
   });

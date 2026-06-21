@@ -9,7 +9,6 @@
   function getBuildSuggestionActionState({
     ally = null,
     enemyCount = 0,
-    enemyLimit = 5,
     loading = false,
     shuttingDown = false,
   } = {}) {
@@ -37,10 +36,9 @@
       );
     }
 
-    const remainingEnemyCount = Math.max(0, Number(enemyLimit) - Number(enemyCount));
-    if (remainingEnemyCount > 0) {
-      const enemyText = remainingEnemyCount === 1 ? "enemy champion" : "enemy champions";
-      const disabledReason = `Select ${remainingEnemyCount} more ${enemyText} to unlock build suggestions.`;
+    const selectedEnemyCount = Number(enemyCount);
+    if (!Number.isFinite(selectedEnemyCount) || selectedEnemyCount <= 0) {
+      const disabledReason = "Select at least 1 enemy champion to unlock build suggestions.";
       return buildBuildActionState(ally, disabledReason, disabledReason);
     }
 

@@ -116,7 +116,7 @@ Response shape includes `request`, `summary`, `projection`, and `requestStats`.
 
 ### Build Recommendations
 
-`POST /build-suggestions` requires one ally with an assigned role and exactly five enemies.
+`POST /build-suggestions` requires one ally with an assigned role and one to five enemies.
 
 For each enemy, the server fetches one Lolalytics mega rune payload and one rendered matchup build page. `lib/lolalytics-build-parser.js` parses the sources, and `lib/build-suggestion-results.js` aggregates successful matchup records into runes, summoner spells, starting items, five-item paths, and boots.
 

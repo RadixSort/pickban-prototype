@@ -1060,8 +1060,22 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   );
 });
 
-test("POST /build-suggestions rejects incomplete enemy teams before upstream fetches", async (t) => {
+test("POST /build-suggestions accepts partial enemy teams", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
+      return jsonResponse(
+        createRuneBuildMegaData({
+          role: "middle",
+          totalGames: 75,
+          pickWinRate: 54,
+        }),
+      );
+    }
+
+    if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
+      return textResponse(createRenderedBuildPageHtml({ splitStats: true }));
+    }
+
     return textResponse("Not found.", 404);
   });
 
@@ -1071,11 +1085,36 @@ test("POST /build-suggestions rejects incomplete enemy teams before upstream fet
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Leona", "Jinx", "Sion", "Vi"],
+    enemies: ["Leona"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.summary.enemyCount, 1);
+  assert.equal(response.body.summary.sourceMatchups, 1);
+  assertBuildSuggestionSectionsArePopulated(response.body);
+  assert.equal(mockServer.countRequests("/mega/"), 1);
+  assert.equal(
+    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
+    1,
+  );
+});
+
+test("POST /build-suggestions rejects missing enemies before upstream fetches", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, () => {
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: [],
   });
 
   assert.equal(response.status, 400);
-  assert.match(response.body.error, /exactly 5 enemy champions/i);
+  assert.match(response.body.error, /at least 1 enemy champion/i);
   assert.equal(mockServer.countRequests(), 0);
 });
 
