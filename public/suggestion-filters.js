@@ -66,18 +66,43 @@
     return [...results];
   }
 
+  function filterNegativeMatchupScoreResults(results = []) {
+    return results.filter((result) => {
+      if (!result || typeof result !== "object") {
+        return true;
+      }
+
+      return !(
+        isNegativeFiniteScore(result.synergyScore) ||
+        isNegativeFiniteScore(result.counterScore)
+      );
+    });
+  }
+
+  function isNegativeFiniteScore(value) {
+    if (value == null || value === "") {
+      return false;
+    }
+
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue < 0;
+  }
+
   /**
-   * Keep all draft-eligible rows visible. The UI highlights low projected
-   * win-rate results instead of silently removing them.
+   * Keep draft-eligible rows with non-negative matchup scores visible. The UI
+   * highlights low projected win-rate results instead of removing them.
    */
   function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {
-    return filterUnavailableResults(results, selectedChampionKeys);
+    return filterNegativeMatchupScoreResults(
+      filterUnavailableResults(results, selectedChampionKeys),
+    );
   }
 
   return {
     MIN_PROJECTED_WIN_RATE,
     buildSelectedChampionKeys,
     filterLowProjectedWinRateResults,
+    filterNegativeMatchupScoreResults,
     filterUnavailableResults,
     getChampionKeyFromSelection,
     getVisibleSuggestionResults,

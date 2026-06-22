@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildSelectedChampionKeys,
   filterLowProjectedWinRateResults,
+  filterNegativeMatchupScoreResults,
   filterUnavailableResults,
   getVisibleSuggestionResults,
 } = require("../public/suggestion-filters.js");
@@ -102,6 +103,24 @@ test("filterLowProjectedWinRateResults keeps sub-50 projected win rates visible"
   );
 });
 
+test("filterNegativeMatchupScoreResults removes results when either matchup score is negative", () => {
+  const filteredResults = filterNegativeMatchupScoreResults([
+    { candidateKey: 1, synergyScore: 1.2, counterScore: 0.4 },
+    { candidateKey: 2, synergyScore: -0.1, counterScore: 2.1 },
+    { candidateKey: 3, synergyScore: 0.8, counterScore: -0.2 },
+    { candidateKey: 4, synergyScore: -0.3, counterScore: -0.4 },
+    { candidateKey: 5, synergyScore: 0, counterScore: 0 },
+    { candidateKey: 6 },
+    { candidateKey: 7, synergyScore: "invalid", counterScore: 0.5 },
+    { candidateKey: 8, synergyScore: "0.5", counterScore: "-0.1" },
+  ]);
+
+  assert.deepEqual(
+    filteredResults.map((result) => result.candidateKey),
+    [1, 5, 6, 7],
+  );
+});
+
 test("getVisibleSuggestionResults keeps all available results including sub-50 projected win rates", () => {
   const visibleResults = getVisibleSuggestionResults([
     createResult(1, 49.2, 0.1),
@@ -121,5 +140,22 @@ test("getVisibleSuggestionResults keeps all available results including sub-50 p
   assert.deepEqual(
     visibleResults.map((result) => result.candidateKey),
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  );
+});
+
+test("getVisibleSuggestionResults excludes selected champions and negative matchup scores", () => {
+  const visibleResults = getVisibleSuggestionResults(
+    [
+      { candidateKey: 1, synergyScore: 0.4, counterScore: 0.2 },
+      { candidateKey: 2, synergyScore: -0.1, counterScore: 0.3 },
+      { candidateKey: 3, synergyScore: 0.2, counterScore: -0.1 },
+      { candidateKey: 4, synergyScore: 0, counterScore: 0 },
+    ],
+    new Set(["1"]),
+  );
+
+  assert.deepEqual(
+    visibleResults.map((result) => result.candidateKey),
+    [4],
   );
 });
