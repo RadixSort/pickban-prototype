@@ -66,16 +66,13 @@
     return [...results];
   }
 
-  function filterNegativeMatchupScoreResults(results = []) {
+  function filterNegativeProjectedAgencyResults(results = []) {
     return results.filter((result) => {
       if (!result || typeof result !== "object") {
         return true;
       }
 
-      return !(
-        isNegativeFiniteScore(result.synergyScore) ||
-        isNegativeFiniteScore(result.counterScore)
-      );
+      return !isNegativeFiniteScore(result.projectedAgency);
     });
   }
 
@@ -89,11 +86,11 @@
   }
 
   /**
-   * Keep draft-eligible rows with non-negative matchup scores visible. The UI
+   * Keep draft-eligible rows with non-negative projected agency visible. The UI
    * highlights low projected win-rate results instead of removing them.
    */
   function getVisibleSuggestionResults(results = [], selectedChampionKeys = new Set()) {
-    return filterNegativeMatchupScoreResults(
+    return filterNegativeProjectedAgencyResults(
       filterUnavailableResults(results, selectedChampionKeys),
     );
   }
@@ -102,7 +99,7 @@
     MIN_PROJECTED_WIN_RATE,
     buildSelectedChampionKeys,
     filterLowProjectedWinRateResults,
-    filterNegativeMatchupScoreResults,
+    filterNegativeProjectedAgencyResults,
     filterUnavailableResults,
     getChampionKeyFromSelection,
     getVisibleSuggestionResults,

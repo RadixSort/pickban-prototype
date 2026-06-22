@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const {
   buildSelectedChampionKeys,
   filterLowProjectedWinRateResults,
-  filterNegativeMatchupScoreResults,
+  filterNegativeProjectedAgencyResults,
   filterUnavailableResults,
   getVisibleSuggestionResults,
 } = require("../public/suggestion-filters.js");
@@ -103,21 +103,21 @@ test("filterLowProjectedWinRateResults keeps sub-50 projected win rates visible"
   );
 });
 
-test("filterNegativeMatchupScoreResults removes results when either matchup score is negative", () => {
-  const filteredResults = filterNegativeMatchupScoreResults([
-    { candidateKey: 1, synergyScore: 1.2, counterScore: 0.4 },
-    { candidateKey: 2, synergyScore: -0.1, counterScore: 2.1 },
-    { candidateKey: 3, synergyScore: 0.8, counterScore: -0.2 },
-    { candidateKey: 4, synergyScore: -0.3, counterScore: -0.4 },
-    { candidateKey: 5, synergyScore: 0, counterScore: 0 },
+test("filterNegativeProjectedAgencyResults removes only negative projected agency results", () => {
+  const filteredResults = filterNegativeProjectedAgencyResults([
+    { candidateKey: 1, projectedAgency: 1.2 },
+    { candidateKey: 2, projectedAgency: -0.1 },
+    { candidateKey: 3, projectedAgency: 0 },
+    { candidateKey: 4, projectedAgency: "-0.4" },
+    { candidateKey: 5, synergyScore: -2, counterScore: 1 },
     { candidateKey: 6 },
-    { candidateKey: 7, synergyScore: "invalid", counterScore: 0.5 },
-    { candidateKey: 8, synergyScore: "0.5", counterScore: "-0.1" },
+    { candidateKey: 7, projectedAgency: "invalid" },
+    { candidateKey: 8, synergyScore: 1, counterScore: -2, projectedAgency: 0.5 },
   ]);
 
   assert.deepEqual(
     filteredResults.map((result) => result.candidateKey),
-    [1, 5, 6, 7],
+    [1, 3, 5, 6, 7, 8],
   );
 });
 
@@ -143,19 +143,19 @@ test("getVisibleSuggestionResults keeps all available results including sub-50 p
   );
 });
 
-test("getVisibleSuggestionResults excludes selected champions and negative matchup scores", () => {
+test("getVisibleSuggestionResults excludes selected champions and negative projected agency", () => {
   const visibleResults = getVisibleSuggestionResults(
     [
-      { candidateKey: 1, synergyScore: 0.4, counterScore: 0.2 },
-      { candidateKey: 2, synergyScore: -0.1, counterScore: 0.3 },
-      { candidateKey: 3, synergyScore: 0.2, counterScore: -0.1 },
-      { candidateKey: 4, synergyScore: 0, counterScore: 0 },
+      { candidateKey: 1, projectedAgency: 0.4 },
+      { candidateKey: 2, synergyScore: -0.1, counterScore: 0.3, projectedAgency: 0.1 },
+      { candidateKey: 3, synergyScore: 0.2, counterScore: -0.1, projectedAgency: 0.1 },
+      { candidateKey: 4, projectedAgency: -0.1 },
     ],
     new Set(["1"]),
   );
 
   assert.deepEqual(
     visibleResults.map((result) => result.candidateKey),
-    [4],
+    [2, 3],
   );
 });

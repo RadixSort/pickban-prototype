@@ -154,7 +154,7 @@ Candidate filters:
 - require role eligibility from live tier-list data
 - require `lanePercent >= 10`
 - require `pickRate >= 0.5`
-- hide draft-aware suggestions when either `synergyScore` or `counterScore` is negative
+- hide draft-aware suggestions when `projectedAgency` is negative
 
 Scores:
 
