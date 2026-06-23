@@ -172,6 +172,8 @@ Backend role-result sort order:
 4. alphabetical candidate name
 
 Low projected win-rate rows stay visible; the UI highlights weak rows instead of filtering them out.
+Draft-aware views highlight the top five rows by `projectedWinRate`, the top five by
+`projectedAgency`, and their overlap.
 
 ## Caching And Failure Handling
 

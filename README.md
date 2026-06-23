@@ -119,7 +119,7 @@ If Auto Import cannot find a supported live draft, loses the connection, or sees
 - `Projected Agency`: the blended score available in the **Rank by** dropdown
 - `PBI`: Lolalytics Pick Ban Influence for first-pick tier-list rows
 
-Rows that rank highly by both active metrics are highlighted in yellow.
+The top five rows for each active metric are highlighted, with overlap highlighted in yellow.
 
 ## Limits
 

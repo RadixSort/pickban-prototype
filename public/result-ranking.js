@@ -12,7 +12,7 @@
   const WIN_RATE_SORT_MODE = "winRate";
   const DEFAULT_SORT_MODE = PROJECTED_WIN_RATE_SORT_MODE;
   const DEFAULT_FIRST_PICK_SORT_MODE = PBI_SORT_MODE;
-  const DEFAULT_TOP_RESULT_LIMIT = 3;
+  const DEFAULT_TOP_RESULT_LIMIT = 5;
 
   function average(values = []) {
     let total = 0;

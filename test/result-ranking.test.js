@@ -123,19 +123,39 @@ test("sortResults ranks first-pick win rate with PBI as the first tie-breaker", 
   );
 });
 
-test("getTopResultKeys returns the top three ranked candidate keys by default", () => {
+test("getTopResultKeys returns the top five projected win-rate keys by default", () => {
   const topResultKeys = getTopResultKeys(
     [
+      { candidate: "Milio", candidateKey: 902, projectedAgency: 0.5, projectedWinRate: 56.1 },
       { candidate: "Soraka", candidateKey: 16, projectedAgency: 0.8, projectedWinRate: 55.2 },
       { support: "Leona", projectedAgency: 1.7, projectedWinRate: 52.4 },
       { candidate: "Rakan", candidateKey: "497", projectedAgency: 1.4, projectedWinRate: 54.1 },
       { candidate: "Taric", candidateKey: 44, projectedAgency: 1.1, projectedWinRate: 53.0 },
+      { candidate: "Braum", candidateKey: 201, projectedAgency: 2.2, projectedWinRate: 52.8 },
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 2.0, projectedWinRate: 52.1 },
     ],
-    "projectedWinRate",
+    PROJECTED_WIN_RATE_SORT_MODE,
   );
 
-  assert.equal(DEFAULT_TOP_RESULT_LIMIT, 3);
-  assert.deepEqual(Array.from(topResultKeys), ["16", "497", "44"]);
+  assert.equal(DEFAULT_TOP_RESULT_LIMIT, 5);
+  assert.deepEqual(Array.from(topResultKeys), ["902", "16", "497", "44", "201"]);
+});
+
+test("getTopResultKeys returns the top five projected agency keys by default", () => {
+  const topResultKeys = getTopResultKeys(
+    [
+      { candidate: "Milio", candidateKey: 902, projectedAgency: 0.5, projectedWinRate: 56.1 },
+      { candidate: "Soraka", candidateKey: 16, projectedAgency: 0.8, projectedWinRate: 55.2 },
+      { support: "Leona", projectedAgency: 1.7, projectedWinRate: 52.4 },
+      { candidate: "Rakan", candidateKey: "497", projectedAgency: 1.4, projectedWinRate: 54.1 },
+      { candidate: "Taric", candidateKey: 44, projectedAgency: 1.1, projectedWinRate: 53.0 },
+      { candidate: "Braum", candidateKey: 201, projectedAgency: 2.2, projectedWinRate: 52.8 },
+      { candidate: "Lulu", candidateKey: 117, projectedAgency: 2.0, projectedWinRate: 52.1 },
+    ],
+    PROJECTED_AGENCY_SORT_MODE,
+  );
+
+  assert.deepEqual(Array.from(topResultKeys), ["201", "117", "497", "44", "16"]);
 });
 
 test("sortResults uses counter score and then alphabetical order to break complete ties", () => {
