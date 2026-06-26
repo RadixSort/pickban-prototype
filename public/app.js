@@ -1884,6 +1884,16 @@ function renderResults() {
       isTopProjectedAgency,
       topOptionTone === "overlap" ? "overlap" : "agency",
     );
+    const synergyScoreClassName = getMetricClassName(
+      [],
+      isNegativeScore(result.synergyScore),
+      "danger",
+    );
+    const counterScoreClassName = getMetricClassName(
+      [],
+      isNegativeScore(result.counterScore),
+      "danger",
+    );
     const selectForDraftHelperText = getSelectResultForDraftHelperText(selectedRole, result);
     const selectForDraftDescription = selectForDraftHelperText
       ? selectForDraftHelperText
@@ -1901,8 +1911,8 @@ function renderResults() {
       </td>
       <td>${formatRate(liveWinRate)}</td>
       <td class="${projectedWinRateClassName}">${formatRate(projectedWinRate)}</td>
-      <td>${formatScore(result.synergyScore)}</td>
-      <td>${formatScore(result.counterScore)}</td>
+      <td class="${synergyScoreClassName}">${formatScore(result.synergyScore)}</td>
+      <td class="${counterScoreClassName}">${formatScore(result.counterScore)}</td>
       <td class="${projectedAgencyClassName}">
         <div class="result-agency-cell">
           <span class="result-agency-score">${formatScore(getProjectedAgency(result))}</span>
@@ -2337,6 +2347,10 @@ function formatPbi(value) {
 
 function isLowWinRate(value) {
   return Number.isFinite(Number(value)) && Number(value) <= MIN_PROJECTED_WIN_RATE;
+}
+
+function isNegativeScore(value) {
+  return Number.isFinite(Number(value)) && Number(value) < 0;
 }
 
 function formatVersion(version) {
