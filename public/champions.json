@@ -444,6 +444,12 @@
     "icon": "https://cdn5.lolalytics.com/champ140/lissandra.webp"
   },
   {
+    "id": "locke",
+    "key": "805",
+    "name": "Locke",
+    "icon": "https://cdn5.lolalytics.com/champ140/locke.webp"
+  },
+  {
     "id": "lucian",
     "key": "236",
     "name": "Lucian",
