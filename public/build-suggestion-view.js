@@ -513,7 +513,7 @@
         <div class="build-item-card-copy">
           <strong>${escapeHtml(selection?.name || "Unknown")}</strong>
           <div class="build-item-card-stats">
-            ${renderItemCardStat(formatPercent(selection?.winRate), "win")}
+            ${renderItemCardStat(formatPercent(selection?.winRate), "win", selection?.winRate)}
             ${renderItemCardStat(formatPercent(selection?.pickRate), "pick")}
             ${renderItemCardStat(formatMinute(selection?.purchaseMinute), "minute")}
           </div>
@@ -522,12 +522,22 @@
     `;
   }
 
-  function renderItemCardStat(value, tone) {
+  function renderItemCardStat(value, tone, rawValue = null) {
+    const classNames = ["build-item-card-stat", `build-item-card-stat--${tone}`];
+    if (tone === "win" && isBelowEvenWinRate(rawValue)) {
+      classNames.push("build-item-card-stat--low-win");
+    }
+
     return `
-      <span class="build-item-card-stat build-item-card-stat--${escapeAttribute(tone)}">
+      <span class="${escapeAttribute(classNames.join(" "))}">
         ${escapeHtml(value)}${tone === "minute" ? "" : ` ${escapeHtml(tone)}`}
       </span>
     `;
+  }
+
+  function isBelowEvenWinRate(value) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue < 50;
   }
 
   function renderCompactSection(label, selections) {

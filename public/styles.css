@@ -1838,6 +1838,10 @@ select {
   color: #8bf0aa;
 }
 
+.build-item-card-stat--low-win {
+  color: var(--projection-negative);
+}
+
 .build-item-card-stat--pick {
   color: #aeb7ff;
 }

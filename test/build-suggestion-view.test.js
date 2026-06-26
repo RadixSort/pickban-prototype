@@ -499,6 +499,18 @@ test("renderBuildSuggestionBody renders unknown item purchase minutes as empty",
   assert.match(html, /build-item-card-stat--minute">\s*-/);
 });
 
+test("renderBuildSuggestionBody marks sub-50 item build win rates as low win", () => {
+  const payload = createPayload();
+  payload.items.highestWinBuild.selections[0].winRate = 49.9;
+  payload.items.mostPickedBuild.selections[0].winRate = 48.3;
+
+  const html = renderBuildSuggestionBody(payload);
+
+  assert.equal(countMatches(html, /build-item-card-stat--win build-item-card-stat--low-win/g), 2);
+  assert.match(html, /Luden(?:&#39;|')?s Companion[\s\S]*49\.9% win/);
+  assert.match(html, /Malignance[\s\S]*48\.3% win/);
+});
+
 test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and boot highlights", () => {
   const payload = createPayload();
   payload.runes.mostPickedPage = payload.runes.highestWinPage;
