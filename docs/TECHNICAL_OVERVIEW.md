@@ -120,6 +120,8 @@ Response shape includes `request`, `summary`, `projection`, and `requestStats`.
 
 For each enemy, the server fetches one Lolalytics mega rune payload and one rendered matchup build page. `lib/lolalytics-build-parser.js` parses the sources, and `lib/build-suggestion-results.js` aggregates successful matchup records into runes, summoner spells, starting items, five-item paths, and boots.
 
+The rendered-page parser prefers Lolalytics' embedded Qwik snapshot for item data when present, because the static HTML only renders the active Highest Win or Most Common build tab. Visible section parsing remains the fallback for pages without usable snapshot data.
+
 The route only succeeds when runes, summoner spells, boots, and both five-item paths can populate the modal. Starting items render when available but are not required for success.
 
 Response shape includes `request`, `summary`, `runes`, `spells`, `startingItems`, `items`, and `boots`.
@@ -215,7 +217,7 @@ Release commits must bump both `package.json` and `package-lock.json` because bo
 ## External Assumptions
 
 - Lolalytics mega tier, synergy, counter, and rune payloads must keep exposing the parsed fields; counter requests must keep honoring `vslane` for target-role-specific matchups.
-- Lolalytics rendered matchup build pages must keep recognizable spell, starting item, core item, and boot sections.
+- Lolalytics rendered matchup build pages must keep exposing either a Qwik build snapshot or recognizable spell, starting item, core item, and boot sections.
 - The League Client lockfile must be readable while the Windows client is running.
 - Local League Client gameflow, champ-select, and perks endpoints must remain compatible.
 - The UI must keep a visible Riot non-endorsement/trademark footnote while it references Riot or League-related names, assets, or local client data.

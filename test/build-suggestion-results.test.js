@@ -17,6 +17,8 @@ function createMatchupBuild({
   spellOptions = [],
   startingItemOptions = [],
   itemSlotOptions = [[], [], [], [], [], []],
+  mostPickedItemSlotOptions = [[], [], [], [], [], []],
+  highestWinItemSlotOptions = [[], [], [], [], [], []],
   boots,
 }) {
   return {
@@ -38,6 +40,8 @@ function createMatchupBuild({
     },
     items: {
       slotOptions: itemSlotOptions,
+      mostPickedSlotOptions: mostPickedItemSlotOptions,
+      highestWinSlotOptions: highestWinItemSlotOptions,
     },
     boots,
   };
@@ -354,6 +358,78 @@ test("buildBuildSuggestionResults keeps unknown item purchase minutes empty", ()
 
   assert.equal(aggregated.items.mostPickedBuild.selections[0].purchaseMinute, null);
   assert.equal(aggregated.items.highestWinBuild.selections[0].purchaseMinute, null);
+});
+
+test("buildBuildSuggestionResults prefers tab-specific item slots when available", () => {
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 200,
+        fetchedAt: "2026-06-26T12:00:00.000Z",
+        itemSlotOptions: [
+          [
+            createItemOption({
+              itemId: 6610,
+              name: "Sundered Sky",
+              games: 134,
+              wins: 77,
+              purchaseMinute: 11,
+            }),
+            createItemOption({
+              itemId: 3078,
+              name: "Trinity Force",
+              games: 1494,
+              wins: 812,
+              purchaseMinute: 11,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        mostPickedItemSlotOptions: [
+          [
+            createItemOption({
+              itemId: 3078,
+              name: "Trinity Force",
+              games: 1494,
+              wins: 812,
+              purchaseMinute: 11,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        highestWinItemSlotOptions: [
+          [
+            createItemOption({
+              itemId: 6610,
+              name: "Sundered Sky",
+              games: 134,
+              wins: 77,
+              purchaseMinute: 11,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        boots: [],
+      }),
+    ],
+  });
+
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].itemId, 3078);
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].name, "Trinity Force");
+  assert.equal(aggregated.items.highestWinBuild.selections[0].itemId, 6610);
+  assert.equal(aggregated.items.highestWinBuild.selections[0].name, "Sundered Sky");
 });
 
 test("buildBuildSuggestionResults reports when no page crosses the highest-win threshold", () => {

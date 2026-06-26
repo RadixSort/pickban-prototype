@@ -543,6 +543,166 @@ test("parseLolalyticsRenderedBuildPage reads starting items from both build tabs
   );
 });
 
+test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapshot data", () => {
+  const itemNames = Object.fromEntries(
+    Array.from({ length: 120 }, (_, index) => {
+      const itemId = 1000 + index;
+      return [String(itemId), `Item ${itemId}`];
+    }),
+  );
+  Object.assign(itemNames, {
+    1102: "Gustwalker Hatchling",
+    1103: "Mosstomper Seedling",
+    2003: "Health Potion",
+    3047: "Plated Steelcaps",
+    3078: "Trinity Force",
+    6333: "Death's Dance",
+    6610: "Sundered Sky",
+  });
+  const qwikSnapshot = {
+    refs: {},
+    ctx: {},
+    subs: [],
+    objs: [
+      {
+        header: {
+          cid: 62,
+          vs: 254,
+          lane: "jungle",
+          vsLane: "jungle",
+          n: 1738,
+        },
+        summary: {
+          pick: {
+            items: {
+              start: {
+                n: 578,
+                wr: 53.81,
+                set: [1102, 2003],
+              },
+              item1: {
+                id: 3078,
+                n: 1494,
+                wr: 54.35,
+              },
+              item2: {
+                id: 3047,
+                n: 936,
+                wr: 55.88,
+              },
+              item3: {
+                id: 6610,
+                n: 1104,
+                wr: 54.62,
+              },
+            },
+          },
+          win: {
+            items: {
+              start: {
+                n: 80,
+                wr: 63.75,
+                set: [1103, 2003],
+              },
+              item1: {
+                id: 6610,
+                n: 134,
+                wr: 57.46,
+              },
+              item2: {
+                id: 3047,
+                n: 936,
+                wr: 55.88,
+              },
+              item3: {
+                id: 6333,
+                n: 47,
+                wr: 59.57,
+              },
+            },
+          },
+        },
+        spells: [["4_11", 54.23, 99.94, 1737]],
+        startSet: [
+          ["1102_2003", 53.81, 33.26, 578],
+          ["1103_2003", 63.75, 4.6, 80],
+        ],
+        boots: [[3047, 55.88, 53.86, 936, 16]],
+        item: [
+          [3078, 54.45, 91.2, 1585, 12],
+          [6610, 54.94, 75.09, 1305, 19],
+          [3047, 55.88, 53.86, 936, 16],
+          [6333, 60.82, 26.58, 462, 26],
+        ],
+        item1: [
+          [3078, 54.35, 85.96, 1494, 11],
+          [6610, 57.46, 7.71, 134, 11],
+        ],
+        item2: [[6610, 54.62, 63.52, 1104, 19]],
+        item3: [[6333, 59.57, 2.7, 47, 26]],
+      },
+      itemNames,
+    ],
+  };
+  const parsed = parseLolalyticsRenderedBuildPage(
+    `
+      <main>
+        <h2>Highest Win Build</h2>
+        <h2>Starting Items</h2>
+        <img src="https://cdn5.lolalytics.com/item64/1103.webp" alt="Mosstomper Seedling" />
+        <img src="https://cdn5.lolalytics.com/item64/2003.webp" alt="Health Potion" />
+        <p>63.75% Win Rate 80 Games</p>
+        <h2>Core Build</h2>
+        <img src="https://cdn5.lolalytics.com/item64/6610.webp" alt="Sundered Sky" />
+        <p>57.46%</p>
+        <p>134</p>
+      </main>
+      <script type="qwik/json">${JSON.stringify(qwikSnapshot)}</script>
+    `,
+    {
+      allyChampionKey: "62",
+      enemyChampionKey: "254",
+      fetchedAt: "2026-06-26T12:00:00.000Z",
+      role: "jungle",
+    },
+  );
+
+  assert.deepEqual(
+    parsed.items.mostPickedSlotOptions[0].map((option) => ({
+      itemId: option.itemId,
+      name: option.name,
+      games: option.games,
+      purchaseMinute: option.purchaseMinute,
+    })),
+    [
+      {
+        itemId: 3078,
+        name: "Trinity Force",
+        games: 1494,
+        purchaseMinute: 11,
+      },
+    ],
+  );
+  assert.deepEqual(
+    parsed.items.highestWinSlotOptions[0].map((option) => ({
+      itemId: option.itemId,
+      name: option.name,
+      games: option.games,
+      purchaseMinute: option.purchaseMinute,
+    })),
+    [
+      {
+        itemId: 6610,
+        name: "Sundered Sky",
+        games: 134,
+        purchaseMinute: 11,
+      },
+    ],
+  );
+  assert.equal(parsed.items.slotOptions[0][0].name, "Trinity Force");
+  assert.equal(parsed.startingItems.options[0].setKey, "1102-2003");
+});
+
 test("parseLolalyticsRenderedBuildPage isolates missing rendered build rows", () => {
   assert.throws(
     () => parseLolalyticsRenderedBuildPage("<section><h2>Core Build</h2></section>"),
