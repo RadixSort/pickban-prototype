@@ -280,14 +280,6 @@
     return topResultKeys;
   }
 
-  function getTopSupportKeys(
-    results = [],
-    sortMode = DEFAULT_SORT_MODE,
-    limit = DEFAULT_TOP_RESULT_LIMIT,
-  ) {
-    return getTopResultKeys(results, sortMode, limit);
-  }
-
   function getTopProjectedWinRateKeysAtEverySkillLevel(
     results = [],
     limit = DRAFT_TOP_RESULT_LIMIT,
@@ -422,7 +414,6 @@
     getSynergyScore,
     getTopProjectedWinRateKeysAtEverySkillLevel,
     getTopResultKeys,
-    getTopSupportKeys,
     getWinRate,
     sortResults,
   };

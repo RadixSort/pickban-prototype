@@ -71,6 +71,9 @@ const {
 
 const state = {
   champions: [],
+  championById: new Map(),
+  championByKey: new Map(),
+  championByName: new Map(),
   allies: [],
   allyRoleLikelihoodsByRank: {},
   allyRoleLikelihoodRequestsByRank: {},
@@ -79,7 +82,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.18",
+  version: "0.6.19",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -170,6 +173,9 @@ async function initialize() {
   state.champions = await response.json();
   state.champions.forEach((champion) => {
     champion.searchText = normalizeText(`${champion.name} ${champion.id}`);
+    state.championById.set(champion.id, champion);
+    state.championByKey.set(String(champion.key), champion);
+    state.championByName.set(normalizeText(champion.name), champion);
   });
   await loadAppConfig();
   initializeRankFilterOptions();
@@ -703,7 +709,7 @@ async function addChampion(side, championId) {
     return;
   }
 
-  const champion = state.champions.find((entry) => entry.id === championId);
+  const champion = state.championById.get(championId);
   if (!champion) {
     return;
   }
@@ -773,8 +779,8 @@ function findChampionForResult(result) {
   const resultName = normalizeText(getResultName(result));
 
   return (
-    state.champions.find((champion) => String(champion.key) === resultKey) ||
-    state.champions.find((champion) => normalizeText(champion.name) === resultName) ||
+    state.championByKey.get(resultKey) ||
+    state.championByName.get(resultName) ||
     null
   );
 }
@@ -1183,7 +1189,7 @@ function normalizeLiveDraftSelections(entries = [], side) {
       continue;
     }
 
-    const champion = state.champions.find((candidate) => String(candidate.key) === championKey);
+    const champion = state.championByKey.get(championKey);
     if (!champion) {
       continue;
     }

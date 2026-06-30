@@ -3,6 +3,7 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const { version: appVersion } = require("./package.json");
+const { createTtlCache } = require("./lib/ttl-cache.js");
 const {
   buildEligibleTierStats,
   extractTierRowsFromMegaPayload,
@@ -66,7 +67,6 @@ const {
 const {
   DEFAULT_RANK_FILTER,
   getLolalyticsDataTierQueryValue,
-  getLolalyticsTierQueryValue,
   normalizeRankFilter,
 } = require(path.join(publicDir, "rank-filters.js"));
 const {
@@ -99,14 +99,16 @@ const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 8 * 60 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
-const requestCache = new Map();
-const tierListRowsCache = new Map();
-const eligibleTierStatsCache = new Map();
-const allyRoleLikelihoodsCache = new Map();
-const normalizedMatchupBuildCache = new Map();
-const buildSuggestionQueryCache = new Map();
-const draftProjectionQueryCache = new Map();
-const banSuggestionQueryCache = new Map();
+const createServerCache = (maxEntries) =>
+  createTtlCache({ maxEntries, ttlMs: CACHE_TTL_MS });
+const requestCache = createServerCache(256);
+const tierListRowsCache = createServerCache(64);
+const eligibleTierStatsCache = createServerCache(64);
+const allyRoleLikelihoodsCache = createServerCache(16);
+const normalizedMatchupBuildCache = createServerCache(128);
+const buildSuggestionQueryCache = createServerCache(64);
+const draftProjectionQueryCache = createServerCache(64);
+const banSuggestionQueryCache = createServerCache(64);
 const extractedRoleValuesCache = new WeakMap();
 const lolalyticsRequestStatsStorage = new AsyncLocalStorage();
 let lolalyticsLifetimeAccessCount = 0;
@@ -210,7 +212,7 @@ app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response
     roleOptions: ROLE_OPTIONS,
     unavailableChampionKeys: normalizedRequest.unavailableChampionKeys,
   });
-  const cachedPayload = getCachedData(banSuggestionQueryCache, cacheKey);
+  const cachedPayload = banSuggestionQueryCache.get(cacheKey);
   if (cachedPayload) {
     return response.json({
       ...cachedPayload,
@@ -260,7 +262,7 @@ app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response
     },
   };
 
-  setCachedData(banSuggestionQueryCache, cacheKey, payload);
+  banSuggestionQueryCache.set(cacheKey, payload);
   response.json({
     ...payload,
     requestStats: buildLolalyticsRequestStats(),
@@ -364,7 +366,7 @@ app.post("/draft-outlook", withLolalyticsRequestStats(async (request, response) 
     normalizedRequest.allies,
     normalizedRequest.enemies,
   );
-  const cachedPayload = getCachedData(draftProjectionQueryCache, cacheKey);
+  const cachedPayload = draftProjectionQueryCache.get(cacheKey);
   if (cachedPayload) {
     return response.json({
       ...cachedPayload,
@@ -420,7 +422,7 @@ app.post("/draft-outlook", withLolalyticsRequestStats(async (request, response) 
     requestStats: buildLolalyticsRequestStats(),
   });
 
-  setCachedData(draftProjectionQueryCache, cacheKey, payload);
+  draftProjectionQueryCache.set(cacheKey, payload);
   response.json(payload);
 }));
 
@@ -462,7 +464,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     },
     normalizedRequest.enemies,
   );
-  const cachedPayload = getCachedData(buildSuggestionQueryCache, aggregatedCacheKey);
+  const cachedPayload = buildSuggestionQueryCache.get(aggregatedCacheKey);
   if (cachedPayload) {
     return response.json({
       ...cachedPayload,
@@ -519,7 +521,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     });
   }
 
-  setCachedData(buildSuggestionQueryCache, aggregatedCacheKey, payload);
+  buildSuggestionQueryCache.set(aggregatedCacheKey, payload);
   response.json({
     ...payload,
     requestStats: buildLolalyticsRequestStats(),
@@ -1010,7 +1012,6 @@ async function fetchRoleSynergyRowsByTargetRoleForLane(
       region: REGION,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
   const payload = await fetchLolalyticsMegaJson(
     `?${searchParams.toString()}`,
@@ -1097,7 +1098,7 @@ function getExpectedOpponentRole(payload) {
 async function fetchEligibleTierStats(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
   const tierListDataUrl = buildTierListDataUrl(targetRole, rankFilter);
-  const cachedEligibleRoleTierStats = getCachedData(eligibleTierStatsCache, tierListDataUrl);
+  const cachedEligibleRoleTierStats = eligibleTierStatsCache.get(tierListDataUrl);
   if (cachedEligibleRoleTierStats) {
     return cachedEligibleRoleTierStats;
   }
@@ -1118,14 +1119,14 @@ async function fetchEligibleTierStats(targetRole, rankFilter) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier list returned no eligible picks.`);
   }
 
-  setCachedData(eligibleTierStatsCache, tierListDataUrl, eligibleRoleTierStats);
+  eligibleTierStatsCache.set(tierListDataUrl, eligibleRoleTierStats);
   return eligibleRoleTierStats;
 }
 
 async function fetchTierListRows(targetRole, rankFilter) {
   const roleLabel = getRoleLabel(targetRole).toLowerCase();
   const tierListDataUrl = buildTierListDataUrl(targetRole, rankFilter);
-  const cachedRows = getCachedData(tierListRowsCache, tierListDataUrl);
+  const cachedRows = tierListRowsCache.get(tierListDataUrl);
   if (cachedRows) {
     return cachedRows;
   }
@@ -1136,13 +1137,13 @@ async function fetchTierListRows(targetRole, rankFilter) {
     throw createHttpError(502, `Lolalytics ${roleLabel} tier data was missing champion rows.`);
   }
 
-  setCachedData(tierListRowsCache, tierListDataUrl, rows);
+  tierListRowsCache.set(tierListDataUrl, rows);
   return rows;
 }
 
 async function fetchAllyRoleLikelihoods(rankFilter) {
   const normalizedRankFilter = normalizeRankFilter(rankFilter) || DEFAULT_RANK_FILTER;
-  const cachedLikelihoods = getCachedData(allyRoleLikelihoodsCache, normalizedRankFilter);
+  const cachedLikelihoods = allyRoleLikelihoodsCache.get(normalizedRankFilter);
   if (cachedLikelihoods) {
     return cachedLikelihoods;
   }
@@ -1175,7 +1176,7 @@ async function fetchAllyRoleLikelihoods(rankFilter) {
     }
   }
 
-  setCachedData(allyRoleLikelihoodsCache, normalizedRankFilter, championRoleLikelihoods);
+  allyRoleLikelihoodsCache.set(normalizedRankFilter, championRoleLikelihoods);
   return championRoleLikelihoods;
 }
 
@@ -1191,7 +1192,6 @@ async function fetchLolalyticsTargetRoleCounterData(slug, targetRole, rankFilter
       region: REGION,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
 
   return fetchLolalyticsMegaJson(
@@ -1211,7 +1211,6 @@ async function fetchLolalyticsAllRoleCounterData(slug, rankFilter) {
       region: REGION,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
 
   return fetchLolalyticsMegaJson(
@@ -1232,7 +1231,7 @@ async function fetchNormalizedMatchupBuildData({
     enemyChampion.key,
     rankFilter,
   );
-  const cached = getCachedData(normalizedMatchupBuildCache, cacheKey);
+  const cached = normalizedMatchupBuildCache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -1274,7 +1273,7 @@ async function fetchNormalizedMatchupBuildData({
   });
   const mergedBuildData = mergeParsedBuildSources(parsedBuildData, renderedBuildData);
 
-  setCachedData(normalizedMatchupBuildCache, cacheKey, mergedBuildData);
+  normalizedMatchupBuildCache.set(cacheKey, mergedBuildData);
   return mergedBuildData;
 }
 
@@ -1296,7 +1295,6 @@ async function fetchLolalyticsRuneBuildData({
       region: REGION,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
 
   if (enemySlug) {
@@ -1319,7 +1317,6 @@ async function fetchLolalyticsRenderedBuildPage({
       patch: PATCH_WINDOW,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
   const path = enemySlug
     ? `/lol/${allySlug}/vs/${enemySlug}/build/`
@@ -1433,16 +1430,13 @@ function buildTierListDataUrl(targetRole, rankFilter) {
       region: REGION,
     },
     rankFilter,
-    { includeDefaultTier: true },
   );
   return `${LOLALYTICS_MEGA_URL}?${searchParams.toString()}`;
 }
 
-function buildLolalyticsSearchParams(params, rankFilter, options = {}) {
+function buildLolalyticsSearchParams(params, rankFilter) {
   const searchParams = new URLSearchParams(params);
-  const tierQueryValue = options.includeDefaultTier
-    ? getLolalyticsDataTierQueryValue(rankFilter)
-    : getLolalyticsTierQueryValue(rankFilter);
+  const tierQueryValue = getLolalyticsDataTierQueryValue(rankFilter);
   if (tierQueryValue) {
     searchParams.set("tier", tierQueryValue);
   }
@@ -1458,15 +1452,13 @@ function buildLolalyticsSearchParams(params, rankFilter, options = {}) {
 async function fetchLolalyticsResource(url, label, responseType) {
   const cached = requestCache.get(url);
   if (cached) {
-    if (cached.data != null && cached.expiresAt > Date.now()) {
+    if (cached.data != null) {
       return cached.data;
     }
 
     if (cached.promise) {
       return cached.promise;
     }
-
-    requestCache.delete(url);
   }
 
   const requestPromise = (async () => {
@@ -1494,10 +1486,7 @@ async function fetchLolalyticsResource(url, label, responseType) {
       }
 
       const data = responseType === "text" ? await res.text() : await res.json();
-      requestCache.set(url, {
-        data,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
+      requestCache.set(url, { data });
       return data;
     } catch (error) {
       requestCache.delete(url);
@@ -1516,10 +1505,7 @@ async function fetchLolalyticsResource(url, label, responseType) {
     }
   })();
 
-  requestCache.set(url, {
-    promise: requestPromise,
-    expiresAt: Date.now() + REQUEST_TIMEOUT_MS,
-  });
+  requestCache.set(url, { promise: requestPromise }, REQUEST_TIMEOUT_MS);
 
   return requestPromise;
 }
@@ -1556,27 +1542,6 @@ function buildMatchupBuildCacheKey(allyChampionKey, role, enemyChampionKey, rank
     `rank=${String(rankFilter || "")}`,
     `patch=${PATCH_WINDOW}`,
   ].join("|");
-}
-
-function getCachedData(cache, key) {
-  const cachedEntry = cache.get(key);
-  if (!cachedEntry) {
-    return null;
-  }
-
-  if (cachedEntry.expiresAt <= Date.now()) {
-    cache.delete(key);
-    return null;
-  }
-
-  return cachedEntry.data;
-}
-
-function setCachedData(cache, key, data) {
-  cache.set(key, {
-    data,
-    expiresAt: Date.now() + CACHE_TTL_MS,
-  });
 }
 
 function normalizeBaseUrl(value, fallback, { requireTrailingSlash = false } = {}) {

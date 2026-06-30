@@ -1,215 +1,85 @@
 # PickBan Prototype
 
-PickBan Prototype is a local League of Legends draft helper. It runs on your computer, opens in your browser, and uses live Lolalytics data to help compare picks during champion select.
+PickBan is a local League of Legends draft helper. It compares live Lolalytics data for first picks, open allied roles, full-draft outlooks, and matchup-aware builds.
 
-The app can:
-
-- show first-pick tier lists before any champions are selected
-- suggest champions for allied roles that are still open
-- estimate the full draft once all five allied roles are assigned
-- show enemy-aware runes, summoner spells, starting items, skill max priorities, items, and boots for one ally
-- import a displayed rune page into the League Client during pick/ban
-- on Windows, optionally import visible and hovered League pick/ban champions in Normal Draft or Ranked queues
-- during Auto Import bans, show one ban recommendation for Top, Jungle, Mid, ADC, and Support
+It can also import a displayed rune page into the League Client. On Windows, optional Auto Import reads supported live champion selects and shows five lane-specific ban recommendations during bans.
 
 This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
 
-## Before You Start
+## Install and run
 
-You need:
-
-- this project folder on your computer
-- internet access
-- a web browser
-- Node.js installed
-
-## Install Node.js
-
-1. Go to [https://nodejs.org](https://nodejs.org).
-2. Download the LTS version.
-3. Run the installer.
-
-You only need to do this once per computer.
-
-## Open The Project Folder
-
-On macOS:
-
-1. Open Terminal.
-2. Type `cd `.
-3. Drag the project folder into the Terminal window.
-4. Press `Enter`.
-
-Example:
-
-```bash
-cd /Users/your-name/Downloads/pickban-prototype
-```
-
-On Windows:
-
-1. Open the project folder in File Explorer.
-2. Click the address bar.
-3. Type `powershell`.
-4. Press `Enter`.
-
-## Install The App
-
-Run:
+You need Node.js LTS, internet access, and a browser.
 
 ```bash
 npm install
-```
-
-You usually only need this the first time, or again after the app has updated its dependencies.
-
-## Start The App
-
-Run:
-
-```bash
 npm start
 ```
 
-Then open:
+Open `http://localhost:3000` and leave the terminal running. After the first setup, `npm start` is normally all you need.
 
-```text
-http://localhost:3000
-```
+## Use the app
 
-Leave the terminal window open while you use the app.
+1. Click **Fetch Suggestions** with an empty draft for first-pick lists.
+2. Add allies and enemies, assign any known ally roles, then fetch again for draft-aware suggestions.
+3. Switch **Target role** to inspect each open role. Use **+** to add a result to the allied draft.
+4. Choose **Champion Skill Level** and a table heading to change draft-aware ranking.
+5. Click **Build** on an assigned ally after adding at least one enemy.
+6. Click **Import Runes** on a build page while League is in champion select.
+7. With five allies in five unique roles, click **Who will win?** for the team projection.
 
-## How To Use It
+The app supports at most five champions per team and never allows the same champion on both teams.
 
-1. Before any champion is selected, click **Fetch Suggestions** to see first-pick tier lists by role.
-2. Add allied champions on the left.
-3. Add enemy champions on the right.
-4. If you know some ally roles already, assign them in the middle panel.
-5. Click **Fetch Suggestions**.
-6. Use the **Target role** dropdown in the results area to switch between returned role suggestions.
-7. Click **+** on a result row to add that recommendation to the allied draft for the role you are viewing.
-8. Sort first-pick rows with **PBI** or **Base Win Rate**. For draft-aware rows, use **Champion Skill Level** to choose Low, Average, or High, then click a table heading to sort by that column.
-9. After one ally has a role and at least one enemy champion is selected, click **Build** on that ally row to see matchup-aware build recommendations.
-10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
-11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft.
-12. On Windows, after League pick/ban starts, click **Auto Import** beside the rank selector to import the live phase, visible and hovered picks, and ally roles from the League Client.
+### Scores
 
-## Auto Import
+- **Synergy**: candidate performance with selected allies.
+- **Counter**: candidate performance into selected enemies, weighted by expected lane matchup.
+- **Projected Win Rate**: estimate for the selected skill level; the lighter value is base win rate.
+- **Projected Agency**: Synergy + Counter; both inputs appear in lighter text.
+- **PBI**: Lolalytics Pick Ban Influence, used for first-pick lists.
 
-Auto Import only works while the League Client is running on the same Windows computer and the current pick/ban is Normal Draft or Ranked.
+Draft-aware rows highlight the top ten projected win rates. Yellow marks picks that are also top ten in Projected Agency and remain top ten in projected win rate at Low, Average, and High skill.
 
-If it connects, a banner says champion picks are being imported. You can still edit picks and roles yourself; the app leaves manual edits alone unless the League Client later reveals conflicting live pick data. When the imported ally or enemy composition changes, the app refreshes the current suggestions automatically.
+## Auto Import (Windows)
 
-Hovered allied picks count as temporary allies while Auto Import is active. They disappear if that champion is banned, change when you hover a different intended pick, and give way to locked allied picks for the same role.
+Click **Auto Import** after the League Client enters Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select. PickBan imports visible picks, allied hovers, and known ally roles while leaving manual selections alone unless live data conflicts.
 
-During the ban phase, a separate panel shows exactly one recommendation for Top, Jungle, Mid, ADC, and Support. Each lane follows this decision order:
+During bans, the app shows one recommendation for each role:
 
-1. If the allied player assigned to that lane is hovering an intended champion, recommend the highest-ranked counter to that champion for the same lane.
-2. Otherwise, recommend the lane's highest-ranked PBI champion.
+1. Counter the allied hover in that role when valid counter data exists.
+2. Otherwise use the role's highest eligible PBI champion.
 
-Missing or invalid lane and hover data uses the PBI fallback. Hover changes replace the affected recommendation, and the entire panel disappears as soon as Auto Import observes that the ban phase has ended. Normal pick-phase recommendations continue to use the existing draft-aware flow.
+Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end or champion select becomes unavailable. Unsupported queues and connection loss disable Auto Import without clearing manual picks.
 
-Ban recommendations skip champions reserved by any ally pick placeholder and champions already banned in the current session. When the current recommendation becomes unavailable, the panel refreshes with the next eligible counter or PBI result.
+## Requirements and limits
 
-If Auto Import cannot find a supported live draft, loses the connection, or sees another game mode, the banner says import is disabled and your current selections stay as they are.
+- **Build**: one ally with a role and one to five enemies.
+- **Import Runes**: active League champion select and an editable saved rune page. PickBan overwrites the first editable page; it never creates or deletes pages.
+- **Who will win?**: five allies with five unique roles; enemies are optional.
+- **Auto Import**: Windows League Client in a supported champion-select queue.
+- Live suggestions require working Lolalytics responses.
 
-## What The Scores Mean
+## Stop the app
 
-- `Synergy`: how well a candidate fits your allied champions
-- `Counter`: how well a candidate performs into your enemy champions
-- `Projected Win Rate`: the selected skill-level matchup estimate, followed by the champion's base win rate in lighter text within parentheses
-- `Projected Agency (Synergy + Counter)`: the unhalved sum of Synergy and Counter, with both inputs shown in lighter text within parentheses
-- `PBI`: Lolalytics Pick Ban Influence for first-pick tier-list rows
+Use the red **X** in the app or press `Ctrl+C` in the terminal.
 
-Draft-aware results highlight the top ten projected-win-rate rows for the selected skill
-level. Yellow is reserved for picks that are also top ten in Projected Agency and top ten
-at all three skill levels: Low, Average, and High. First-pick results keep their separate
-PBI, win-rate, and overlap highlights.
+## Troubleshooting
 
-## Limits
+- **`npm` is not recognized**: install Node.js LTS, then reopen the terminal.
+- **The page does not open**: confirm `npm start` is still running and use `http://localhost:3000`.
+- **Data fails to load**: check internet access and retry; Lolalytics may be unavailable or may have changed its response format.
+- **Build is disabled**: assign the ally a role and add an enemy. Hover the button for the missing requirement.
+- **Rune import fails**: confirm League is in champion select and the account has an editable saved rune page.
+- **Auto Import is disabled**: confirm the local Windows client is in a supported draft or ranked queue.
 
-- Up to 5 allied champions
-- Up to 5 enemy champions
-- A champion can only appear once across both teams
-- Ally role assignment is optional until you want a full-draft projection
-- With no champions selected, **Fetch Suggestions** shows first-pick tier lists instead of draft-aware suggestions
-- **Build** needs 1 ally with an assigned role and 1 to 5 enemy champions selected
-- **Import Runes** needs League pick/ban and at least 1 editable saved rune page
-- **Who will win?** needs all 5 allies plus 5 unique ally roles
-- **Auto Import** needs the Windows League Client in Normal Draft or Ranked champ select
-- Ban recommendations require Auto Import and are visible only during the detected ban phase
-
-## Next Time
-
-After the first setup, you usually only need:
+## Development
 
 ```bash
-npm start
+npm test
+npm run bench:efficiency
 ```
 
-Then open `http://localhost:3000`.
-
-## Stop The App
-
-Preferred method:
-
-1. Click the red `X` in the top-right corner of the app.
-2. Close the browser tab if you want.
-
-Fallback:
-
-1. Return to the terminal.
-2. Press `Ctrl+C`.
-
-## Common Problems
-
-### `npm` Is Not Recognized
-
-Node.js is probably missing or was not installed correctly. Reinstall it from [https://nodejs.org](https://nodejs.org), then reopen the terminal.
-
-### The Browser Page Does Not Open
-
-- Make sure `npm start` is still running.
-- Make sure you opened `http://localhost:3000`.
-
-### Port 3000 Is Already In Use
-
-Ask someone technical to start the app on a different port.
-
-### Data Fails To Load
-
-The app needs internet access and working Lolalytics responses. Wait a moment and try again.
-
-### Auto Import Says It Is Disabled
-
-Make sure League is in Normal Draft or Ranked pick/ban on this Windows computer. Other modes, no active champ select, or a disconnected League Client disable import without changing your current picks.
-
-### Ban Recommendations Are Not Visible
-
-The five-lane ban panel appears only while Auto Import detects an active ban turn. It is intentionally hidden during planning, picking, finalization, and after champion select ends.
-
-### The `Build` Button Is Disabled
-
-The button only works after the ally has an assigned role and at least one enemy champion is selected. Hover over the disabled button to see which requirement is still missing.
-
-### Import Runes Fails
-
-Make sure League is currently in pick/ban and that your League account has at least one editable saved rune page. The app skips default Riot rune pages and only rewrites the first editable saved page.
-
-### I Expected One Role, But The App Shows Others
-
-The app fetches every role that is still unassigned. Assign more ally roles before fetching if you want fewer result roles.
-
-### The Main Button Says `Who will win?`
-
-That is expected when all five allied champions are selected and all five ally roles are assigned.
-
-## Developer Details
-
-For the technical map of the project, read [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md).
+See [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md) for architecture, request flows, caching, and external assumptions.
 
 ## License
 
-This repository is open source under the [MIT License](LICENSE).
-
-The MIT license applies only to the original code in this repository. It does not grant rights to third-party names, trademarks, data, or media, including Riot Games and League of Legends marks or any Lolalytics data, site content, or icon URLs referenced by the app.
+The code is available under the [MIT License](LICENSE). The license does not grant rights to third-party names, trademarks, data, site content, or image URLs referenced by the app.

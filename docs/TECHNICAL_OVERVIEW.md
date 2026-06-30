@@ -1,284 +1,139 @@
-# Technical Summary
+# Technical Overview
 
-This document is the developer-facing map of the app runtime, module boundaries, request flows, and external assumptions.
+This is the developer map for runtime boundaries, request behavior, and external risks. User setup and operation belong in the [README](../README.md).
 
-## Runtime
+## Runtime and commands
 
-- Node.js 18+
-- Express 5
-- plain HTML, CSS, and browser JavaScript
-- built-in `fetch`
-- built-in `node:test`
+- Node.js 18+, Express 5, plain HTML/CSS/browser JavaScript, built-in `fetch`, and `node:test`.
+- One local process serves `public/`; there is no bundler, database, auth, hosted backend, or deployment config.
+- `npm start`: run the startup updater, then the server.
+- `npm test`: run all tests serially.
+- `npm run bench:efficiency`: compare aggregation, top-N ranking, and Qwik resolution hot paths.
 
-Only one npm dependency is installed: `express`.
+Runtime overrides:
 
-There is no bundler, database, auth layer, server-side rendering, hosted backend, or deployment config in this repository.
+- `PORT` (default `3000`).
+- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0` disables startup updates.
+- `PICKBAN_AUTO_UPDATE_REMOTE`, `PICKBAN_AUTO_UPDATE_BRANCH`, and `PICKBAN_AUTO_UPDATE_ZIP_URL` configure update sources.
+- `LOLALYTICS_BASE_URL` and `LOLALYTICS_MEGA_URL` override live-data origins.
+- `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` overrides League lockfile discovery.
 
-## Commands
+## Code map
 
-- `npm install`: install dependencies
-- `npm start`: run `start.js`, then start the local server
-- `npm test`: run the Node test suite
-- `npm run bench:efficiency`: run the aggregation benchmark
+- `start.js`: startup bootstrap.
+- `server.js`: Express routes, live fetch orchestration, caching, and shutdown.
+- `public/app.js`: browser state, draft editing, live import, request flows, and rendering.
+- `public/*.js`: focused browser helpers; shared rules are also loaded by Node tests and server code.
+- `lib/*.js`: Node-only normalization, parsing, League Client access, scoring, caching, and response construction.
+- `test/*.test.js`: unit and local HTTP coverage; live origins are mocked.
+- `bench/efficiency.js`: synthetic hot-path comparisons.
 
-Useful runtime overrides:
+Keep cross-runtime rules in their existing focused modules:
 
-- `PORT`: local listen port; default is `3000`
-- `PICKBAN_DISABLE_AUTO_UPDATE=1` or `PICKBAN_AUTO_UPDATE=0`: skip the startup update check
-- `PICKBAN_AUTO_UPDATE_REMOTE` and `PICKBAN_AUTO_UPDATE_BRANCH`: startup update target; defaults are `origin` and `main`
-- `PICKBAN_AUTO_UPDATE_ZIP_URL`: no-git update zip URL; default is the GitHub `main.zip`
-- `LOLALYTICS_BASE_URL`: rendered Lolalytics page origin
-- `LOLALYTICS_MEGA_URL`: Lolalytics mega endpoint origin
-- `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH`: League Client lockfile override
+- roles: `public/roles.js`
+- rank filters: `public/rank-filters.js`
+- result ranking: `public/result-ranking.js`
+- frontend cache keys: `public/suggestion-cache.js`, `public/build-suggestion-cache.js`
+- ban UI lifecycle: `public/ban-suggestion-state.js`
+- request validation: `lib/request-normalization.js`, `lib/requested-target-roles.js`
+- route response shaping: `lib/server-route-helpers.js`
+- bounded server cache: `lib/ttl-cache.js`
 
-## Entry Points
+## HTTP surface
 
-- `start.js`: startup bootstrap used by `npm start`
-- `server.js`: Express process, HTTP routes, live fetches, caching, validation glue, and graceful shutdown
-- `public/index.html`: browser entry point
-- `public/app.js`: frontend state, draft editing, fetch flows, modal state, and rendering
+- `GET /app-config`: version, data window, shutdown token, and request stats.
+- `GET /ally-role-likelihoods`: lane shares for role assignment.
+- `GET /live-draft`: opt-in local League Client champion-select state.
+- `POST /rune-import`: update the first editable League rune page.
+- `POST /ban-suggestions`: one ban recommendation for each role.
+- `POST /suggest`: first-pick or draft-aware open-role suggestions.
+- `POST /draft-outlook`: projection for five role-assigned allies.
+- `POST /build-suggestions`: build aggregation for one ally into one to five enemies.
+- `POST /shutdown`: loopback-only shutdown guarded by a per-process token.
 
-The app runs as one local process and serves static browser files from `public/`.
+Static assets use `Cache-Control: no-store`.
 
-## Module Boundaries
+## Request behavior
 
-- `public/*.js`: browser-loaded helpers; several are also imported by Node tests and server code with `require(...)`
-- `lib/*.js`: Node-only request normalization, League Client access, parsing, aggregation, and scoring helpers
-- `test/*.test.js`: Node test coverage for shared helpers, parsers, route contracts, startup, and League Client behavior
-- `bench/efficiency.js`: synthetic aggregation benchmark
+### Suggestions
 
-Important shared-rule modules:
+`POST /suggest` accepts a rank filter, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching.
 
-- `public/roles.js`: role labels, aliases, and unassigned-role calculation
-- `public/rank-filters.js`: rank filter normalization and Lolalytics tier query values
-- `public/result-ranking.js`: result ranking and top-result helpers
-- `public/suggestion-cache.js` and `public/build-suggestion-cache.js`: frontend cache keys
-- `public/ban-suggestion-state.js`: ban-panel cache keys, phase lifecycle, and stale-response guards
-- `lib/ban-suggestion-results.js`: tolerant hover normalization, aggregate cache keys, and counter/PBI selection
-- `lib/request-normalization.js`: request validation and champion normalization
-- `lib/requested-target-roles.js`: explicit or inferred target-role resolution
-- `lib/server-route-helpers.js`: shared request normalization and response shaping
+An empty draft returns PBI tier lists. A populated draft fetches tier data first, then ally-synergy and role-scoped enemy-counter rows only for roles with usable tier candidates. Multi-role requests share identical upstream resources.
 
-## HTTP Surface
+Candidates must have at least 10% lane share and 0.5% pick rate. Selected champions and negative Projected Agency results are excluded.
 
-- `GET /app-config`: package version, visible Lolalytics lookback window, shutdown token, and request stats
-- `GET /ally-role-likelihoods`: role-likelihood data used by the role-assignment UI
-- `GET /live-draft`: opt-in local League Client champ-select import
-- `POST /rune-import`: local League Client rune-page import
-- `POST /ban-suggestions`: five-lane ban recommendations from ally hovers and PBI fallbacks
-- `POST /suggest`: first-pick or draft-aware role suggestions
-- `POST /draft-outlook`: full allied draft projection
-- `POST /build-suggestions`: enemy-composition build recommendations
-- `POST /shutdown`: loopback-only graceful shutdown with per-process token
+### Ban suggestions
 
-Static assets are served with `Cache-Control: no-store`.
+`POST /ban-suggestions` tolerates invalid hover and unavailable-champion records so one bad lane falls back instead of failing the request. Tier data for all five roles is fetched in parallel; only valid hovers require counter data. Every response must contain five ordered suggestions.
 
-## Request Flows
+### Draft outlook
 
-### Role Suggestions
+`POST /draft-outlook` requires five allies with unique roles and accepts zero to five enemies. It combines ally synergy and enemy counters. A request with no usable win-rate samples fails rather than returning a misleading projection.
 
-`POST /suggest` accepts a rank filter, allies, enemies, and optional target roles.
+### Builds and rune import
 
-Validation:
+`POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for inactive item tabs, with visible HTML sections as fallback. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
 
-- allies and enemies must be arrays when present
-- ally entries can be champion strings or objects with `champion`/`name` and optional `role`/`lane`
-- enemy entries must be non-empty champion strings
-- champions must exist in `public/champions.json`
-- duplicate champions in the same list are ignored
-- the same champion cannot appear on both teams
-- maximum 5 unique allies and 5 unique enemies
-- duplicate ally role assignments are rejected
-- explicit target roles cannot overlap assigned ally roles
+`POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 
-With no selected champions, `/suggest` returns first-pick tier-list rows by role. With a draft state, it fetches Lolalytics tier data first, then fetches ally-synergy and `vslane`-scoped enemy-counter data only for target roles with usable tier rows.
+### Live draft
 
-Response shape includes `roles`, `resultsByRole`, `metaByRole`, `requestStats`, and legacy `results`/`meta` fields when exactly one role was requested.
+`GET /live-draft` reads local League endpoints only after Auto Import is enabled in the browser. Supported queue IDs are 400, 420, and 440. The normalized payload includes visible picks, temporary allied hovers, roles, phase, session identity, hover intents, and champions unavailable for bans.
 
-### Ban Suggestions
+The browser polls independently of suggestion requests. Session changes, phase exit, or disconnection invalidate ban state so late responses cannot reopen the panel.
 
-`POST /ban-suggestions` accepts a rank filter, optional allied hover records with champion and lane, and optional unavailable champion keys. Invalid, unknown, duplicate-lane, or incomplete hover records are ignored so the affected lane falls back instead of rejecting the request. Unknown unavailable keys are also ignored.
+## Scoring
 
-The route always evaluates Top, Jungle, Mid, ADC (`bottom`), and Support. For each lane it:
+Per target role:
 
-1. Uses the existing role-specific `ep=counter` and `vslane` retrieval plus draft-aware result ranking when that lane has a valid allied hover.
-2. Uses the lane's highest-ranked eligible PBI result when there is no valid hover or no usable counter row.
+- `synergyScore`: average allied matchup values.
+- `counterScore`: average counter values after opponent-lane weighting.
+- Counter weight is `0.5` across unrelated lanes and `1` for same-lane, Bottom/Support pairs, or missing lane metadata.
+- `projectedWinRate`: average allied win rates and enemy-facing win rates reoriented to the candidate.
+- Low/High skill estimates subtract/add the gap between the tier's best worldwide win rate and candidate base win rate.
+- `projectedAgency = synergyScore + counterScore`.
+- First-pick `PBI = (winRate - averageWinRate) * 100 * pickRate / (100 - banRate)`, rounded.
 
-All five tier datasets are fetched in parallel. Only lanes with valid hovers request counter data. Hovered allies, all ally pick intents, locked picks, and completed bans are excluded from every ban candidate list. A successful response contains exactly five ordered suggestions plus counter/fallback counts and any counter-to-PBI fallback diagnostics.
+Backend draft-aware order is Projected Win Rate, Projected Agency, Counter, then champion name. The frontend can re-sort without changing server results.
 
-### Draft Outlook
+## Caching and failures
 
-`POST /draft-outlook` requires exactly five allied champions with unique assigned roles. It accepts 0 to 5 enemies.
+All server caches use an eight-hour TTL and least-recently-used bounds:
 
-The server fetches allied synergy rows and enemy counter rows, then `lib/draft-projection.js` aggregates them into one team projection. If no usable win-rate samples are available, the route returns an error instead of a misleading projection.
+- remote Lolalytics resources: 256 entries
+- normalized matchup builds: 128
+- tier rows and eligible tier stats: 64 each
+- aggregate build, draft, and ban responses: 64 each
+- ally role likelihoods: 16
 
-Response shape includes `request`, `summary`, `projection`, and `requestStats`.
+Remote cache keys are full URLs. Identical in-flight requests share one promise; pending entries use the 15-second request timeout rather than the normal TTL. Resolved Qwik objects use lifetime-bound `WeakMap` caches.
 
-### Build Recommendations
+Browser suggestion and build caches last for the page session. Ban results last only for the current champion-select session. Live-draft and rune-import calls are never cached.
 
-`POST /build-suggestions` requires one ally with an assigned role and one to five enemies.
+Lolalytics requests time out after 15 seconds. Suggestion, draft, and build flows preserve partial failures when a useful result remains. Ban counter failures fall back per lane; the route fails only if five recommendations cannot be produced.
 
-For each enemy, the server fetches one Lolalytics mega rune payload and one rendered matchup build page. `lib/lolalytics-build-parser.js` parses the sources, and `lib/build-suggestion-results.js` aggregates successful matchup records into runes, summoner spells, starting items, first-maxed skill priorities, five-item paths, and boots.
+## Startup updates
 
-The rendered-page parser prefers Lolalytics' embedded Qwik snapshot for item and skill-order data when present, because the static HTML only renders the active Highest Win or Most Common build tab. Visible section parsing remains the fallback for pages without usable snapshot data. Skill priority is the first basic ability (Q, W, or E) to reach rank 5, independent of the exact level sequence.
+The git updater runs only on the configured branch with a clean worktree, a newer remote package version, and a fast-forwardable commit. Non-git installs can replace files from the configured GitHub zip. Dependency file changes trigger `npm install --no-audit --no-fund`.
 
-The route only succeeds when runes, summoner spells, boots, and both five-item paths can populate the modal. Starting items and skill max priorities render when available but are not required for success.
+Release commits must update the version in both `package.json` and `package-lock.json`; both update paths use it to detect a new release.
 
-Response shape includes `request`, `summary`, `runes`, `spells`, `startingItems`, `skillPriority`, `items`, `boots`, and `requestStats`.
+## External assumptions
 
-### Rune Import
+- Lolalytics mega payloads retain the parsed tier, synergy, counter, and rune fields and honor `vslane`.
+- Rendered matchup pages retain usable Qwik data or recognizable build sections.
+- League Client lockfile and local gameflow, champion-select, and perks endpoints remain compatible.
+- Riot/League references keep a visible non-endorsement footnote.
+- Patch window, queue, region, request timeout, cache limits, and eligibility thresholds remain hard-coded in `server.js`.
 
-`POST /rune-import` validates a complete rune recommendation, reads the local League Client lockfile, confirms the gameflow phase is `ChampSelect`, reads `/lol-perks/v1/pages`, and updates the first editable saved rune page by page order.
+When live data fails without a local change, check these boundaries first.
 
-The route never creates or deletes rune pages. It skips default Riot pages, preserves repeated stat modifier IDs, and reports success without writing when the target page already matches the requested import.
+## Test risk map
 
-### Live Draft Import
-
-`GET /live-draft` is used only after the user clicks **Auto Import**.
-
-`lib/riot-live-draft.js` reads the local League Client lockfile, authenticates to the local client, checks `/lol-gameflow/v1/session`, and reads `/lol-champ-select/v1/session` only for supported champ-select queues:
-
-- Normal Draft (`400`)
-- Ranked Solo/Duo (`420`)
-- Ranked Flex (`440`)
-
-The payload includes visible allied picks with roles, pending allied pick hovers as temporary allies, visible enemy picks, the local player's assigned role, queue metadata, a normalized champ-select phase, a best-effort session ID, lane-assigned ally hover intents, and the champion keys unavailable for bans. The unavailable set combines all ally pick intents, locked picks, and completed bans. Phase detection prefers the active League action, then explicit ban state, timer state, and the next pending action group. Expected unavailable states return a disabled payload without changing the browser's current draft.
-
-`public/app.js` reconciles ban state on every live-draft poll. Ban requests run independently from normal suggestion loading so they do not delay the next phase poll. Leaving bans, losing champion select, or starting a new session clears the visible payload and invalidates in-flight responses; a late response cannot reopen the panel. Hover and rank changes produce new cache keys and replace only the ban panel.
-
-## Scoring And Ranking
-
-Role suggestions are computed per target role.
-
-Candidate filters:
-
-- remove champions already present in the draft
-- require role eligibility from live tier-list data
-- require `lanePercent >= 10`
-- require `pickRate >= 0.5`
-- hide draft-aware suggestions when `projectedAgency` is negative
-
-Scores:
-
-- `synergyScore = average(ally matchup values)`
-- `counterScore = average(Lolalytics counter d2/delta2 values * -1 * lane weight)`
-- counter lane weight is `0.5` when the opponent's Lolalytics expected role differs from the candidate's role, `1` for the same role, and `1` for Bottom-Support pairings in either direction; missing opponent-role metadata remains `1`
-- `projectedWinRate = average(ally matchup win rates + (100 - enemy matchup win rates))`
-- `bestWorldwideWinRateDelta = max(0, tier topWr - tier wr)` for the selected rank, role, and seven-day window
-- `projectedWinRateLowSkill = projectedWinRate - bestWorldwideWinRateDelta`
-- `projectedWinRateHighSkill = projectedWinRate + bestWorldwideWinRateDelta`
-- `projectedAgency = synergyScore + counterScore`
-- first-pick `pbi = (winRate - avgWr) * 100 * pickRate / (100 - banRate)`, rounded to the nearest integer
-
-Backend role-result sort order:
-
-1. higher `projectedWinRate`
-2. higher `projectedAgency`
-3. higher `counterScore`
-4. alphabetical candidate name
-
-Low projected win-rate rows stay visible; the UI highlights weak rows instead of filtering them out.
-The frontend **Champion Skill Level** control chooses the Low, Average, or High projected win
-rate and renders one column named `Projected Win Rate`. Each value includes the base win rate
-in lighter text within parentheses. Projected Agency includes its Synergy and Counter inputs in
-lighter parenthetical text.
-Clicking Champion, Projected Win Rate, or Projected Agency sorts the visible rows by that
-column without moving the viewport. The selected level's top ten projected-win-rate rows are
-highlighted. Yellow requires a row to be both top ten in Projected Agency and top ten in all
-three projected win-rate rankings: Low, Average, and High.
-
-## Caching And Failure Handling
-
-Backend caches:
-
-- Lolalytics resource cache: full URL key, 8-hour TTL
-- normalized matchup build cache: ally, role, enemy, rank filter, patch key, 8-hour TTL
-- aggregated build cache: rank filter, ally, role, enemies key, 8-hour TTL
-- aggregated draft-projection cache: rank filter, allies, roles, enemies key, 8-hour TTL
-- aggregated ban-suggestion cache: rank filter, patch, one hover champion key per lane, and unavailable champion keys, 8-hour TTL
-- resolved Qwik payload caches: `WeakMap`s tied to payload object lifetime
-
-Frontend caches:
-
-- role suggestions: current browser session
-- build suggestions: current browser session
-- draft outlooks: current browser session
-- ban suggestions: current champion-select session, keyed by rank, lane hovers, and unavailable champion keys; cleared on phase exit
-- live-draft and rune-import calls: never cached
-
-The URL-level Lolalytics cache coalesces identical in-flight requests, so ban, pick, build, PBI, and draft-projection flows reuse matching resources and concurrent identical requests issue one live hit. Every attempted outbound Lolalytics request increments the lifetime live-hit counter, including failed requests; cache hits do not. Each Lolalytics-backed route returns the current counter in `requestStats`. Remote requests time out after 15 seconds. Role, draft, and build fetches preserve partial failures when enough data remains to build a useful result. Ban counter failures fall back lane-by-lane to PBI; the route fails only when it cannot produce all five lane recommendations.
-
-## Startup Update
-
-`npm start` runs `start.js`, which calls `lib/startup-auto-update.js` before loading `server.js`.
-
-The git update path only updates when:
-
-- auto-update is enabled
-- the current branch matches the configured branch
-- the working tree is clean
-- the local package version differs from the fetched remote package version
-- the fetched commit can fast-forward
-
-When the app is not running from a git worktree, startup can download the configured GitHub release zip and copy it over the app folder. If `package.json` or `package-lock.json` changes during update, startup runs `npm install --no-audit --no-fund`.
-
-Release commits must bump both `package.json` and `package-lock.json` because both update paths compare package versions before replacing local files.
-
-## External Assumptions
-
-- Lolalytics mega tier, synergy, counter, and rune payloads must keep exposing the parsed fields; counter requests must keep honoring `vslane` for target-role-specific matchups.
-- Lolalytics rendered matchup build pages must keep exposing either a Qwik build snapshot or recognizable spell, skill order, starting item, core item, and boot sections.
-- The League Client lockfile must be readable while the Windows client is running.
-- Local League Client gameflow, champ-select, and perks endpoints must remain compatible.
-- The UI must keep a visible Riot non-endorsement/trademark footnote while it references Riot or League-related names, assets, or local client data.
-- Patch window, queue, region, request timeout, and role-eligibility thresholds are currently hard-coded in `server.js`.
-
-If live data suddenly stops returning without a local code change, start with these assumptions.
-
-## Manual API Checks
-
-Run these while `npm start` is running.
-
-Role suggestions:
-
-```bash
-curl -s http://localhost:3000/suggest \
-  -H 'content-type: application/json' \
-  -d '{"rankFilter":"emerald_plus","allies":[{"champion":"Ahri","role":"middle"},{"champion":"Jarvan IV"}],"enemies":["Jinx","Nautilus"]}'
-```
-
-Build recommendations:
-
-```bash
-curl -s http://localhost:3000/build-suggestions \
-  -H 'content-type: application/json' \
-  -d '{"rankFilter":"emerald_plus","ally":{"champion":"Ahri","role":"middle"},"enemies":["Zed","Sejuani","Ashe","Neeko","Sion"]}'
-```
-
-Draft outlook:
-
-```bash
-curl -s http://localhost:3000/draft-outlook \
-  -H 'content-type: application/json' \
-  -d '{"rankFilter":"emerald_plus","allies":[{"champion":"Darius","role":"top"},{"champion":"Jarvan IV","role":"jungle"},{"champion":"Ahri","role":"middle"},{"champion":"Miss Fortune","role":"bottom"},{"champion":"Leona","role":"support"}],"enemies":["Jinx","Lux"]}'
-```
-
-Ban suggestions:
-
-```bash
-curl -s http://localhost:3000/ban-suggestions \
-  -H 'content-type: application/json' \
-  -d '{"rankFilter":"emerald_plus","hovers":[{"champion":"Ahri","role":"middle"}]}'
-```
-
-## Testing
-
-- `npm test` runs the full suite.
-- Most tests cover pure helpers or renderers and do not depend on live network access.
-- `test/server-api.test.js` mocks Lolalytics origins for route-contract coverage.
-- `test/ban-suggestions-api.test.js` covers five-lane output, counter/PBI hierarchy, hover changes, invalid hover fallback, and Lolalytics request reuse.
-- `test/server-http.test.js` covers local HTTP behavior, including app config, shutdown, live draft, and rune import cases.
-- `test/riot-live-draft.test.js` covers local League Client phase and hover normalization; `test/riot-rune-import.test.js` covers rune-page mutation shaping.
-- `test/ban-suggestion-state.test.js` covers ban-panel entry, hover replacement/removal, phase exit, termination, and stale-response rejection.
-- `test/lolalytics-build-parser.test.js` and `test/build-suggestion-results.test.js` cover build parsing and aggregation regressions.
-- `npm run bench:efficiency` is useful after changing aggregation or ranking behavior.
+- `test/server-api.test.js`: mocked Lolalytics contracts, caching, partial failures, builds, and projections.
+- `test/server-http.test.js`: local config, shutdown, live draft, and rune import routes.
+- `test/ban-suggestions-api.test.js` and `test/ban-suggestion-state.test.js`: ban hierarchy and stale-response lifecycle.
+- `test/riot-live-draft.test.js` and `test/riot-rune-import.test.js`: League normalization and mutation.
+- `test/lolalytics-build-parser.test.js` and `test/build-suggestion-results.test.js`: build-source regressions.
+- `test/ttl-cache.test.js`: cache expiry, recency, and bounds.
