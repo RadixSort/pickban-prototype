@@ -161,7 +161,8 @@ Candidate filters:
 Scores:
 
 - `synergyScore = average(ally matchup values)`
-- `counterScore = average(Lolalytics counter d2/delta2 values * -1)`
+- `counterScore = average(Lolalytics counter d2/delta2 values * -1 * lane weight)`
+- counter lane weight is `0.5` when the opponent's Lolalytics expected role differs from the candidate's role, `1` for the same role, and `1` for Bottom-Support pairings in either direction; missing opponent-role metadata remains `1`
 - `projectedWinRate = average(ally matchup win rates + (100 - enemy matchup win rates))`
 - `bestWorldwideWinRateDelta = max(0, tier topWr - tier wr)` for the selected rank, role, and seven-day window
 - `projectedWinRateLowSkill = projectedWinRate - bestWorldwideWinRateDelta`

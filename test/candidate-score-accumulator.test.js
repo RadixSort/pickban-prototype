@@ -37,3 +37,16 @@ test("candidate score accumulator defaults missing averages to zero", () => {
     projectedAgency: 0,
   });
 });
+
+test("candidate score accumulator weights only the counter score contribution", () => {
+  const accumulator = createCandidateScoreAccumulator();
+
+  addCounterRow(accumulator, { value: 10, winRate: 48 }, (winRate) => 100 - winRate, 0.5);
+
+  assert.deepEqual(finalizeCandidateScores(accumulator), {
+    synergyScore: 0,
+    counterScore: 5,
+    projectedWinRate: 52,
+    projectedAgency: 5,
+  });
+});

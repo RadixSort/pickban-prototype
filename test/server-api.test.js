@@ -375,6 +375,64 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   );
 });
 
+test("POST /suggest halves cross-lane counters without penalizing Bottom-Support", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "tier" &&
+      url.searchParams.get("lane") === "support"
+    ) {
+      return jsonResponse(
+        createTierMegaData("support", [
+          {
+            championKey: "117",
+            lanePercent: 98,
+            winRate: 51,
+            pickRate: 8,
+          },
+        ]),
+      );
+    }
+
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
+      const enemySlug = url.searchParams.get("c");
+      const opponentRole = enemySlug === "vi" ? "jungle" : "bottom";
+      return jsonResponse(
+        createCounterMegaData(
+          [
+            {
+              championKey: "117",
+              role: "support",
+              enemyWinRate: 50,
+              delta2Score: -10,
+            },
+          ],
+          { opponentRole },
+        ),
+      );
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/suggest", {
+    rankFilter: "emerald_plus",
+    role: "support",
+    enemies: ["Vi", "Jhin"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.resultsByRole.support[0].candidate, "Lulu");
+  assert.equal(response.body.resultsByRole.support[0].counterScore, 7.5);
+  assert.equal(response.body.resultsByRole.support[0].projectedAgency, 7.5);
+  assert.equal(response.body.resultsByRole.support[0].projectedWinRate, 50);
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 3,
+    lolalyticsLifetimeAccessCount: 3,
+  });
+  assert.equal(mockServer.countRequests("/mega/"), 3);
+});
+
 test("GET /ally-role-likelihoods returns per-champion lane shares and reuses the cache", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname !== "/mega/" || url.searchParams.get("ep") !== "tier") {

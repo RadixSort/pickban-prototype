@@ -892,6 +892,7 @@ function buildDraftCounterResult(ally, enemyChampion, targetRoleRowResult) {
     status: "fulfilled",
     value: {
       row,
+      targetRole: ally.role,
     },
   };
 }
@@ -1033,6 +1034,7 @@ function extractRequestedRoleValues(rowsByTargetRole, targetRoles, valueIndex) {
 
 function extractCounterRows(payload) {
   const rows = new Map();
+  const opponentRole = getExpectedOpponentRole(payload);
   if (!Array.isArray(payload?.counters)) {
     return rows;
   }
@@ -1044,7 +1046,7 @@ function extractCounterRows(payload) {
       continue;
     }
 
-    rows.set(candidateKey, buildCounterRow(row));
+    rows.set(candidateKey, buildCounterRow(row, opponentRole));
   }
 
   return rows;
@@ -1052,6 +1054,7 @@ function extractCounterRows(payload) {
 
 function extractCounterRoleValues(payload, targetRoles) {
   const extractedRowsByTargetRole = new Map();
+  const opponentRole = getExpectedOpponentRole(payload);
 
   for (const targetRole of targetRoles) {
     extractedRowsByTargetRole.set(targetRole, new Map());
@@ -1070,20 +1073,25 @@ function extractCounterRoleValues(payload, targetRoles) {
       continue;
     }
 
-    targetRoleRows.set(candidateKey, buildCounterRow(row));
+    targetRoleRows.set(candidateKey, buildCounterRow(row, opponentRole));
   }
 
   return extractedRowsByTargetRole;
 }
 
-function buildCounterRow(row) {
+function buildCounterRow(row, opponentRole = null) {
   const counterValue = parseFiniteNumber(row?.d2);
   const enemyWinRate = parseFiniteNumber(row?.vsWr);
 
   return {
     value: counterValue == null ? null : -counterValue,
     winRate: enemyWinRate,
+    opponentRole,
   };
+}
+
+function getExpectedOpponentRole(payload) {
+  return normalizeRole(payload?.stats?.defaultLane ?? payload?.stats?.lane ?? null);
 }
 
 async function fetchEligibleTierStats(targetRole, rankFilter) {

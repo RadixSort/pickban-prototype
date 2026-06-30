@@ -127,6 +127,38 @@ test("buildRoleSuggestionResults defaults to projected win rate ordering", () =>
   );
 });
 
+test("buildRoleSuggestionResults halves cross-lane counters except Bottom-Support", () => {
+  const roleSuggestionResults = buildRoleSuggestionResults({
+    enemyResults: [
+      {
+        status: "fulfilled",
+        value: {
+          rows: new Map([
+            ["111", { value: 10, winRate: 50, opponentRole: "jungle" }],
+          ]),
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          rows: new Map([
+            ["111", { value: 10, winRate: 50, opponentRole: "bottom" }],
+          ]),
+        },
+      },
+    ],
+    eligibleTierStats: new Map([
+      ["111", { lanePercent: 90, pickRate: 12, winRate: 51.2 }],
+    ]),
+    targetRole: "support",
+    championByKey,
+  });
+
+  assert.equal(roleSuggestionResults.results[0].counterScore, 7.5);
+  assert.equal(roleSuggestionResults.results[0].projectedWinRate, 50);
+  assert.equal(roleSuggestionResults.results[0].projectedAgency, 7.5);
+});
+
 test("buildRoleSuggestionResults throws when matchup rows reference missing champion metadata", () => {
   assert.throws(
     () =>

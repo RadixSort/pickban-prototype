@@ -148,8 +148,16 @@ function createTierMegaData(lane, rows = [], options = {}) {
   };
 }
 
-function createCounterMegaData(rows = []) {
+function createCounterMegaData(rows = [], { opponentRole = null } = {}) {
   return {
+    ...(opponentRole
+      ? {
+          stats: {
+            defaultLane: opponentRole,
+            lane: opponentRole,
+          },
+        }
+      : {}),
     counters: rows.map((row) => ({
       cid: Number(row.championKey),
       defaultLane: row.role,

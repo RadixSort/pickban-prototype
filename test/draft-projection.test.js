@@ -93,6 +93,39 @@ test("buildDraftProjection rejects projections without any usable win-rate sampl
   assert.equal(hasUsableDraftProjection(projection), false);
 });
 
+test("buildDraftProjection applies lane weighting only to counter agency", () => {
+  const projection = buildDraftProjection({
+    enemyCounterResults: [
+      {
+        status: "fulfilled",
+        value: {
+          targetRole: "support",
+          row: {
+            opponentRole: "jungle",
+            winRate: 48,
+            value: 10,
+          },
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          targetRole: "support",
+          row: {
+            opponentRole: "bottom",
+            winRate: 48,
+            value: 10,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(projection.counterScore, 7.5);
+  assert.equal(projection.projectedAgency, 7.5);
+  assert.equal(projection.allyWinRate, 52);
+});
+
 test("hasUsableDraftProjection rejects empty projections", () => {
   const projection = buildDraftProjection();
 
