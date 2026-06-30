@@ -81,6 +81,8 @@ function assertBuildSuggestionSectionsArePopulated(payload) {
   assert.ok(payload.spells.highestWinSet);
   assert.ok(payload.startingItems.mostPickedSet);
   assert.ok(payload.startingItems.highestWinSet);
+  assert.ok(payload.skillPriority.mostPickedSkill);
+  assert.ok(payload.skillPriority.highestWinSkill);
   assert.ok(payload.boots.options.length > 0);
   assert.equal(payload.items.mostPickedBuild.selections.length, 5);
   assert.equal(payload.items.highestWinBuild.selections.length, 5);
@@ -238,12 +240,14 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
             lanePercent: 82.1,
             winRate: 51.1,
             pickRate: 4.4,
+            topWinRate: 55.35,
           },
           {
             championKey: "412",
             lanePercent: 80.4,
             winRate: 50.1,
             pickRate: 3.2,
+            topWinRate: 53.6,
           },
         ]),
       );
@@ -308,8 +312,11 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       synergyScore: 60,
       counterScore: -48,
       projectedWinRate: 53,
-      projectedAgency: 6,
-      finalScore: 6,
+      projectedAgency: 12,
+      bestWorldwideWinRateDelta: 4.25,
+      projectedWinRateLowSkill: 48.75,
+      projectedWinRateHighSkill: 57.25,
+      finalScore: 12,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
@@ -324,8 +331,11 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
       synergyScore: 40,
       counterScore: 48,
       projectedWinRate: 47,
-      projectedAgency: 44,
-      finalScore: 44,
+      projectedAgency: 88,
+      bestWorldwideWinRateDelta: 3.5,
+      projectedWinRateLowSkill: 43.5,
+      projectedWinRateHighSkill: 50.5,
+      finalScore: 88,
       lanePercent: 80.4,
       pickRate: 3.2,
       winRate: 50.1,
@@ -637,8 +647,8 @@ test("POST /suggest preserves per-role failures while deduplicating shared upstr
       synergyScore: 60,
       counterScore: -48,
       projectedWinRate: 53,
-      projectedAgency: 6,
-      finalScore: 6,
+      projectedAgency: 12,
+      finalScore: 12,
       lanePercent: 82.1,
       pickRate: 4.4,
       winRate: 51.1,
@@ -811,7 +821,7 @@ test("POST /draft-outlook returns projected team win rates and caches identical 
   assert.equal(validResponse.body.projection.enemyWinRate, 46);
   assert.equal(validResponse.body.projection.synergyScore, 10);
   assert.equal(validResponse.body.projection.counterScore, -7);
-  assert.equal(validResponse.body.projection.projectedAgency, 1.5);
+  assert.equal(validResponse.body.projection.projectedAgency, 3);
   assert.deepEqual(validResponse.body.requestStats, {
     lolalyticsLiveAccessCount: 7,
     lolalyticsLifetimeAccessCount: 7,
@@ -1006,6 +1016,8 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   assert.deepEqual(firstResponse.body.spells.highestWinSet.spellIds, [4, 14]);
   assert.deepEqual(firstResponse.body.startingItems.mostPickedSet.itemIds, [1056, 2003]);
   assert.deepEqual(firstResponse.body.startingItems.highestWinSet.itemIds, [1082, 2031]);
+  assert.equal(firstResponse.body.skillPriority.mostPickedSkill.abilityKey, "Q");
+  assert.equal(firstResponse.body.skillPriority.highestWinSkill.abilityKey, "Q");
   assert.deepEqual(
     firstResponse.body.items.mostPickedBuild.selections.map((selection) => selection.itemId),
     [2510, 3115, 3089, 4645, 3135],

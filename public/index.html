@@ -119,16 +119,17 @@
             <h2 id="results-title">Support recommendations</h2>
           </div>
           <div class="results-toolbar">
+            <label id="results-sort-control" class="sort-control" for="results-sort">
+              <span>Champion Skill Level</span>
+              <select id="results-sort">
+                <option value="projectedWinRateLowSkill">Low</option>
+                <option value="projectedWinRate" selected>Average</option>
+                <option value="projectedWinRateHighSkill">High</option>
+              </select>
+            </label>
             <label id="results-role-control" class="sort-control" for="results-role">
               <span>Target role</span>
               <select id="results-role"></select>
-            </label>
-            <label id="results-sort-control" class="sort-control" for="results-sort">
-              <span>Rank by</span>
-              <select id="results-sort">
-                <option value="projectedWinRate">Projected Win Rate</option>
-                <option value="projectedAgency">Projected Agency</option>
-              </select>
             </label>
             <span id="results-meta" class="results-meta"></span>
           </div>
@@ -147,11 +148,11 @@
               <tr id="results-header-row">
                 <th>Rank</th>
                 <th>Champion</th>
-                <th>Win Rate</th>
                 <th>Projected Win Rate</th>
-                <th>Synergy Score</th>
-                <th>Counter Score</th>
-                <th>Projected Agency</th>
+                <th>
+                  Projected Agency
+                  <span class="projected-agency-detail">(Synergy + Counter)</span>
+                </th>
               </tr>
             </thead>
             <tbody id="results-body"></tbody>
@@ -216,7 +217,7 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.6.16</span>
+      <span id="app-version">v0.6.17</span>
     </div>
 
     <script src="/roles.js" defer></script>

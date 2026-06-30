@@ -264,6 +264,23 @@ function createPayload() {
         notes: [],
       },
     },
+    skillPriority: {
+      highestWinSkill: {
+        abilityKey: "E",
+        winRate: 57.8,
+        pickRate: 18.6,
+        games: 318,
+      },
+      mostPickedSkill: {
+        abilityKey: "Q",
+        winRate: 52.9,
+        pickRate: 71.4,
+        games: 1221,
+      },
+      highlighting: {
+        notes: [],
+      },
+    },
     items: {
       highestWinBuild: {
         selections: [
@@ -422,7 +439,10 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.equal(countMatches(html, /Import Runes/g), 2);
   assert.equal(countMatches(html, /data-rune-import-key=/g), 2);
   assert.match(html, /Summoner Spells/);
+  assert.equal(countMatches(html, /build-spell-card-list--spells/g), 1);
+  assert.doesNotMatch(html, /build-spell-card-list--single/);
   assert.match(html, /Starting Items/);
+  assert.match(html, /Skill Max Priority/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
   assert.match(html, /Most picked and highest win build options are shown below when available\./);
@@ -432,6 +452,8 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Flash \+ Teleport/);
   assert.match(html, /Dark Seal \+ Refillable Potion/);
   assert.match(html, /Doran(?:&#39;|')s Ring \+ Health Potion/);
+  assert.match(html, /Max E first/);
+  assert.match(html, /Max Q first/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves/);
   assert.match(html, /Ionian Boots of Lucidity/);
   assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
@@ -452,9 +474,13 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Nimbus Cloak[\s\S]*Gathering Storm/);
   assert.match(
     html,
-    /Runes[\s\S]*Precision \+ Sorcery[\s\S]*Precision \+ Resolve[\s\S]*Summoner Spells[\s\S]*Flash \+ Ignite[\s\S]*Flash \+ Teleport[\s\S]*Starting Items[\s\S]*Dark Seal \+ Refillable Potion[\s\S]*Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*Boots/,
+    /Runes[\s\S]*Precision \+ Sorcery[\s\S]*Precision \+ Resolve[\s\S]*Summoner Spells[\s\S]*Flash \+ Ignite[\s\S]*Flash \+ Teleport[\s\S]*Starting Items[\s\S]*Dark Seal \+ Refillable Potion[\s\S]*Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*Skill Max Priority[\s\S]*Max E first[\s\S]*Max Q first[\s\S]*Boots/,
   );
-  assert.match(html, /Summoner Spells[\s\S]*Starting Items[\s\S]*Boots[\s\S]*Items/);
+  assert.match(
+    html,
+    /build-summary-rune-stack[\s\S]*Recommended runes[\s\S]*Recommended summoner spells[\s\S]*build-summary-side-stack/,
+  );
+  assert.match(html, /Summoner Spells[\s\S]*Starting Items[\s\S]*Skill Max Priority[\s\S]*Boots[\s\S]*Items/);
   assert.match(html, /build-summary-side-stack/);
   assert.equal(
     countMatches(
@@ -475,6 +501,8 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Flash \+ Teleport[\s\S]*51\.6%[\s\S]*56\.4%[\s\S]*1,604/);
   assert.match(html, /Dark Seal \+ Refillable Potion[\s\S]*57\.2%[\s\S]*18\.4%[\s\S]*304/);
   assert.match(html, /Doran(?:&#39;|')s Ring \+ Health Potion[\s\S]*53\.6%[\s\S]*62\.1%[\s\S]*1,022/);
+  assert.match(html, /Max E first[\s\S]*57\.8%[\s\S]*18\.6%[\s\S]*318/);
+  assert.match(html, /Max Q first[\s\S]*52\.9%[\s\S]*71\.4%[\s\S]*1,221/);
   assert.match(html, /Berserker(?:&#39;|')s Greaves[\s\S]*Most Picked/);
   assert.match(html, /Ionian Boots of Lucidity[\s\S]*Highest Win/);
   assert.match(html, /Items[\s\S]*Highest Win[\s\S]*Luden(?:&#39;|')?s Companion[\s\S]*Most Picked[\s\S]*Malignance/);
@@ -542,6 +570,10 @@ test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and 
   const html = renderBuildSuggestionBody(payload);
 
   assert.match(html, /build-summary-board--single/);
+  assert.match(
+    html,
+    /build-spell-card-list build-spell-card-list--spells build-spell-card-list--single/,
+  );
   assert.equal(countMatches(html, /Precision \+ Sorcery/g), 1);
   assert.equal(countMatches(html, /Flash \+ Ignite/g), 1);
   assert.equal(countMatches(html, /Dark Seal \+ Refillable Potion/g), 1);

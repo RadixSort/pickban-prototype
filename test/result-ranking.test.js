@@ -3,18 +3,29 @@ const assert = require("node:assert/strict");
 
 const {
   average,
+  CHAMPION_SORT_MODE,
   DEFAULT_FIRST_PICK_SORT_MODE,
   DEFAULT_SORT_MODE,
   DEFAULT_TOP_RESULT_LIMIT,
+  DRAFT_TOP_RESULT_LIMIT,
   PBI_SORT_MODE,
   PROJECTED_AGENCY_SORT_MODE,
+  PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE,
+  PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
   WIN_RATE_SORT_MODE,
+  getCounterScore,
+  getDraftHighlightTone,
   getPbi,
   getProjectedAgency,
+  getProjectedWinRateHighSkill,
+  getProjectedWinRateLowSkill,
   getProjectedWinRate,
+  getSkillAdjustedProjectedWinRate,
   getResultKey,
   getResultName,
+  getSynergyScore,
+  getTopProjectedWinRateKeysAtEverySkillLevel,
   getTopResultKeys,
   getWinRate,
   sortResults,
@@ -34,6 +45,26 @@ test("projected agency falls back to legacy finalScore", () => {
 test("projected win rate defaults to 0 when missing", () => {
   assert.equal(getProjectedWinRate({ projectedWinRate: 53.14 }), 53.14);
   assert.equal(getProjectedWinRate({}), 0);
+  assert.equal(getProjectedWinRateLowSkill({ projectedWinRateLowSkill: 48.52 }), 48.52);
+  assert.equal(getProjectedWinRateLowSkill({}), 0);
+  assert.equal(getProjectedWinRateHighSkill({ projectedWinRateHighSkill: 57.76 }), 57.76);
+  assert.equal(getProjectedWinRateHighSkill({}), 0);
+  assert.equal(
+    getSkillAdjustedProjectedWinRate(
+      { projectedWinRate: 53.14, projectedWinRateLowSkill: 48.52 },
+      PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
+    ),
+    48.52,
+  );
+  assert.equal(getProjectedWinRateLowSkill({ projectedWinRate: 53.14 }), 53.14);
+  assert.equal(getProjectedWinRateHighSkill({ projectedWinRate: 53.14 }), 53.14);
+});
+
+test("draft metric helpers default missing scores to zero", () => {
+  assert.equal(getSynergyScore({ synergyScore: 1.4 }), 1.4);
+  assert.equal(getSynergyScore({}), 0);
+  assert.equal(getCounterScore({ counterScore: -0.8 }), -0.8);
+  assert.equal(getCounterScore({}), 0);
 });
 
 test("first-pick metric helpers default to 0 when missing", () => {
@@ -41,6 +72,15 @@ test("first-pick metric helpers default to 0 when missing", () => {
   assert.equal(getPbi({}), 0);
   assert.equal(getWinRate({ winRate: 53.5 }), 53.5);
   assert.equal(getWinRate({}), 0);
+});
+
+test("draft highlights require all three projected win-rate top tens for yellow", () => {
+  assert.equal(getDraftHighlightTone(true, false, false), "");
+  assert.equal(getDraftHighlightTone(false, true, false), "winrate");
+  assert.equal(getDraftHighlightTone(true, true, false), "winrate");
+  assert.equal(getDraftHighlightTone(true, true, true), "overlap");
+  assert.equal(getDraftHighlightTone(false, true, true), "winrate");
+  assert.equal(getDraftHighlightTone(false, false, false), "");
 });
 
 test("sortResults defaults to projected win rate ordering", () => {
@@ -88,6 +128,80 @@ test("sortResults ranks projected win rate with projected agency as the first ti
     ranked.map((result) => result.candidate),
     ["Janna", "Thresh", "Braum"],
   );
+});
+
+test("sortResults ranks low- and high-skill projected win rates independently", () => {
+  const results = [
+    {
+      candidate: "A",
+      candidateKey: 1,
+      projectedWinRate: 54,
+      projectedWinRateLowSkill: 49,
+      projectedWinRateHighSkill: 59,
+    },
+    {
+      candidate: "B",
+      candidateKey: 2,
+      projectedWinRate: 53,
+      projectedWinRateLowSkill: 51,
+      projectedWinRateHighSkill: 55,
+    },
+    {
+      candidate: "C",
+      candidateKey: 3,
+      projectedWinRate: 52,
+      projectedWinRateLowSkill: 44,
+      projectedWinRateHighSkill: 60,
+    },
+  ];
+
+  assert.deepEqual(
+    sortResults(results, PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE).map(
+      (result) => result.candidate,
+    ),
+    ["B", "A", "C"],
+  );
+  assert.deepEqual(
+    sortResults(results, PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE).map(
+      (result) => result.candidate,
+    ),
+    ["C", "A", "B"],
+  );
+});
+
+test("sortResults supports every sortable draft table column", () => {
+  const results = [
+    {
+      candidate: "Alpha",
+      candidateKey: 1,
+      projectedWinRate: 50,
+      synergyScore: 2,
+      counterScore: 1,
+      projectedAgency: 3,
+    },
+    {
+      candidate: "Beta",
+      candidateKey: 2,
+      projectedWinRate: 52,
+      synergyScore: 1,
+      counterScore: 3,
+      projectedAgency: 4,
+    },
+    {
+      candidate: "Gamma",
+      candidateKey: 3,
+      projectedWinRate: 51,
+      synergyScore: 3,
+      counterScore: 0,
+      projectedAgency: 3,
+    },
+  ];
+  const namesFor = (sortMode) =>
+    sortResults(results, sortMode).map((result) => result.candidate);
+
+  assert.deepEqual(namesFor(CHAMPION_SORT_MODE), ["Alpha", "Beta", "Gamma"]);
+  assert.deepEqual(namesFor(PROJECTED_WIN_RATE_SORT_MODE), ["Beta", "Gamma", "Alpha"]);
+  assert.deepEqual(namesFor(PROJECTED_AGENCY_SORT_MODE), ["Beta", "Gamma", "Alpha"]);
 });
 
 test("sortResults ranks first-pick PBI with win rate as the first tie-breaker", () => {
@@ -156,6 +270,54 @@ test("getTopResultKeys returns the top five projected agency keys by default", (
   );
 
   assert.deepEqual(Array.from(topResultKeys), ["201", "117", "497", "44", "16"]);
+});
+
+test("draft highlight limit includes the top ten results", () => {
+  const results = Array.from({ length: 11 }, (_, index) => ({
+    candidate: `Champion ${index + 1}`,
+    candidateKey: index + 1,
+    projectedWinRate: 60 - index,
+  }));
+
+  const topResultKeys = getTopResultKeys(
+    results,
+    PROJECTED_WIN_RATE_SORT_MODE,
+    DRAFT_TOP_RESULT_LIMIT,
+  );
+
+  assert.equal(DRAFT_TOP_RESULT_LIMIT, 10);
+  assert.deepEqual(Array.from(topResultKeys), ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+});
+
+test("projected win-rate overlap keeps only picks ranked at the top for every skill level", () => {
+  const results = [
+    {
+      candidate: "Everywhere",
+      candidateKey: 1,
+      projectedWinRateLowSkill: 60,
+      projectedWinRate: 60,
+      projectedWinRateHighSkill: 60,
+    },
+    {
+      candidate: "Average only",
+      candidateKey: 2,
+      projectedWinRateLowSkill: 40,
+      projectedWinRate: 59,
+      projectedWinRateHighSkill: 40,
+    },
+    {
+      candidate: "Low and high",
+      candidateKey: 3,
+      projectedWinRateLowSkill: 59,
+      projectedWinRate: 40,
+      projectedWinRateHighSkill: 59,
+    },
+  ];
+
+  assert.deepEqual(
+    Array.from(getTopProjectedWinRateKeysAtEverySkillLevel(results, 2)),
+    ["1"],
+  );
 });
 
 test("sortResults uses counter score and then alphabetical order to break complete ties", () => {

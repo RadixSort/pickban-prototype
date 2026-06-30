@@ -14,6 +14,9 @@ const { normalizeChampionName } = require("../lib/request-normalization.js");
 const championByName = new Map(
   champions.map((champion) => [normalizeChampionName(champion.name), champion]),
 );
+const championByKey = new Map(
+  champions.map((champion) => [String(champion.key), champion]),
+);
 
 test("ban suggestion prefers the ranked counter for a valid lane hover", () => {
   const suggestion = buildBanSuggestion({
@@ -98,4 +101,32 @@ test("invalid and incomplete hover records normalize to lane PBI fallbacks", () 
       roleOptions: ROLE_OPTIONS,
     }),
   );
+});
+
+test("known unavailable champions normalize into the aggregate cache key", () => {
+  const request = normalizeBanSuggestionRequest(
+    {
+      rankFilter: "emerald_plus",
+      unavailableChampionKeys: [238, "34", "238", "unknown", { championKey: "99" }],
+    },
+    {
+      championByKey,
+      championByName,
+      defaultRankFilter: "emerald_plus",
+      normalizeChampionName,
+      normalizeRankFilter,
+      normalizeRole,
+      roleOptions: ROLE_OPTIONS,
+    },
+  );
+  const cacheKey = buildBanSuggestionCacheKey({
+    hoversByRole: request.hoversByRole,
+    patch: "7",
+    rankFilter: request.rankFilter,
+    roleOptions: ROLE_OPTIONS,
+    unavailableChampionKeys: request.unavailableChampionKeys,
+  });
+
+  assert.deepEqual([...request.unavailableChampionKeys], ["238", "34", "99"]);
+  assert.match(cacheKey, /unavailable=34,99,238$/);
 });

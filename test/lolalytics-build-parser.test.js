@@ -99,6 +99,10 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
         ["4_12", 54, 70, 70],
         ["4_14", 60, 30, 30],
       ],
+      skillOrder: [
+        ["1_3_2", 54, 70, 70],
+        ["1_3_3_2_3_4_3_1_3", 58, 30, 30],
+      ],
       item1: [
         [3118, 54, 65, 65, 10],
         [2503, 58, 35, 35, 11],
@@ -205,6 +209,16 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
     ],
   );
   assert.deepEqual(
+    parsed.skills.options.map((option) => ({
+      abilityKey: option.abilityKey,
+      games: option.games,
+    })),
+    [
+      { abilityKey: "Q", games: 70 },
+      { abilityKey: "E", games: 30 },
+    ],
+  );
+  assert.deepEqual(
     parsed.items.slotOptions.map((slotOptions) =>
       slotOptions.map((option) => ({
         itemId: option.itemId,
@@ -238,6 +252,47 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
     [
       { itemId: 3006, games: 70 },
       { itemId: 3158, games: 10 },
+    ],
+  );
+});
+
+test("parseLolalyticsMatchupBuildData falls back to summary skill max priorities", () => {
+  const parsed = parseLolalyticsMatchupBuildData({
+    header: {
+      cid: 350,
+      vs: 89,
+      lane: "support",
+      n: 100,
+    },
+    runes: {
+      stats: {},
+    },
+    summary: {
+      pick: {
+        skills: {
+          set: [1, 3, 2],
+          n: 70,
+          wr: 51,
+        },
+      },
+      win: {
+        skills: {
+          set: [3, 1, 2],
+          n: 30,
+          wr: 59,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    parsed.skills.options.map((option) => ({
+      abilityKey: option.abilityKey,
+      games: option.games,
+    })),
+    [
+      { abilityKey: "Q", games: 70 },
+      { abilityKey: "E", games: 30 },
     ],
   );
 });
@@ -465,6 +520,15 @@ test("parseLolalyticsRenderedBuildPage restores current rendered page spells, it
   );
   assert.equal(parsed.startingItems.options[0].games, 36);
   assert.equal(Number(parsed.startingItems.options[1].winRate.toFixed(2)), 57.22);
+  assert.deepEqual(parsed.skills.options, [
+    {
+      id: "Q",
+      abilityKey: "Q",
+      name: "Q",
+      games: 44,
+      wins: 24.4992,
+    },
+  ]);
   assert.deepEqual(
     parsed.items.slotOptions.map((slotOptions) => slotOptions.map((option) => option.name)),
     [
@@ -623,6 +687,10 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
           },
         },
         spells: [["4_11", 54.23, 99.94, 1737]],
+        skillOrder: [
+          ["1_3_2", 53.9, 82.3, 1430],
+          ["3_1_2", 57.1, 10.2, 177],
+        ],
         startSet: [
           ["1102_2003", 53.81, 33.26, 578],
           ["1103_2003", 63.75, 4.6, 80],
@@ -701,6 +769,16 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
   );
   assert.equal(parsed.items.slotOptions[0][0].name, "Trinity Force");
   assert.equal(parsed.startingItems.options[0].setKey, "1102-2003");
+  assert.deepEqual(
+    parsed.skills.options.map((option) => ({
+      abilityKey: option.abilityKey,
+      games: option.games,
+    })),
+    [
+      { abilityKey: "Q", games: 1430 },
+      { abilityKey: "E", games: 177 },
+    ],
+  );
 });
 
 test("parseLolalyticsRenderedBuildPage isolates missing rendered build rows", () => {

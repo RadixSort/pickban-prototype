@@ -75,6 +75,35 @@ test("changing or removing an ally hover invalidates the active ban request", ()
   assert.equal(removed.hovers.length, 0);
 });
 
+test("newly unavailable champions invalidate a cached ban recommendation", () => {
+  const available = reconcileBanSuggestionState(createInitialBanSuggestionState(), {
+    active: true,
+    champSelectPhase: "ban",
+    hovers: [{ champion: "Ahri", championKey: "103", role: "middle" }],
+    rankFilter: "emerald_plus",
+    sessionId: "game-1",
+    unavailableChampionKeys: [103],
+  });
+  const completed = completeBanSuggestionRequest(available, {
+    key: available.activeKey,
+    payload: createPayload(),
+    requestVersion: available.requestVersion,
+  });
+  const unavailable = reconcileBanSuggestionState(completed, {
+    active: true,
+    champSelectPhase: "ban",
+    hovers: [{ champion: "Ahri", championKey: "103", role: "middle" }],
+    rankFilter: "emerald_plus",
+    sessionId: "game-1",
+    unavailableChampionKeys: [238, 103, "238"],
+  });
+
+  assert.notEqual(unavailable.activeKey, available.activeKey);
+  assert.deepEqual(unavailable.unavailableChampionKeys, ["103", "238"]);
+  assert.equal(unavailable.loading, true);
+  assert.equal(unavailable.payload, null);
+});
+
 test("phase exit and champion-select termination clear UI and reject stale completions", () => {
   const loading = reconcileBanSuggestionState(createInitialBanSuggestionState(), {
     active: true,

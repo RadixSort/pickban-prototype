@@ -49,7 +49,7 @@ test("buildDraftProjection aggregates ally synergy and enemy counter win rates",
   assert.ok(Math.abs(projection.enemyWinRate - 45.333333333333336) < 1e-12);
   assert.equal(projection.synergyScore, 10);
   assert.equal(projection.counterScore, -6);
-  assert.equal(projection.projectedAgency, 2);
+  assert.equal(projection.projectedAgency, 4);
   assert.equal(projection.synergyMatchupCount, 2);
   assert.equal(projection.counterMatchupCount, 1);
   assert.equal(projection.sourceMatchups, 3);

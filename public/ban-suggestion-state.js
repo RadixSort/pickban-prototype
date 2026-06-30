@@ -18,11 +18,12 @@
       payload: null,
       requestVersion: 0,
       sessionId: "",
+      unavailableChampionKeys: [],
       visible: false,
     };
   }
 
-  function buildBanSuggestionCacheKey(rankFilter, hovers = []) {
+  function buildBanSuggestionCacheKey(rankFilter, hovers = [], unavailableChampionKeys = []) {
     const hoversByRole = new Map(
       normalizeBanSuggestionHovers(hovers).map((hover) => [hover.role, hover]),
     );
@@ -31,7 +32,23 @@
       return `${role}=${hover?.championKey || ""}`;
     });
 
-    return [`rank=${String(rankFilter || "")}`, ...roleParts].join("|");
+    const unavailablePart = normalizeUnavailableChampionKeys(unavailableChampionKeys).join(",");
+
+    return [
+      `rank=${String(rankFilter || "")}`,
+      ...roleParts,
+      `unavailable=${unavailablePart}`,
+    ].join("|");
+  }
+
+  function normalizeUnavailableChampionKeys(championKeys = []) {
+    return Array.from(
+      new Set(
+        (Array.isArray(championKeys) ? championKeys : [])
+          .map((championKey) => String(championKey || "").trim())
+          .filter(Boolean),
+      ),
+    ).sort((left, right) => Number(left) - Number(right));
   }
 
   function normalizeBanSuggestionHovers(hovers = []) {
@@ -66,6 +83,7 @@
       hovers = [],
       rankFilter = "",
       sessionId = "",
+      unavailableChampionKeys = [],
     } = {},
   ) {
     const current = currentState || createInitialBanSuggestionState();
@@ -82,7 +100,14 @@
     );
     const cache = isNewSession ? {} : current.cache || {};
     const normalizedHovers = normalizeBanSuggestionHovers(hovers);
-    const activeKey = buildBanSuggestionCacheKey(rankFilter, normalizedHovers);
+    const normalizedUnavailableChampionKeys = normalizeUnavailableChampionKeys(
+      unavailableChampionKeys,
+    );
+    const activeKey = buildBanSuggestionCacheKey(
+      rankFilter,
+      normalizedHovers,
+      normalizedUnavailableChampionKeys,
+    );
     const cachedPayload = cache[activeKey] || null;
     const didChangeRequest = current.activeKey !== activeKey || !current.visible || isNewSession;
 
@@ -98,6 +123,7 @@
         ? Number(current.requestVersion || 0) + 1
         : Number(current.requestVersion || 0),
       sessionId: normalizedSessionId,
+      unavailableChampionKeys: normalizedUnavailableChampionKeys,
       visible: true,
     };
   }
@@ -148,6 +174,7 @@
     createInitialBanSuggestionState,
     failBanSuggestionRequest,
     normalizeBanSuggestionHovers,
+    normalizeUnavailableChampionKeys,
     reconcileBanSuggestionState,
   };
 });

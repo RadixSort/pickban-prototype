@@ -16,6 +16,7 @@ function createMatchupBuild({
   pageCandidates,
   spellOptions = [],
   startingItemOptions = [],
+  skillOptions = [],
   itemSlotOptions = [[], [], [], [], [], []],
   mostPickedItemSlotOptions = [[], [], [], [], [], []],
   highestWinItemSlotOptions = [[], [], [], [], [], []],
@@ -37,6 +38,9 @@ function createMatchupBuild({
     },
     startingItems: {
       options: startingItemOptions,
+    },
+    skills: {
+      options: skillOptions,
     },
     items: {
       slotOptions: itemSlotOptions,
@@ -124,6 +128,16 @@ function createStartingItemSetOption({
   };
 }
 
+function createSkillOption({ abilityKey, games, wins }) {
+  return {
+    id: abilityKey,
+    abilityKey,
+    name: abilityKey,
+    games,
+    wins,
+  };
+}
+
 test("buildBuildSuggestionResults aggregates overview groups, exact pages, items, and boots", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
@@ -175,6 +189,10 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
         startingItemOptions: [
           createStartingItemSetOption({ itemIds: [1056, 2003], games: 70, wins: 38 }),
           createStartingItemSetOption({ itemIds: [1082, 2031], games: 30, wins: 19 }),
+        ],
+        skillOptions: [
+          createSkillOption({ abilityKey: "Q", games: 70, wins: 38 }),
+          createSkillOption({ abilityKey: "E", games: 30, wins: 18 }),
         ],
         itemSlotOptions: [
           [
@@ -255,6 +273,10 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
           createStartingItemSetOption({ itemIds: [1056, 2003], games: 50, wins: 25 }),
           createStartingItemSetOption({ itemIds: [1082, 2031], games: 50, wins: 34 }),
         ],
+        skillOptions: [
+          createSkillOption({ abilityKey: "Q", games: 30, wins: 15 }),
+          createSkillOption({ abilityKey: "E", games: 30, wins: 22 }),
+        ],
         itemSlotOptions: [
           [
             createItemOption({ itemId: 3118, name: "Malignance", games: 60, wins: 34, purchaseMinute: 11 }),
@@ -296,6 +318,10 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
   assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 14]);
   assert.deepEqual(aggregated.startingItems.mostPickedSet.itemIds, [1056, 2003]);
   assert.deepEqual(aggregated.startingItems.highestWinSet.itemIds, [1082, 2031]);
+  assert.equal(aggregated.skillPriority.mostPickedSkill.abilityKey, "Q");
+  assert.equal(aggregated.skillPriority.highestWinSkill.abilityKey, "E");
+  assert.equal(aggregated.skillPriority.mostPickedSkill.games, 100);
+  assert.equal(aggregated.skillPriority.highestWinSkill.games, 60);
 
   const primaryStyleGroup = aggregated.runes.overview.slotGroups.find(
     (group) => group.key === "primary-style",
@@ -466,7 +492,7 @@ test("buildBuildSuggestionResults reports when no page crosses the highest-win t
   assert.match(aggregated.runes.highlighting.notes[0], /60%/i);
 });
 
-test("buildBuildSuggestionResults uses a 1% default threshold for highest-win page, spells, starting items, and boots", () => {
+test("buildBuildSuggestionResults uses a 1% default threshold for highest-win build options", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
       createMatchupBuild({
@@ -509,6 +535,11 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win pa
           createStartingItemSetOption({ itemIds: [1082, 2031], games: 9, wins: 9 }),
           createStartingItemSetOption({ itemIds: [1102], games: 976, wins: 400 }),
         ],
+        skillOptions: [
+          createSkillOption({ abilityKey: "E", games: 15, wins: 12 }),
+          createSkillOption({ abilityKey: "Q", games: 9, wins: 9 }),
+          createSkillOption({ abilityKey: "W", games: 976, wins: 400 }),
+        ],
         boots: [
           { itemId: 3158, icon: "3158.webp", name: "Ionian Boots of Lucidity", games: 15, wins: 12 },
           { itemId: 3006, icon: "3006.webp", name: "Berserker's Greaves", games: 9, wins: 9 },
@@ -521,6 +552,7 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win pa
   assert.equal(aggregated.runes.highestWinPage.pageKey, "page-over-threshold");
   assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 12]);
   assert.deepEqual(aggregated.startingItems.highestWinSet.itemIds, [1056, 2003]);
+  assert.equal(aggregated.skillPriority.highestWinSkill.abilityKey, "E");
   assert.equal(
     aggregated.boots.options.find((option) => option.itemId === 3158)?.isHighestWin,
     true,

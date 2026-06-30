@@ -912,6 +912,20 @@ select {
   font-weight: 600;
 }
 
+.results-table th.projected-skill-header {
+  min-width: 142px;
+  white-space: normal;
+}
+
+.results-table th.projected-agency-header {
+  min-width: 224px;
+  white-space: normal;
+}
+
+.projected-skill-rate {
+  font-variant-numeric: tabular-nums;
+}
+
 .results-sort-button {
   padding: 0;
   border: 0;
@@ -928,16 +942,24 @@ select {
 
 .results-sort-button--active {
   text-decoration: underline;
-  text-decoration-color: var(--accent);
+  text-decoration-color: var(--text);
   text-underline-offset: 4px;
 }
 
-.results-table tbody tr.top-option--agency {
-  background: var(--highlight-agency-bg);
+.results-sort-button--active::after {
+  content: "v";
+  display: inline-block;
+  margin-left: 0.35em;
+  color: var(--text);
+  font-size: 0.72em;
+  font-weight: 400;
+  line-height: 1;
+  text-decoration: none;
 }
 
-.results-table tbody tr.top-option--agency td {
-  border-top-color: var(--highlight-agency-border);
+.projected-agency-detail {
+  font-size: 0.78em;
+  font-weight: 400;
 }
 
 .results-table tbody tr.top-option--pbi {
@@ -998,10 +1020,6 @@ select {
   font-weight: 700;
 }
 
-.metric-highlight--agency {
-  color: var(--highlight-agency-text);
-}
-
 .metric-highlight--pbi {
   color: var(--highlight-agency-text);
 }
@@ -1016,6 +1034,12 @@ select {
 
 .metric-highlight--danger {
   color: var(--danger-text);
+}
+
+.metric-detail {
+  color: var(--muted);
+  font-weight: 400;
+  font-style: normal;
 }
 
 .result-agency-cell {
@@ -1392,6 +1416,7 @@ select {
   align-items: start;
 }
 
+.build-summary-rune-stack,
 .build-summary-side-stack {
   display: grid;
   gap: 10px;
@@ -1681,6 +1706,24 @@ select {
   gap: 8px;
 }
 
+.build-spell-card-list--spells {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.build-spell-card-list--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.build-skill-priority-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.build-skill-priority-list--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .build-starting-item-chip {
   width: 42px;
   height: 42px;
@@ -1913,6 +1956,78 @@ select {
 .build-spell-card--both {
   border-color: rgba(96, 203, 200, 0.46);
   box-shadow: inset 0 0 0 1px rgba(96, 203, 200, 0.18);
+}
+
+.build-skill-priority-card {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(9, 13, 20, 0.88);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.build-skill-priority-card--highest-win {
+  border-color: rgba(88, 198, 121, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(88, 198, 121, 0.15);
+}
+
+.build-skill-priority-card--most-picked {
+  border-color: rgba(113, 142, 238, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(113, 142, 238, 0.16);
+}
+
+.build-skill-priority-card--both {
+  border-color: rgba(96, 203, 200, 0.46);
+  box-shadow: inset 0 0 0 1px rgba(96, 203, 200, 0.18);
+}
+
+.build-skill-priority-card-top {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.build-skill-priority-ability {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid rgba(113, 142, 238, 0.38);
+  border-radius: 12px;
+  background: rgba(26, 36, 68, 0.78);
+  color: #dbe1ff;
+  display: grid;
+  place-items: center;
+  font-size: 1.06rem;
+  font-weight: 800;
+}
+
+.build-skill-priority-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.build-skill-priority-copy h4 {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.2;
+}
+
+.build-skill-priority-card .build-summary-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.build-skill-priority-card .build-summary-metric {
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.build-skill-priority-card .build-summary-metric strong {
+  font-size: 0.82rem;
 }
 
 .build-spell-card-top {
@@ -2291,6 +2406,7 @@ select {
   .build-summary-top-grid,
   .build-summary-side-stack,
   .build-summary-board,
+  .build-spell-card-list--spells,
   .build-items-grid,
   .build-detail-layout {
     grid-template-columns: 1fr;
@@ -2320,5 +2436,24 @@ select {
 @media (max-height: 720px) {
   #ally-role-title {
     white-space: normal;
+  }
+}
+
+@media (max-width: 480px) {
+  .build-spell-card-list--spells .build-spell-card-top {
+    display: grid;
+  }
+
+  .build-spell-card-list--spells .build-summary-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .build-spell-card-list--spells .build-summary-metric {
+    padding: 6px 4px;
+  }
+
+  .build-spell-card-list--spells .build-summary-metric strong {
+    font-size: 0.82rem;
   }
 }

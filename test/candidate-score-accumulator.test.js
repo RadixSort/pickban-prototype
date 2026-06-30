@@ -23,7 +23,7 @@ test("candidate score accumulator applies counter values directly to agency", ()
     synergyScore: 57,
     counterScore: -40,
     projectedWinRate: 54.5,
-    projectedAgency: 8.5,
+    projectedAgency: 17,
   });
 });
 

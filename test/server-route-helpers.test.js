@@ -241,6 +241,14 @@ test("build suggestion helper payloads preserve request and summary fields", () 
           itemIds: [1082, 2031],
         },
       },
+      skillPriority: {
+        mostPickedSkill: {
+          abilityKey: "Q",
+        },
+        highestWinSkill: {
+          abilityKey: "E",
+        },
+      },
       items: {
         highestWinBuild: {
           selections: [
@@ -322,6 +330,14 @@ test("build suggestion helper payloads preserve request and summary fields", () 
     highestWinSet: {
       setKey: "1082-2031",
       itemIds: [1082, 2031],
+    },
+  });
+  assert.deepEqual(payload.skillPriority, {
+    mostPickedSkill: {
+      abilityKey: "Q",
+    },
+    highestWinSkill: {
+      abilityKey: "E",
     },
   });
   assert.equal(hasUsableBuildSuggestions(payload), true);

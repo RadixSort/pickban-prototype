@@ -36,18 +36,24 @@ const {
   renderBuildSuggestionBody,
 } = globalThis.buildSuggestionView;
 const {
+  CHAMPION_SORT_MODE,
   DEFAULT_FIRST_PICK_SORT_MODE,
   DEFAULT_TOP_RESULT_LIMIT,
   DEFAULT_SORT_MODE,
+  DRAFT_TOP_RESULT_LIMIT,
   PBI_SORT_MODE,
   PROJECTED_AGENCY_SORT_MODE,
+  PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE,
+  PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
   PROJECTED_WIN_RATE_SORT_MODE,
   WIN_RATE_SORT_MODE,
+  getDraftHighlightTone,
   getPbi,
   getProjectedAgency,
-  getProjectedWinRate,
   getResultKey,
   getResultName,
+  getSkillAdjustedProjectedWinRate,
+  getTopProjectedWinRateKeysAtEverySkillLevel,
   getTopResultKeys,
   getWinRate,
   sortResults,
@@ -73,10 +79,11 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.16",
+  version: "0.6.17",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
-  sortMode: DEFAULT_SORT_MODE,
+  skillLevelSortMode: DEFAULT_SORT_MODE,
+  resultSortMode: PROJECTED_WIN_RATE_SORT_MODE,
   firstPickSortMode: DEFAULT_FIRST_PICK_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
   autoImport: createInitialAutoImportState(),
@@ -176,7 +183,7 @@ async function initialize() {
   autoImportButton.addEventListener("click", handleStartAutoImport);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
-  sortSelect.addEventListener("change", handleSortModeChange);
+  sortSelect.addEventListener("change", handleSkillLevelChange);
   buildSuggestionBackdrop.addEventListener("click", closeBuildSuggestionModal);
   buildSuggestionCloseButton.addEventListener("click", closeBuildSuggestionModal);
   document.addEventListener("click", handleOutsideClick);
@@ -537,6 +544,7 @@ function createInitialAutoImportState() {
     sessionId: "",
     status: "idle",
     timerId: null,
+    unavailableChampionKeys: [],
   };
 }
 
@@ -1030,6 +1038,9 @@ async function handleLiveDraftImportPayload(payload) {
   state.autoImport.champSelectPhase =
     typeof payload.champSelectPhase === "string" ? payload.champSelectPhase : "unknown";
   state.autoImport.allyHovers = Array.isArray(payload.allyHovers) ? payload.allyHovers : [];
+  state.autoImport.unavailableChampionKeys = Array.isArray(payload.unavailableChampionKeys)
+    ? payload.unavailableChampionKeys
+    : [];
   state.autoImport.sessionId = typeof payload.sessionId === "string" ? payload.sessionId : "";
   state.autoImport.assignedRole = normalizeRole(payload.assignedRole) || "";
   state.autoImport.queueDescription =
@@ -1066,6 +1077,7 @@ function syncBanSuggestions() {
     hovers: state.autoImport.allyHovers,
     rankFilter: state.rankFilter,
     sessionId: state.autoImport.sessionId,
+    unavailableChampionKeys: state.autoImport.unavailableChampionKeys,
   });
   renderBanSuggestions();
 
@@ -1092,6 +1104,7 @@ function syncBanSuggestions() {
           champion: hover.champion,
           role: hover.role,
         })),
+        unavailableChampionKeys: state.banSuggestions.unavailableChampionKeys,
       });
       updateLolalyticsRequestStats(suggestionPayload?.requestStats);
       if (!response.ok) {
@@ -1318,6 +1331,7 @@ function disableAutoImport(reason, message) {
   state.autoImport.lastUpdatedAt = new Date().toISOString();
   state.autoImport.reason = reason;
   state.autoImport.sessionId = "";
+  state.autoImport.unavailableChampionKeys = [];
   state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
     active: false,
   });
@@ -1434,14 +1448,27 @@ function handleResetDraft() {
   renderAll();
 }
 
-function handleSortModeChange(event) {
-  state.sortMode = normalizeSortMode(event.target.value);
+function handleSkillLevelChange(event) {
+  state.skillLevelSortMode = normalizeSkillLevelSortMode(event.target.value);
   renderResults();
+}
+
+function handleResultSortModeChange(value) {
+  state.resultSortMode = normalizeResultSortMode(value);
+  renderResultsPreservingScrollPosition();
 }
 
 function handleFirstPickSortModeChange(value) {
   state.firstPickSortMode = normalizeFirstPickSortMode(value);
+  renderResultsPreservingScrollPosition();
+}
+
+function renderResultsPreservingScrollPosition() {
+  const scrollLeft = window.scrollX;
+  const scrollTop = window.scrollY;
+
   renderResults();
+  window.scrollTo(scrollLeft, scrollTop);
 }
 
 function handleRankFilterChange(event) {
@@ -1763,30 +1790,44 @@ function renderResults() {
   const isFirstPickBundle = currentBundle?.mode === "firstPick";
   const currentMeta = currentBundle?.metaByRole?.[selectedRole] || null;
   const currentResults = currentBundle?.resultsByRole?.[selectedRole] || [];
+  const activeDraftSortMode = getActiveDraftSortMode(
+    state.resultSortMode,
+    state.skillLevelSortMode,
+  );
   const visibleResults = sortResults(
     getVisibleResults(currentResults),
-    isFirstPickBundle ? state.firstPickSortMode : state.sortMode,
+    isFirstPickBundle ? state.firstPickSortMode : activeDraftSortMode,
   );
   const topProjectedWinRateKeys = isFirstPickBundle
     ? new Set()
     : getTopResultKeys(
         visibleResults,
-        PROJECTED_WIN_RATE_SORT_MODE,
-        DEFAULT_TOP_RESULT_LIMIT,
+        state.skillLevelSortMode,
+        DRAFT_TOP_RESULT_LIMIT,
       );
   const topProjectedAgencyKeys = isFirstPickBundle
     ? new Set()
     : getTopResultKeys(
         visibleResults,
         PROJECTED_AGENCY_SORT_MODE,
-        DEFAULT_TOP_RESULT_LIMIT,
+        DRAFT_TOP_RESULT_LIMIT,
+      );
+  const topProjectedWinRateKeysAtEverySkillLevel = isFirstPickBundle
+    ? new Set()
+    : getTopProjectedWinRateKeysAtEverySkillLevel(
+        visibleResults,
+        DRAFT_TOP_RESULT_LIMIT,
       );
 
   resultsBody.innerHTML = "";
   partialFailures.innerHTML = "";
   draftProjectionWrap.innerHTML = "";
-  renderResultsTableHeader(isFirstPickBundle);
-  sortSelect.value = state.sortMode;
+  renderResultsTableHeader(
+    isFirstPickBundle,
+    state.skillLevelSortMode,
+    state.resultSortMode,
+  );
+  sortSelect.value = state.skillLevelSortMode;
   sortSelect.disabled =
     state.loading ||
     state.shuttingDown ||
@@ -1843,9 +1884,7 @@ function renderResults() {
   emptyState.classList.add("hidden");
   draftProjectionWrap.classList.add("hidden");
   resultsWrap.classList.remove("hidden");
-  resultsMeta.textContent = isFirstPickBundle
-    ? `${visibleResults.length} ${getRoleLabel(selectedRole).toLowerCase()} tier-list options`
-    : `${visibleResults.length} ranked ${getRoleLabel(selectedRole).toLowerCase()} options`;
+  resultsMeta.textContent = "";
 
   if (isFirstPickBundle) {
     renderFirstPickRows(visibleResults, selectedRole);
@@ -1857,10 +1896,20 @@ function renderResults() {
     const resultKey = getResultKey(result) || "";
     const resultName = getResultName(result);
     const liveWinRate = Number(result.winRate);
-    const projectedWinRate = getProjectedWinRate(result);
+    const projectedWinRate = getSkillAdjustedProjectedWinRate(
+      result,
+      state.skillLevelSortMode,
+    );
+    const projectedAgency = getProjectedAgency(result);
     const isTopProjectedWinRate = topProjectedWinRateKeys.has(resultKey);
     const isTopProjectedAgency = topProjectedAgencyKeys.has(resultKey);
-    const topOptionTone = getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate);
+    const isTopProjectedWinRateAtEverySkillLevel =
+      topProjectedWinRateKeysAtEverySkillLevel.has(resultKey);
+    const topOptionTone = getDraftHighlightTone(
+      isTopProjectedAgency,
+      isTopProjectedWinRate,
+      isTopProjectedWinRateAtEverySkillLevel,
+    );
     const hasLowProjectedWinRate = isLowWinRate(projectedWinRate);
     const rowClassNames = [];
 
@@ -1881,18 +1930,8 @@ function renderResults() {
     );
     const projectedAgencyClassName = getMetricClassName(
       ["final-score"],
-      isTopProjectedAgency,
-      topOptionTone === "overlap" ? "overlap" : "agency",
-    );
-    const synergyScoreClassName = getMetricClassName(
-      [],
-      isNegativeScore(result.synergyScore),
-      "danger",
-    );
-    const counterScoreClassName = getMetricClassName(
-      [],
-      isNegativeScore(result.counterScore),
-      "danger",
+      topOptionTone === "overlap",
+      "overlap",
     );
     const selectForDraftHelperText = getSelectResultForDraftHelperText(selectedRole, result);
     const selectForDraftDescription = selectForDraftHelperText
@@ -1909,13 +1948,10 @@ function renderResults() {
           </span>
         </div>
       </td>
-      <td>${formatRate(liveWinRate)}</td>
-      <td class="${projectedWinRateClassName}">${formatRate(projectedWinRate)}</td>
-      <td class="${synergyScoreClassName}">${formatScore(result.synergyScore)}</td>
-      <td class="${counterScoreClassName}">${formatScore(result.counterScore)}</td>
+      <td class="projected-skill-rate ${projectedWinRateClassName}">${formatProjectedRateWithBase(projectedWinRate, liveWinRate)}</td>
       <td class="${projectedAgencyClassName}">
         <div class="result-agency-cell">
-          <span class="result-agency-score">${formatScore(getProjectedAgency(result))}</span>
+          <span class="result-agency-score">${formatAgencyWithBreakdown(projectedAgency, result.synergyScore, result.counterScore)}</span>
           <button
             type="button"
             class="result-draft-action"
@@ -1941,7 +1977,11 @@ function renderResults() {
   renderPartialFailures(currentMeta?.partialFailures || []);
 }
 
-function renderResultsTableHeader(isFirstPickBundle = false) {
+function renderResultsTableHeader(
+  isFirstPickBundle = false,
+  skillLevelSortMode = DEFAULT_SORT_MODE,
+  resultSortMode = PROJECTED_WIN_RATE_SORT_MODE,
+) {
   if (isFirstPickBundle) {
     resultsHeaderRow.innerHTML = `
       <th>Rank</th>
@@ -1962,10 +2002,10 @@ function renderResultsTableHeader(isFirstPickBundle = false) {
           type="button"
           class="${getFirstPickSortButtonClassName(WIN_RATE_SORT_MODE)}"
           data-first-pick-sort="${WIN_RATE_SORT_MODE}"
-          title="Sort by winrate"
-          aria-label="Sort by winrate"
+          title="Sort by base win rate"
+          aria-label="Sort by base win rate"
         >
-          Winrate
+          Base Win Rate
         </button>
       </th>
       <th class="results-action-header" aria-label="Add champion"></th>
@@ -1979,15 +2019,53 @@ function renderResultsTableHeader(isFirstPickBundle = false) {
     return;
   }
 
+  const projectedWinRateColumn = getProjectedWinRateColumn(skillLevelSortMode);
+
   resultsHeaderRow.innerHTML = `
     <th>Rank</th>
-    <th>Champion</th>
-    <th>Win Rate</th>
-    <th>Projected Win Rate</th>
-    <th>Synergy Score</th>
-    <th>Counter Score</th>
-    <th>Projected Agency</th>
+    <th>
+      <button
+        type="button"
+        class="${getResultSortButtonClassName(CHAMPION_SORT_MODE, resultSortMode)}"
+        data-result-sort="${CHAMPION_SORT_MODE}"
+        title="Sort by champion name"
+        aria-label="Sort by champion name"
+        aria-pressed="${resultSortMode === CHAMPION_SORT_MODE}"
+      >
+        Champion
+      </button>
+    </th>
+    <th class="projected-skill-header">
+      <button
+        type="button"
+        class="${getResultSortButtonClassName(PROJECTED_WIN_RATE_SORT_MODE, resultSortMode)}"
+        data-result-sort="${PROJECTED_WIN_RATE_SORT_MODE}"
+        title="${escapeHtml(projectedWinRateColumn.title)} Sort by this value."
+        aria-label="Sort by Projected Win Rate"
+        aria-pressed="${resultSortMode === PROJECTED_WIN_RATE_SORT_MODE}"
+      >
+        Projected Win Rate
+      </button>
+    </th>
+    <th class="projected-agency-header">
+      <button
+        type="button"
+        class="${getResultSortButtonClassName(PROJECTED_AGENCY_SORT_MODE, resultSortMode)}"
+        data-result-sort="${PROJECTED_AGENCY_SORT_MODE}"
+        title="Sort by Projected Agency"
+        aria-label="Sort by Projected Agency, Synergy plus Counter"
+        aria-pressed="${resultSortMode === PROJECTED_AGENCY_SORT_MODE}"
+      >
+        Projected Agency <span class="projected-agency-detail">(Synergy + Counter)</span>
+      </button>
+    </th>
   `;
+  resultsHeaderRow.querySelectorAll("[data-result-sort]").forEach((button) => {
+    button.disabled = state.loading || state.shuttingDown;
+    button.addEventListener("click", () =>
+      handleResultSortModeChange(button.dataset.resultSort),
+    );
+  });
 }
 
 function renderFirstPickRows(visibleResults, selectedRole) {
@@ -2337,6 +2415,17 @@ function formatRate(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+function formatProjectedRateWithBase(projectedWinRate, baseWinRate) {
+  return `${formatRate(projectedWinRate)} <span class="metric-detail">(${formatRate(baseWinRate)})</span>`;
+}
+
+function formatAgencyWithBreakdown(projectedAgency, synergyScore, counterScore) {
+  const numericCounterScore = Number(counterScore || 0);
+  const operator = numericCounterScore < 0 ? "-" : "+";
+
+  return `${formatScore(projectedAgency)} <span class="metric-detail">(${formatScore(synergyScore)} ${operator} ${formatScore(Math.abs(numericCounterScore))})</span>`;
+}
+
 function formatPbi(value) {
   if (!Number.isFinite(Number(value))) {
     return "-";
@@ -2399,12 +2488,66 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function normalizeSortMode(value) {
-  if (value === PROJECTED_AGENCY_SORT_MODE || value === PROJECTED_WIN_RATE_SORT_MODE) {
+function normalizeSkillLevelSortMode(value) {
+  if (
+    value === PROJECTED_WIN_RATE_SORT_MODE ||
+    value === PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE ||
+    value === PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE
+  ) {
     return value;
   }
 
   return DEFAULT_SORT_MODE;
+}
+
+function normalizeResultSortMode(value) {
+  if (
+    value === CHAMPION_SORT_MODE ||
+    value === PROJECTED_WIN_RATE_SORT_MODE ||
+    value === PROJECTED_AGENCY_SORT_MODE
+  ) {
+    return value;
+  }
+
+  return PROJECTED_WIN_RATE_SORT_MODE;
+}
+
+function getActiveDraftSortMode(resultSortMode, skillLevelSortMode) {
+  return resultSortMode === PROJECTED_WIN_RATE_SORT_MODE
+    ? skillLevelSortMode
+    : resultSortMode;
+}
+
+function getProjectedWinRateColumn(skillLevelSortMode) {
+  if (skillLevelSortMode === PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE) {
+    return {
+      label: "Projected Win Rate",
+      title:
+        "Projected Win Rate minus the Best Worldwide on Champion delta for the selected rank and role.",
+    };
+  }
+
+  if (skillLevelSortMode === PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE) {
+    return {
+      label: "Projected Win Rate",
+      title:
+        "Projected Win Rate plus the Best Worldwide on Champion delta for the selected rank and role.",
+    };
+  }
+
+  return {
+    label: "Projected Win Rate",
+    title: "Projected Win Rate with no skill adjustment.",
+  };
+}
+
+function getResultSortButtonClassName(sortMode, activeSortMode) {
+  return [
+    "results-sort-button",
+    activeSortMode === sortMode ? "results-sort-button--active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function normalizeFirstPickSortMode(value) {
@@ -2413,22 +2556,6 @@ function normalizeFirstPickSortMode(value) {
   }
 
   return DEFAULT_FIRST_PICK_SORT_MODE;
-}
-
-function getTopOptionTone(isTopProjectedAgency, isTopProjectedWinRate) {
-  if (isTopProjectedAgency && isTopProjectedWinRate) {
-    return "overlap";
-  }
-
-  if (isTopProjectedAgency) {
-    return "agency";
-  }
-
-  if (isTopProjectedWinRate) {
-    return "winrate";
-  }
-
-  return "";
 }
 
 function getFirstPickTopOptionTone(isTopPbi, isTopWinRate) {

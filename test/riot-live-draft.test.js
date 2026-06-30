@@ -304,8 +304,18 @@ test("buildLiveDraftImport exposes ban phase and lane-assigned ally hover intent
           championPickIntent: 122,
           assignedPosition: "top",
         },
+        {
+          cellId: 3,
+          championId: 0,
+          championPickIntent: 34,
+          assignedPosition: "invalid",
+        },
       ],
       theirTeam: [],
+      bans: {
+        myTeamBans: [],
+        theirTeamBans: [238],
+      },
       actions: [
         [
           {
@@ -334,6 +344,7 @@ test("buildLiveDraftImport exposes ban phase and lane-assigned ally hover intent
       { champion: "Darius", championKey: "122", role: "top" },
     ],
   );
+  assert.deepEqual(payload.unavailableChampionKeys, ["34", "103", "122", "238"]);
 });
 
 test("invalid ally hover lanes are omitted without affecting phase detection", () => {

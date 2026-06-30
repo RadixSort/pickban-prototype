@@ -6,13 +6,17 @@
 
   globalScope.resultRanking = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
+  const CHAMPION_SORT_MODE = "champion";
   const PROJECTED_AGENCY_SORT_MODE = "projectedAgency";
+  const PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE = "projectedWinRateHighSkill";
+  const PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE = "projectedWinRateLowSkill";
   const PROJECTED_WIN_RATE_SORT_MODE = "projectedWinRate";
   const PBI_SORT_MODE = "pbi";
   const WIN_RATE_SORT_MODE = "winRate";
   const DEFAULT_SORT_MODE = PROJECTED_WIN_RATE_SORT_MODE;
   const DEFAULT_FIRST_PICK_SORT_MODE = PBI_SORT_MODE;
   const DEFAULT_TOP_RESULT_LIMIT = 5;
+  const DRAFT_TOP_RESULT_LIMIT = 10;
 
   function average(values = []) {
     let total = 0;
@@ -56,6 +60,26 @@
     return toFiniteNumber(result?.projectedWinRate) ?? 0;
   }
 
+  function getProjectedWinRateLowSkill(result) {
+    return toFiniteNumber(result?.projectedWinRateLowSkill) ?? getProjectedWinRate(result);
+  }
+
+  function getProjectedWinRateHighSkill(result) {
+    return toFiniteNumber(result?.projectedWinRateHighSkill) ?? getProjectedWinRate(result);
+  }
+
+  function getSkillAdjustedProjectedWinRate(result, skillLevelSortMode) {
+    if (skillLevelSortMode === PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE) {
+      return getProjectedWinRateLowSkill(result);
+    }
+
+    if (skillLevelSortMode === PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE) {
+      return getProjectedWinRateHighSkill(result);
+    }
+
+    return getProjectedWinRate(result);
+  }
+
   function getPbi(result) {
     return toFiniteNumber(result?.pbi) ?? 0;
   }
@@ -64,13 +88,35 @@
     return toFiniteNumber(result?.winRate) ?? 0;
   }
 
+  function getSynergyScore(result) {
+    return toFiniteNumber(result?.synergyScore) ?? 0;
+  }
+
+  function getCounterScore(result) {
+    return toFiniteNumber(result?.counterScore) ?? 0;
+  }
+
   function compareByProjectedAgency(left, right) {
-    const agencyDifference = getProjectedAgency(right) - getProjectedAgency(left);
+    return compareByProjectedAgencyMetric(
+      left,
+      right,
+      getProjectedAgency,
+      getProjectedWinRate,
+    );
+  }
+
+  function compareByProjectedAgencyMetric(
+    left,
+    right,
+    getAgencyValue,
+    getWinRateValue,
+  ) {
+    const agencyDifference = getAgencyValue(right) - getAgencyValue(left);
     if (agencyDifference !== 0) {
       return agencyDifference;
     }
 
-    const projectedWinRateDifference = getProjectedWinRate(right) - getProjectedWinRate(left);
+    const projectedWinRateDifference = getWinRateValue(right) - getWinRateValue(left);
     if (projectedWinRateDifference !== 0) {
       return projectedWinRateDifference;
     }
@@ -84,12 +130,44 @@
   }
 
   function compareByProjectedWinRate(left, right) {
-    const projectedWinRateDifference = getProjectedWinRate(right) - getProjectedWinRate(left);
+    return compareByProjectedWinRateMetric(
+      left,
+      right,
+      getProjectedWinRate,
+      getProjectedAgency,
+    );
+  }
+
+  function compareByProjectedWinRateLowSkill(left, right) {
+    return compareByProjectedWinRateMetric(
+      left,
+      right,
+      getProjectedWinRateLowSkill,
+      getProjectedAgency,
+    );
+  }
+
+  function compareByProjectedWinRateHighSkill(left, right) {
+    return compareByProjectedWinRateMetric(
+      left,
+      right,
+      getProjectedWinRateHighSkill,
+      getProjectedAgency,
+    );
+  }
+
+  function compareByProjectedWinRateMetric(
+    left,
+    right,
+    getMetricValue,
+    getAgencyValue,
+  ) {
+    const projectedWinRateDifference = getMetricValue(right) - getMetricValue(left);
     if (projectedWinRateDifference !== 0) {
       return projectedWinRateDifference;
     }
 
-    const agencyDifference = getProjectedAgency(right) - getProjectedAgency(left);
+    const agencyDifference = getAgencyValue(right) - getAgencyValue(left);
     if (agencyDifference !== 0) {
       return agencyDifference;
     }
@@ -99,6 +177,10 @@
       return counterDifference;
     }
 
+    return compareSupportNames(left, right);
+  }
+
+  function compareByChampion(left, right) {
     return compareSupportNames(left, right);
   }
 
@@ -206,7 +288,44 @@
     return getTopResultKeys(results, sortMode, limit);
   }
 
+  function getTopProjectedWinRateKeysAtEverySkillLevel(
+    results = [],
+    limit = DRAFT_TOP_RESULT_LIMIT,
+  ) {
+    const topKeysBySkillLevel = [
+      PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
+      PROJECTED_WIN_RATE_SORT_MODE,
+      PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE,
+    ].map((sortMode) => getTopResultKeys(results, sortMode, limit));
+
+    return new Set(
+      [...topKeysBySkillLevel[0]].filter((resultKey) =>
+        topKeysBySkillLevel.slice(1).every((topKeys) => topKeys.has(resultKey)),
+      ),
+    );
+  }
+
+  function getDraftHighlightTone(
+    isTopProjectedAgency,
+    isTopProjectedWinRate,
+    isTopProjectedWinRateAtEverySkillLevel,
+  ) {
+    if (isTopProjectedAgency && isTopProjectedWinRateAtEverySkillLevel) {
+      return "overlap";
+    }
+
+    if (isTopProjectedWinRate) {
+      return "winrate";
+    }
+
+    return "";
+  }
+
   function getSortComparator(sortMode) {
+    if (sortMode === CHAMPION_SORT_MODE) {
+      return compareByChampion;
+    }
+
     if (sortMode === PBI_SORT_MODE) {
       return compareByPbi;
     }
@@ -217,6 +336,14 @@
 
     if (sortMode === PROJECTED_AGENCY_SORT_MODE) {
       return compareByProjectedAgency;
+    }
+
+    if (sortMode === PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE) {
+      return compareByProjectedWinRateLowSkill;
+    }
+
+    if (sortMode === PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE) {
+      return compareByProjectedWinRateHighSkill;
     }
 
     return compareByProjectedWinRate;
@@ -250,7 +377,7 @@
   }
 
   function getNumericCounterScore(result) {
-    return toFiniteNumber(result?.counterScore) ?? 0;
+    return getCounterScore(result);
   }
 
   function toFiniteNumber(value) {
@@ -263,23 +390,37 @@
   }
 
   return {
+    CHAMPION_SORT_MODE,
     DEFAULT_FIRST_PICK_SORT_MODE,
     DEFAULT_TOP_RESULT_LIMIT,
     DEFAULT_SORT_MODE,
+    DRAFT_TOP_RESULT_LIMIT,
     PBI_SORT_MODE,
     PROJECTED_AGENCY_SORT_MODE,
+    PROJECTED_WIN_RATE_HIGH_SKILL_SORT_MODE,
+    PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
     PROJECTED_WIN_RATE_SORT_MODE,
     WIN_RATE_SORT_MODE,
     average,
+    compareByChampion,
     compareByPbi,
     compareByProjectedAgency,
+    compareByProjectedWinRateHighSkill,
+    compareByProjectedWinRateLowSkill,
     compareByProjectedWinRate,
     compareByWinRate,
+    getCounterScore,
+    getDraftHighlightTone,
     getPbi,
     getProjectedAgency,
+    getProjectedWinRateHighSkill,
+    getProjectedWinRateLowSkill,
     getProjectedWinRate,
     getResultKey,
     getResultName,
+    getSkillAdjustedProjectedWinRate,
+    getSynergyScore,
+    getTopProjectedWinRateKeysAtEverySkillLevel,
     getTopResultKeys,
     getTopSupportKeys,
     getWinRate,

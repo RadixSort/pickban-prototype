@@ -38,6 +38,9 @@
     const startingItemNotes = Array.isArray(payload?.startingItems?.highlighting?.notes)
       ? payload.startingItems.highlighting.notes
       : [];
+    const skillPriorityNotes = Array.isArray(payload?.skillPriority?.highlighting?.notes)
+      ? payload.skillPriority.highlighting.notes
+      : [];
     const slotGroups = Array.isArray(payload?.runes?.overview?.slotGroups)
       ? payload.runes.overview.slotGroups
       : [];
@@ -47,6 +50,8 @@
     const mostPickedSpellSet = payload?.spells?.mostPickedSet || null;
     const highestWinStartingItemSet = payload?.startingItems?.highestWinSet || null;
     const mostPickedStartingItemSet = payload?.startingItems?.mostPickedSet || null;
+    const highestWinSkill = payload?.skillPriority?.highestWinSkill || null;
+    const mostPickedSkill = payload?.skillPriority?.mostPickedSkill || null;
     const highestWinItemBuild = payload?.items?.highestWinBuild || null;
     const mostPickedItemBuild = payload?.items?.mostPickedBuild || null;
     const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
@@ -58,10 +63,12 @@
       mostPickedSpellSet,
       highestWinStartingItemSet,
       mostPickedStartingItemSet,
+      highestWinSkill,
+      mostPickedSkill,
       highestWinItemBuild,
       mostPickedItemBuild,
       boots,
-      notes: [...runeNotes, ...spellNotes, ...startingItemNotes],
+      notes: [...runeNotes, ...spellNotes, ...startingItemNotes, ...skillPriorityNotes],
       runeImportStatesByPageKey: normalizeRuneImportStates(options?.runeImportStatesByPageKey),
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
@@ -74,6 +81,8 @@
     mostPickedSpellSet,
     highestWinStartingItemSet,
     mostPickedStartingItemSet,
+    highestWinSkill,
+    mostPickedSkill,
     highestWinItemBuild,
     mostPickedItemBuild,
     boots,
@@ -90,11 +99,16 @@
       highestWinStartingItemSet,
       mostPickedStartingItemSet,
     );
+    const skillPriorityRecommendations = buildRecommendedSkillPriorities(
+      highestWinSkill,
+      mostPickedSkill,
+    );
     const highlightedBoots = getHighlightedOptions(boots, "itemId");
     const hasAnyContent =
       runeRecommendations.length > 0 ||
       spellRecommendations.length > 0 ||
       startingItemRecommendations.length > 0 ||
+      skillPriorityRecommendations.length > 0 ||
       highestWinItemBuild ||
       mostPickedItemBuild ||
       highlightedBoots.length > 0;
@@ -113,14 +127,17 @@
         ${renderInlineNotes(notes)}
         ${renderBuildSummaryGlobalNote()}
         <div class="build-summary-top-grid">
-          ${renderRuneRecommendationsSection(
-            runeRecommendations,
-            slotGroupMap,
-            runeImportStatesByPageKey,
-          )}
-          <div class="build-summary-side-stack">
+          <div class="build-summary-rune-stack">
+            ${renderRuneRecommendationsSection(
+              runeRecommendations,
+              slotGroupMap,
+              runeImportStatesByPageKey,
+            )}
             ${renderSpellRecommendationsSection(spellRecommendations)}
+          </div>
+          <div class="build-summary-side-stack">
             ${renderStartingItemsSection(startingItemRecommendations)}
+            ${renderSkillPrioritySection(skillPriorityRecommendations)}
             ${renderBootsSection(highlightedBoots)}
           </div>
         </div>
@@ -258,7 +275,7 @@
             <h3>Summoner Spells</h3>
           </div>
         </header>
-        <div class="build-spell-card-list">
+        <div class="build-spell-card-list build-spell-card-list--spells${recommendations.length === 1 ? " build-spell-card-list--single" : ""}">
           ${recommendations.map((spellSet) => renderSpellSetCard(spellSet)).join("")}
         </div>
       </section>
@@ -290,6 +307,36 @@
         </header>
         <div class="build-spell-card-list">
           ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderSkillPrioritySection(recommendations) {
+    if (!Array.isArray(recommendations) || recommendations.length === 0) {
+      return `
+        <section class="build-items-panel" aria-label="Recommended skill max priority">
+          <header class="build-items-panel-header">
+            <div class="build-items-panel-heading">
+              <h3>Skill Max Priority</h3>
+            </div>
+          </header>
+          <div class="build-summary-column-empty">
+            No skill max priority recommendations were available.
+          </div>
+        </section>
+      `;
+    }
+
+    return `
+      <section class="build-items-panel" aria-label="Recommended skill max priority">
+        <header class="build-items-panel-header">
+          <div class="build-items-panel-heading">
+            <h3>Skill Max Priority</h3>
+          </div>
+        </header>
+        <div class="build-skill-priority-list${recommendations.length === 1 ? " build-skill-priority-list--single" : ""}">
+          ${recommendations.map((skill) => renderSkillPriorityCard(skill)).join("")}
         </div>
       </section>
     `;
@@ -622,6 +669,29 @@
     `;
   }
 
+  function renderSkillPriorityCard(skill) {
+    const abilityKey = normalizeAbilityKey(skill?.abilityKey);
+
+    return `
+      <article class="build-skill-priority-card ${getOptionHighlightClassName("build-skill-priority-card", skill)}">
+        <div class="build-skill-priority-card-top">
+          <span class="build-skill-priority-ability" aria-hidden="true">
+            ${escapeHtml(abilityKey || "?")}
+          </span>
+          <div class="build-skill-priority-copy">
+            <h4>${escapeHtml(abilityKey ? `Max ${abilityKey} first` : "Unknown priority")}</h4>
+            ${renderHighlightLegend(skill)}
+          </div>
+        </div>
+        <div class="build-summary-metric-grid">
+          ${renderSummaryMetric("Win", formatPercent(skill?.winRate), "win")}
+          ${renderSummaryMetric("Pick", formatPercent(skill?.pickRate), "pick")}
+          ${renderSummaryMetric("Games", formatCount(skill?.games), "games")}
+        </div>
+      </article>
+    `;
+  }
+
   function renderStartingItemSelection(selection) {
     return `
       <article class="build-starting-item-chip" title="${escapeAttribute(selection?.name || "Item")}">
@@ -699,6 +769,13 @@
       : [];
 
     return itemNames.length > 0 ? itemNames.join(" + ") : "Starting items";
+  }
+
+  function normalizeAbilityKey(value) {
+    const normalizedValue = String(value || "").trim().toUpperCase();
+    return normalizedValue === "Q" || normalizedValue === "W" || normalizedValue === "E"
+      ? normalizedValue
+      : null;
   }
 
   function renderSummaryMetric(label, value, tone) {
@@ -870,6 +947,36 @@
     });
 
     return [...setsByKey.values()].sort(compareHighlightedOptions);
+  }
+
+  function buildRecommendedSkillPriorities(highestWinSkill, mostPickedSkill) {
+    const skillsByKey = new Map();
+
+    [
+      { option: highestWinSkill, isHighestWin: true, isMostPicked: false },
+      { option: mostPickedSkill, isHighestWin: false, isMostPicked: true },
+    ].forEach(({ option, isHighestWin, isMostPicked }) => {
+      const abilityKey = normalizeAbilityKey(option?.abilityKey);
+      if (!abilityKey) {
+        return;
+      }
+
+      const existing = skillsByKey.get(abilityKey);
+      if (existing) {
+        existing.isHighestWin = existing.isHighestWin || isHighestWin;
+        existing.isMostPicked = existing.isMostPicked || isMostPicked;
+        return;
+      }
+
+      skillsByKey.set(abilityKey, {
+        ...option,
+        abilityKey,
+        isHighestWin,
+        isMostPicked,
+      });
+    });
+
+    return [...skillsByKey.values()].sort(compareHighlightedOptions);
   }
 
   function getHighlightedOptions(options, keyField) {

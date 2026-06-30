@@ -140,6 +140,20 @@ test("POST /ban-suggestions returns one lane result, uses hover counters, and de
   assert.equal(repeated.body.requestStats.lolalyticsLiveAccessCount, 0);
   assert.equal(mockServer.countRequests("/mega/"), 6);
 
+  const allyIntentExcluded = await postJson(baseUrl, {
+    rankFilter: "emerald_plus",
+    hovers: [{ champion: "Ahri", role: "middle" }],
+    unavailableChampionKeys: ["34"],
+  });
+  assert.equal(allyIntentExcluded.status, 200);
+  assert.equal(
+    allyIntentExcluded.body.suggestions.find((suggestion) => suggestion.role === "middle")
+      .champion,
+    "Zed",
+  );
+  assert.equal(allyIntentExcluded.body.summary.unavailableChampionCount, 2);
+  assert.equal(mockServer.countRequests("/mega/"), 6);
+
   const changed = await postJson(baseUrl, {
     rankFilter: "emerald_plus",
     hovers: [{ champion: "Lux", role: "middle" }],
@@ -158,6 +172,19 @@ test("POST /ban-suggestions returns one lane result, uses hover counters, and de
   assert.equal(removed.status, 200);
   assert.equal(removed.body.summary.counterSuggestionCount, 0);
   assert.equal(removed.body.summary.fallbackSuggestionCount, 5);
+  assert.equal(mockServer.countRequests("/mega/"), 7);
+
+  const bannedChampionExcluded = await postJson(baseUrl, {
+    rankFilter: "emerald_plus",
+    hovers: [],
+    unavailableChampionKeys: ["238"],
+  });
+  assert.equal(bannedChampionExcluded.status, 200);
+  assert.equal(
+    bannedChampionExcluded.body.suggestions.find((suggestion) => suggestion.role === "middle")
+      .champion,
+    "Anivia",
+  );
   assert.equal(mockServer.countRequests("/mega/"), 7);
 
   const invalid = await postJson(baseUrl, {

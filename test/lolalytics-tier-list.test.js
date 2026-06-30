@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildEligibleTierStats,
+  calculateBestWorldwideWinRateDelta,
   calculatePickBanInfluence,
   extractTierListRows,
   extractTierRowsFromMegaPayload,
@@ -183,6 +184,7 @@ test("extractTierRowsFromMegaPayload parses current mega tier payloads by champi
                 pctLane: 99.92,
                 wr: 52.06,
                 pr: 14.46,
+                topWr: "56.25",
               },
             },
           },
@@ -212,6 +214,7 @@ test("extractTierRowsFromMegaPayload parses current mega tier payloads by champi
       lanePercent: 99.92,
       winRate: 52.06,
       pickRate: 14.46,
+      bestWorldwideWinRateDelta: 4.19,
     },
     {
       championKey: "412",
@@ -222,6 +225,30 @@ test("extractTierRowsFromMegaPayload parses current mega tier payloads by champi
       pickRate: 12.3,
     },
   ]);
+});
+
+test("calculateBestWorldwideWinRateDelta calculates the tier delta and clamps negatives", () => {
+  assert.equal(
+    calculateBestWorldwideWinRateDelta({
+      winRate: 53.88,
+      bestWorldwideWinRate: "58.50",
+    }),
+    4.62,
+  );
+  assert.equal(
+    calculateBestWorldwideWinRateDelta({
+      winRate: 53.88,
+      bestWorldwideWinRate: "52.50",
+    }),
+    0,
+  );
+  assert.equal(
+    calculateBestWorldwideWinRateDelta({
+      winRate: 53.88,
+      bestWorldwideWinRate: null,
+    }),
+    null,
+  );
 });
 
 test("extractTierRowsFromMegaPayload calculates PBI from mega tier fields", () => {

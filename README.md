@@ -7,7 +7,7 @@ The app can:
 - show first-pick tier lists before any champions are selected
 - suggest champions for allied roles that are still open
 - estimate the full draft once all five allied roles are assigned
-- show enemy-aware runes, summoner spells, items, and boots for one ally
+- show enemy-aware runes, summoner spells, starting items, skill max priorities, items, and boots for one ally
 - import a displayed rune page into the League Client during pick/ban
 - on Windows, optionally import visible and hovered League pick/ban champions in Normal Draft or Ranked queues
 - during Auto Import bans, show one ban recommendation for Top, Jungle, Mid, ADC, and Support
@@ -88,7 +88,7 @@ Leave the terminal window open while you use the app.
 5. Click **Fetch Suggestions**.
 6. Use the **Target role** dropdown in the results area to switch between returned role suggestions.
 7. Click **+** on a result row to add that recommendation to the allied draft for the role you are viewing.
-8. Sort first-pick rows with **PBI** or **Winrate**. Sort draft-aware rows with **Projected Win Rate** or **Projected Agency**.
+8. Sort first-pick rows with **PBI** or **Base Win Rate**. For draft-aware rows, use **Champion Skill Level** to choose Low, Average, or High, then click a table heading to sort by that column.
 9. After one ally has a role and at least one enemy champion is selected, click **Build** on that ally row to see matchup-aware build recommendations.
 10. During League pick/ban, click **Import Runes** on a displayed rune page to overwrite the first editable saved League rune page as `import - Champion Name`.
 11. If all five allies are selected and every ally role is assigned, click **Who will win?** to project the current draft.
@@ -109,17 +109,22 @@ During the ban phase, a separate panel shows exactly one recommendation for Top,
 
 Missing or invalid lane and hover data uses the PBI fallback. Hover changes replace the affected recommendation, and the entire panel disappears as soon as Auto Import observes that the ban phase has ended. Normal pick-phase recommendations continue to use the existing draft-aware flow.
 
+Ban recommendations skip champions reserved by any ally pick placeholder and champions already banned in the current session. When the current recommendation becomes unavailable, the panel refreshes with the next eligible counter or PBI result.
+
 If Auto Import cannot find a supported live draft, loses the connection, or sees another game mode, the banner says import is disabled and your current selections stay as they are.
 
 ## What The Scores Mean
 
-- `Synergy Score`: how well a candidate fits your allied champions
-- `Counter Score`: how well a candidate performs into your enemy champions
-- `Projected Win Rate`: the combined matchup win-rate estimate from the selected allies and enemies
-- `Projected Agency`: the blended score available in the **Rank by** dropdown
+- `Synergy`: how well a candidate fits your allied champions
+- `Counter`: how well a candidate performs into your enemy champions
+- `Projected Win Rate`: the selected skill-level matchup estimate, followed by the champion's base win rate in lighter text within parentheses
+- `Projected Agency (Synergy + Counter)`: the unhalved sum of Synergy and Counter, with both inputs shown in lighter text within parentheses
 - `PBI`: Lolalytics Pick Ban Influence for first-pick tier-list rows
 
-The top five rows for each active metric are highlighted, with overlap highlighted in yellow.
+Draft-aware results highlight the top ten projected-win-rate rows for the selected skill
+level. Yellow is reserved for picks that are also top ten in Projected Agency and top ten
+at all three skill levels: Low, Average, and High. First-pick results keep their separate
+PBI, win-rate, and overlap highlights.
 
 ## Limits
 

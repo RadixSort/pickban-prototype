@@ -194,6 +194,7 @@ app.post("/rune-import", async (request, response) => {
 
 app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response) => {
   const normalizedRequest = normalizeBanSuggestionRequest(request.body, {
+    championByKey,
     championByName,
     defaultRankFilter: DEFAULT_RANK_FILTER,
     normalizeChampionName,
@@ -207,6 +208,7 @@ app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response
     patch: PATCH_WINDOW,
     rankFilter: normalizedRequest.rankFilter,
     roleOptions: ROLE_OPTIONS,
+    unavailableChampionKeys: normalizedRequest.unavailableChampionKeys,
   });
   const cachedPayload = getCachedData(banSuggestionQueryCache, cacheKey);
   if (cachedPayload) {
@@ -219,6 +221,9 @@ app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response
   const selectedChampionKeys = new Set(
     Array.from(normalizedRequest.hoversByRole.values()).map((champion) => String(champion.key)),
   );
+  for (const championKey of normalizedRequest.unavailableChampionKeys) {
+    selectedChampionKeys.add(championKey);
+  }
   const roleOutcomes = await Promise.all(
     ROLE_OPTIONS.map(({ value: role }) =>
       buildBanSuggestionForRole({
@@ -246,6 +251,7 @@ app.post("/ban-suggestions", withLolalyticsRequestStats(async (request, response
     suggestions,
     summary: {
       hoverCount: normalizedRequest.hoversByRole.size,
+      unavailableChampionCount: selectedChampionKeys.size,
       counterSuggestionCount: suggestions.filter((suggestion) => suggestion.strategy === "counter")
         .length,
       fallbackSuggestionCount: suggestions.filter((suggestion) => suggestion.strategy === "pbi")
@@ -1343,6 +1349,9 @@ function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
     startingItems: hasBuildList(renderedBuildData.startingItems?.options)
       ? renderedBuildData.startingItems
       : primaryBuildData.startingItems,
+    skills: hasBuildList(renderedBuildData.skills?.options)
+      ? renderedBuildData.skills
+      : primaryBuildData.skills,
     items: hasNestedBuildList(renderedBuildData.items?.slotOptions)
       ? renderedBuildData.items
       : primaryBuildData.items,

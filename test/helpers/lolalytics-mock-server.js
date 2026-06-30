@@ -130,6 +130,7 @@ function createTierMegaData(lane, rows = [], options = {}) {
       pr: row.pickRate,
       br: row.banRate ?? row.br ?? 0,
       games: row.games || 1000,
+      ...(row.topWinRate != null ? { topWr: row.topWinRate } : {}),
     };
   });
 
@@ -257,6 +258,9 @@ function createRenderedBuildPageHtml({
   thirdCoreWinRate = 83.33,
   spellGames = 48,
   spellWinRate = 53.63,
+  skillGames = 44,
+  skillWinRate = 55.68,
+  skillOrder = ["Q", "E", "W"],
   startingGames = 36,
   startingWinRate = 54.17,
   secondStartingGames = 18,
@@ -293,6 +297,8 @@ function createRenderedBuildPageHtml({
         <img src="https://cdn5.lolalytics.com/spell64/14.webp" alt="Ignite" />
         ${renderSpellStats(spellWinRate, spellGames)}
         <h2>Skill Order</h2>
+        ${skillOrder.map((abilityKey) => `<span>${abilityKey}</span>`).join("\n")}
+        ${renderSpellStats(skillWinRate, skillGames)}
       </section>
       <section>
         <h2>Starting Build</h2>
@@ -404,6 +410,10 @@ function createGenericBuildQData({
       spells: [
         ["4_12", winRate, 100, totalGames],
         ["4_14", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
+      ],
+      skillOrder: [
+        ["1_3_2", winRate, 100, totalGames],
+        ["3_1_2", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
       ],
       item1: [[3118, winRate, totalGames, totalGames, 10]],
       item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
@@ -518,6 +528,10 @@ function createMatchupBuildQData({
       spells: [
         ["4_12", winRate, 100, totalGames],
         ["4_14", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
+      ],
+      skillOrder: [
+        ["1_3_2", winRate, 100, totalGames],
+        ["3_1_2", winRate + 2, 60, Math.max(1, Math.round(totalGames * 0.6))],
       ],
       item1: [[3118, winRate, totalGames, totalGames, 10]],
       item2: [[bootItemId, winRate, totalGames, totalGames, 13]],
