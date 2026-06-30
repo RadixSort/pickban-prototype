@@ -1030,6 +1030,10 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
     firstResponse.body.boots.options.map((option) => option.itemId),
     [3170],
   );
+  assert.deepEqual(firstResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 10,
+    lolalyticsLifetimeAccessCount: 10,
+  });
 
   const secondResponse = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
@@ -1041,7 +1045,17 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   });
 
   assert.equal(secondResponse.status, 200);
-  assert.deepEqual(secondResponse.body, firstResponse.body);
+  assert.deepEqual(
+    {
+      ...secondResponse.body,
+      requestStats: firstResponse.body.requestStats,
+    },
+    firstResponse.body,
+  );
+  assert.deepEqual(secondResponse.body.requestStats, {
+    lolalyticsLiveAccessCount: 0,
+    lolalyticsLifetimeAccessCount: 10,
+  });
   assert.equal(mockServer.countRequests("/mega/"), 5);
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname === "/mega/" && entry.search.includes("ep=rune")),
@@ -1104,6 +1118,10 @@ test("POST /build-suggestions accepts partial enemy teams", async (t) => {
   assert.equal(response.body.summary.enemyCount, 1);
   assert.equal(response.body.summary.sourceMatchups, 1);
   assertBuildSuggestionSectionsArePopulated(response.body);
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 2,
+    lolalyticsLifetimeAccessCount: 2,
+  });
   assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
@@ -1165,6 +1183,10 @@ test("POST /build-suggestions rejects rune-only data when rendered build pages a
   );
   assert.equal(response.body.summary.enemyCount, 5);
   assert.equal(response.body.summary.sourceMatchups, 5);
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 10,
+    lolalyticsLifetimeAccessCount: 10,
+  });
   assert.equal(mockServer.countRequests("/mega/"), 5);
   assert.equal(
     mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
@@ -1219,6 +1241,10 @@ test("POST /build-suggestions returns a 502 summary when every rune build fetch 
     response.body.summary.partialFailures[1],
     /Jinx: .*Ahri vs Jinx middle rune build data .*status 504/i,
   );
+  assert.deepEqual(response.body.requestStats, {
+    lolalyticsLiveAccessCount: 10,
+    lolalyticsLifetimeAccessCount: 10,
+  });
   assert.equal(mockServer.countRequests("/mega/"), 5);
 });
 

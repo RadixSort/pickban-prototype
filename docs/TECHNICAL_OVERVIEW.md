@@ -124,7 +124,7 @@ The rendered-page parser prefers Lolalytics' embedded Qwik snapshot for item and
 
 The route only succeeds when runes, summoner spells, boots, and both five-item paths can populate the modal. Starting items and skill max priorities render when available but are not required for success.
 
-Response shape includes `request`, `summary`, `runes`, `spells`, `startingItems`, `skillPriority`, `items`, and `boots`.
+Response shape includes `request`, `summary`, `runes`, `spells`, `startingItems`, `skillPriority`, `items`, `boots`, and `requestStats`.
 
 ### Rune Import
 
@@ -190,11 +190,11 @@ three projected win-rate rankings: Low, Average, and High.
 
 Backend caches:
 
-- Lolalytics resource cache: full URL key, 5-minute TTL
-- normalized matchup build cache: ally, role, enemy, rank filter, patch key, 5-minute TTL
-- aggregated build cache: rank filter, ally, role, enemies key, 5-minute TTL
-- aggregated draft-projection cache: rank filter, allies, roles, enemies key, 5-minute TTL
-- aggregated ban-suggestion cache: rank filter, patch, one hover champion key per lane, and unavailable champion keys, 5-minute TTL
+- Lolalytics resource cache: full URL key, 8-hour TTL
+- normalized matchup build cache: ally, role, enemy, rank filter, patch key, 8-hour TTL
+- aggregated build cache: rank filter, ally, role, enemies key, 8-hour TTL
+- aggregated draft-projection cache: rank filter, allies, roles, enemies key, 8-hour TTL
+- aggregated ban-suggestion cache: rank filter, patch, one hover champion key per lane, and unavailable champion keys, 8-hour TTL
 - resolved Qwik payload caches: `WeakMap`s tied to payload object lifetime
 
 Frontend caches:
@@ -205,7 +205,7 @@ Frontend caches:
 - ban suggestions: current champion-select session, keyed by rank, lane hovers, and unavailable champion keys; cleared on phase exit
 - live-draft and rune-import calls: never cached
 
-The URL-level Lolalytics cache coalesces identical in-flight requests, so ban and pick flows reuse the same tier and counter resources and concurrent identical requests issue one live hit. Remote requests time out after 15 seconds. Role, draft, and build fetches preserve partial failures when enough data remains to build a useful result. Ban counter failures fall back lane-by-lane to PBI; the route fails only when it cannot produce all five lane recommendations.
+The URL-level Lolalytics cache coalesces identical in-flight requests, so ban, pick, build, PBI, and draft-projection flows reuse matching resources and concurrent identical requests issue one live hit. Every attempted outbound Lolalytics request increments the lifetime live-hit counter, including failed requests; cache hits do not. Each Lolalytics-backed route returns the current counter in `requestStats`. Remote requests time out after 15 seconds. Role, draft, and build fetches preserve partial failures when enough data remains to build a useful result. Ban counter failures fall back lane-by-lane to PBI; the route fails only when it cannot produce all five lane recommendations.
 
 ## Startup Update
 

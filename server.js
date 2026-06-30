@@ -96,7 +96,7 @@ const LOLALYTICS_MEGA_URL = normalizeBaseUrl(
   { requireTrailingSlash: true },
 );
 const REQUEST_TIMEOUT_MS = 15000;
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 8 * 60 * 60 * 1000;
 const SHUTDOWN_GRACE_PERIOD_MS = 1000;
 
 const requestCache = new Map();
@@ -464,7 +464,10 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
   );
   const cachedPayload = getCachedData(buildSuggestionQueryCache, aggregatedCacheKey);
   if (cachedPayload) {
-    return response.json(cachedPayload);
+    return response.json({
+      ...cachedPayload,
+      requestStats: buildLolalyticsRequestStats(),
+    });
   }
 
   const matchupResults = await Promise.allSettled(
@@ -492,6 +495,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
         lastUpdatedAt: new Date().toISOString(),
         partialFailures,
       },
+      requestStats: buildLolalyticsRequestStats(),
     });
   }
 
@@ -511,11 +515,15 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
         "Lolalytics returned build data, but it did not include usable build recommendations.",
       request: payload.request,
       summary: payload.summary,
+      requestStats: buildLolalyticsRequestStats(),
     });
   }
 
   setCachedData(buildSuggestionQueryCache, aggregatedCacheKey, payload);
-  response.json(payload);
+  response.json({
+    ...payload,
+    requestStats: buildLolalyticsRequestStats(),
+  });
 }));
 
 server = app.listen(PORT, () => {
