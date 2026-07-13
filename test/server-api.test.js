@@ -73,6 +73,115 @@ async function getJson(baseUrl, endpoint) {
   };
 }
 
+function createRenderedQwikBuildPageHtml({
+  totalGames = 100,
+  mostPickedRuneGames = 60,
+  highestWinRuneGames = 5,
+} = {}) {
+  const qwikSnapshot = {
+    refs: {},
+    ctx: {},
+    subs: [],
+    objs: [
+      {
+        header: {
+          cid: 103,
+          vs: 89,
+          lane: "middle",
+          vsLane: "support",
+          n: totalGames,
+        },
+        summary: {
+          pick: {
+            sums: {
+              ids: [4, 14],
+              n: 80,
+              wr: 55,
+            },
+            runes: {
+              wr: 55,
+              n: mostPickedRuneGames,
+              set: {
+                pri: [8010, 9111, 9103, 8299],
+                sec: [8446, 8451],
+                mod: [5005, 5008, 5001],
+              },
+            },
+          },
+          win: {
+            sums: {
+              ids: [4, 12],
+              n: 20,
+              wr: 65,
+            },
+            runes: {
+              wr: 80,
+              n: highestWinRuneGames,
+              set: {
+                pri: [8992, 8224, 8210, 8237],
+                sec: [8444, 8453],
+                mod: [5008, 5008, 5011],
+              },
+            },
+          },
+        },
+        runes: {
+          stats: {
+            5001: [[60, 55, mostPickedRuneGames]],
+            5005: [[60, 55, mostPickedRuneGames]],
+            5008: [[65, 56, mostPickedRuneGames + highestWinRuneGames]],
+            5011: [[5, 80, highestWinRuneGames]],
+            8010: [[60, 55, mostPickedRuneGames]],
+            8299: [[60, 55, mostPickedRuneGames]],
+            9103: [[60, 55, mostPickedRuneGames]],
+            9111: [[60, 55, mostPickedRuneGames]],
+            8210: [[5, 80, highestWinRuneGames]],
+            8224: [[5, 80, highestWinRuneGames]],
+            8237: [[5, 80, highestWinRuneGames]],
+            8992: [[5, 80, highestWinRuneGames]],
+            8444: [[0, 0, 0], [5, 80, highestWinRuneGames]],
+            8446: [[0, 0, 0], [60, 55, mostPickedRuneGames]],
+            8451: [[0, 0, 0], [60, 55, mostPickedRuneGames]],
+            8453: [[0, 0, 0], [5, 80, highestWinRuneGames]],
+          },
+        },
+        spells: [
+          ["4_14", 55, 80, 80],
+          ["4_12", 65, 20, 20],
+        ],
+        startSet: [["1056_2003", 55, 80, 80]],
+        skillOrder: [["1_3_2", 55, 80, 80]],
+        boots: [[3170, 55, 80, 80, 13]],
+        item1: [[2510, 55, 80, 80, 10]],
+        item2: [[3115, 55, 80, 80, 15]],
+        item3: [[3089, 55, 80, 80, 20]],
+        item4: [[4645, 55, 80, 80, 25]],
+        item5: [[3135, 55, 80, 80, 30]],
+      },
+      {
+        1056: "Doran's Ring",
+        2003: "Health Potion",
+        2510: "Dusk and Dawn",
+        3115: "Nashor's Tooth",
+        3089: "Rabadon's Deathcap",
+        4645: "Shadowflame",
+        3135: "Void Staff",
+        3170: "Gluttonous Greaves",
+      },
+    ],
+  };
+
+  return `
+    <main>
+      <h2>Core Build</h2>
+      <img src="https://cdn5.lolalytics.com/item64/2510.webp" alt="Dusk and Dawn" />
+      <p>55%</p>
+      <p>80</p>
+    </main>
+    <script type="qwik/json">${JSON.stringify(qwikSnapshot)}</script>
+  `;
+}
+
 function assertBuildSuggestionSectionsArePopulated(payload) {
   assert.equal(payload.runes.overview.slotGroups.length > 0, true);
   assert.ok(payload.runes.mostPickedPage);
@@ -1138,10 +1247,60 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
         entry.pathname.startsWith("/lol/ahri/vs/") &&
         new URLSearchParams(entry.search).get("tier") === "emerald_plus" &&
         new URLSearchParams(entry.search).get("lane") === "middle" &&
-        new URLSearchParams(entry.search).get("patch") === "7",
+        new URLSearchParams(entry.search).get("patch") === "14",
     ),
     5,
   );
+});
+
+test("POST /build-suggestions prefers rendered matchup runes over generic mega runes", async (t) => {
+  const { baseUrl } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
+      return jsonResponse(
+        createRuneBuildMegaData({
+          role: "middle",
+          totalGames: 10000,
+          pickWinRate: 51,
+          highestWinRate: 52,
+          highestWinGames: 6000,
+        }),
+      );
+    }
+
+    if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
+      return textResponse(
+        createRenderedQwikBuildPageHtml({
+          totalGames: 100,
+          mostPickedRuneGames: 60,
+          highestWinRuneGames: 5,
+        }),
+      );
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: ["Leona"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    response.body.runes.mostPickedPage.selections.primary.map((selection) => selection.id),
+    [8010, 9111, 9103, 8299],
+  );
+  assert.deepEqual(
+    response.body.runes.highestWinPage.selections.primary.map((selection) => selection.id),
+    [8992, 8224, 8210, 8237],
+  );
+  assert.equal(response.body.runes.highestWinPage.games, 5);
+  assert.equal(response.body.runes.highestWinPage.pickRate, 5);
+  assert.equal(response.body.runes.mostPickedPage.pickRate, 60);
 });
 
 test("POST /build-suggestions accepts partial enemy teams", async (t) => {

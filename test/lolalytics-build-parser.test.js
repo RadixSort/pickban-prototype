@@ -638,6 +638,15 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
         },
         summary: {
           pick: {
+            runes: {
+              wr: 55,
+              n: 300,
+              set: {
+                pri: [8010, 9111, 9103, 8299],
+                sec: [8446, 8451],
+                mod: [5005, 5008, 5001],
+              },
+            },
             items: {
               start: {
                 n: 578,
@@ -662,6 +671,15 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
             },
           },
           win: {
+            runes: {
+              wr: 62,
+              n: 80,
+              set: {
+                pri: [8992, 8224, 8210, 8237],
+                sec: [8444, 8453],
+                mod: [5008, 5008, 5011],
+              },
+            },
             items: {
               start: {
                 n: 80,
@@ -684,6 +702,38 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
                 wr: 59.57,
               },
             },
+          },
+        },
+        runes: {
+          stats: {
+            5001: [[25, 55, 300]],
+            5005: [[25, 55, 300]],
+            5008: [[30, 56.47, 380]],
+            5011: [[5, 62, 80]],
+            8010: [[25, 55, 300]],
+            8299: [[25, 55, 300]],
+            9103: [[25, 55, 300]],
+            9111: [[25, 55, 300]],
+            8210: [[5, 62, 80]],
+            8224: [[5, 62, 80]],
+            8237: [[5, 62, 80]],
+            8992: [[5, 62, 80]],
+            8444: [
+              [0, 0, 0],
+              [5, 62, 80],
+            ],
+            8446: [
+              [0, 0, 0],
+              [25, 55, 300],
+            ],
+            8451: [
+              [0, 0, 0],
+              [25, 55, 300],
+            ],
+            8453: [
+              [0, 0, 0],
+              [5, 62, 80],
+            ],
           },
         },
         spells: [["4_11", 54.23, 99.94, 1737]],
@@ -777,6 +827,41 @@ test("parseLolalyticsRenderedBuildPage reads inactive item tabs from Qwik snapsh
     [
       { abilityKey: "Q", games: 1430 },
       { abilityKey: "E", games: 177 },
+    ],
+  );
+  assert.deepEqual(
+    parsed.runes.pageCandidates.map((candidate) => ({
+      sourceType: candidate.sourceType,
+      primaryRuneIds: candidate.primaryRuneIds,
+      secondaryRuneIds: candidate.secondaryRuneIds,
+      games: candidate.games,
+      winRate: Number(candidate.winRate.toFixed(2)),
+    })),
+    [
+      {
+        sourceType: "pick",
+        primaryRuneIds: [8010, 9111, 9103, 8299],
+        secondaryRuneIds: [8446, 8451],
+        games: 300,
+        winRate: 55,
+      },
+      {
+        sourceType: "win",
+        primaryRuneIds: [8992, 8224, 8210, 8237],
+        secondaryRuneIds: [8444, 8453],
+        games: 80,
+        winRate: 62,
+      },
+    ],
+  );
+  assert.deepEqual(
+    parsed.runes.primaryStyleOptions.map((option) => ({
+      id: option.id,
+      games: option.games,
+    })),
+    [
+      { id: 8000, games: 300 },
+      { id: 8200, games: 80 },
     ],
   );
 });

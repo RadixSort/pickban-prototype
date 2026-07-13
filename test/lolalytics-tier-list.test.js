@@ -12,12 +12,12 @@ const {
 const sampleTierListHtml = `
   <div class="flex h-[52px]  justify-between text-[13px] text-[#cccccc] odd:bg-[#181818] even:bg-[#101010]" q:id="55">
     <div style="width:50px" class="my-auto justify-center flex" q:key="1">
-      <a href="/lol/thresh/build/?tier=platinum_plus&amp;patch=7" q:key="Hl_2">
+      <a href="/lol/thresh/build/?tier=platinum_plus&amp;patch=14" q:key="Hl_2">
         <img src="https://cdn5.lolalytics.com/champx46/thresh.webp" width="50" height="50" alt="Thresh" />
       </a>
     </div>
     <div style="width:110px" class="my-auto justify-center flex" q:key="2">
-      <a href="/lol/thresh/build/?tier=platinum_plus&amp;patch=7" q:key="Hl_0">Thresh</a>
+      <a href="/lol/thresh/build/?tier=platinum_plus&amp;patch=14" q:key="Hl_0">Thresh</a>
     </div>
     <div style="width:40px" class="my-auto justify-center flex" q:key="3">S+</div>
     <div style="width:40px" class="my-auto justify-center flex" q:key="4">
@@ -37,12 +37,12 @@ const sampleTierListHtml = `
   </div>
   <div class="flex h-[52px]  justify-between text-[13px] text-[#cccccc] odd:bg-[#181818] even:bg-[#101010]" q:id="5r">
     <div style="width:50px" class="my-auto justify-center flex" q:key="1">
-      <a href="/lol/sona/build/?tier=platinum_plus&amp;patch=7" q:key="Hl_2">
+      <a href="/lol/sona/build/?tier=platinum_plus&amp;patch=14" q:key="Hl_2">
         <img src="https://cdn5.lolalytics.com/champx46/sona.webp" width="50" height="50" alt="Sona" />
       </a>
     </div>
     <div style="width:110px" class="my-auto justify-center flex" q:key="2">
-      <a href="/lol/sona/build/?tier=platinum_plus&amp;patch=7" q:key="Hl_0">Sona</a>
+      <a href="/lol/sona/build/?tier=platinum_plus&amp;patch=14" q:key="Hl_0">Sona</a>
     </div>
     <div style="width:40px" class="my-auto justify-center flex" q:key="3">S</div>
     <div style="width:40px" class="my-auto justify-center flex" q:key="4">
@@ -64,7 +64,7 @@ const sampleTierListHtml = `
 
 const sampleGridTierListHtml = `
   <div class="h-[151px] min-w-[150px] max-w-[190px] flex-auto overflow-hidden border border-[#4e6a6c] hover:border-white" q:key="hE_6">
-    <a href="/lol/maokai/build/?tier=platinum_plus&amp;patch=7">
+    <a href="/lol/maokai/build/?tier=platinum_plus&amp;patch=14">
       <div>
         <div class="h-[20px] flex-auto border-b-[1px] border-[#4e6a6c] pt-[2px] text-center text-[15px]">Maokai</div>
         <div class="flex">
@@ -89,7 +89,7 @@ const sampleGridTierListHtml = `
     </a>
   </div>
   <div class="h-[151px] min-w-[150px] max-w-[190px] flex-auto overflow-hidden border border-[#4e6a6c] hover:border-white" q:key="hE_6">
-    <a href="/lol/morgana/build/?tier=platinum_plus&amp;patch=7">
+    <a href="/lol/morgana/build/?tier=platinum_plus&amp;patch=14">
       <div>
         <div class="h-[20px] flex-auto border-b-[1px] border-[#4e6a6c] pt-[2px] text-center text-[15px]">Morgana</div>
         <div class="flex">

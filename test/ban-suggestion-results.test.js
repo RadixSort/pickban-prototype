@@ -96,7 +96,7 @@ test("invalid and incomplete hover records normalize to lane PBI fallbacks", () 
   assert.doesNotThrow(() =>
     buildBanSuggestionCacheKey({
       hoversByRole: request.hoversByRole,
-      patch: "7",
+      patch: "14",
       rankFilter: request.rankFilter,
       roleOptions: ROLE_OPTIONS,
     }),
@@ -121,7 +121,7 @@ test("known unavailable champions normalize into the aggregate cache key", () =>
   );
   const cacheKey = buildBanSuggestionCacheKey({
     hoversByRole: request.hoversByRole,
-    patch: "7",
+    patch: "14",
     rankFilter: request.rankFilter,
     roleOptions: ROLE_OPTIONS,
     unavailableChampionKeys: request.unavailableChampionKeys,

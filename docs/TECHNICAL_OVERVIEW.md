@@ -73,7 +73,7 @@ Candidates must have at least 10% lane share and 0.5% pick rate. Selected champi
 
 ### Builds and rune import
 
-`POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for inactive item tabs, with visible HTML sections as fallback. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
+`POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for matchup rune pages and inactive item tabs, with visible HTML sections as fallback. Rendered Qwik rune data overrides mega rune data when present because the mega endpoint can return generic champion-role runes even when a matchup filter is requested. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 

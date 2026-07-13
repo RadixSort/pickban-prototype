@@ -94,7 +94,7 @@ const state = {
   banSuggestionRequestsByKey: {},
   buildSuggestionCache: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
-  lolalyticsDataWindowDays: 7,
+  lolalyticsDataWindowDays: 14,
   lolalyticsLifetimeAccessCount: 0,
 };
 
@@ -2258,7 +2258,7 @@ function formatLolalyticsAccessStat(accessCount) {
 }
 
 function formatLolalyticsDataWindow(days) {
-  const normalizedDays = Math.max(1, Math.round(Number(days) || 7));
+  const normalizedDays = Math.max(1, Math.round(Number(days) || 14));
   return `last ${normalizedDays} ${normalizedDays === 1 ? "day" : "days"}`;
 }
 

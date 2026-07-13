@@ -80,7 +80,7 @@ const { buildBuildSuggestionCacheKey } = require(path.join(
 ));
 
 const PORT = process.env.PORT || 3000;
-const PATCH_WINDOW = "7";
+const PATCH_WINDOW = "14";
 const LOLALYTICS_DATA_WINDOW_DAYS = Number.parseInt(PATCH_WINDOW, 10);
 const QUEUE = "ranked";
 const REGION = "all";
@@ -1354,8 +1354,14 @@ function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
     return primaryBuildData;
   }
 
+  const renderedRunes = hasUsableRuneData(renderedBuildData.runes)
+    ? renderedBuildData.runes
+    : null;
+
   return {
     ...primaryBuildData,
+    totalGames: renderedRunes ? renderedBuildData.totalGames : primaryBuildData.totalGames,
+    runes: renderedRunes || primaryBuildData.runes,
     spells: hasBuildList(renderedBuildData.spells?.options)
       ? renderedBuildData.spells
       : primaryBuildData.spells,
@@ -1376,6 +1382,10 @@ function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
 
 function hasBuildList(value) {
   return Array.isArray(value) && value.length > 0;
+}
+
+function hasUsableRuneData(runes) {
+  return hasBuildList(runes?.pageCandidates);
 }
 
 function hasNestedBuildList(value) {

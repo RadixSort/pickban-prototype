@@ -593,12 +593,12 @@ function buildTierListRowHtml({
   return `
     <div class="flex h-[52px]  justify-between text-[13px] text-[#cccccc] odd:bg-[#181818] even:bg-[#101010]" q:id="${slug}">
       <div style="width:50px" class="my-auto justify-center flex" q:key="1">
-        <a href="/lol/${slug}/build/?patch=7" q:key="Hl_2">
+        <a href="/lol/${slug}/build/?patch=14" q:key="Hl_2">
           <img src="https://cdn5.lolalytics.com/champx46/${slug}.webp" width="50" height="50" alt="${name}" />
         </a>
       </div>
       <div style="width:110px" class="my-auto justify-center flex" q:key="2">
-        <a href="/lol/${slug}/build/?patch=7" q:key="Hl_0">${name}</a>
+        <a href="/lol/${slug}/build/?patch=14" q:key="Hl_0">${name}</a>
       </div>
       <div style="width:40px" class="my-auto justify-center flex" q:key="3">S</div>
       <div style="width:40px" class="my-auto justify-center flex" q:key="4">
