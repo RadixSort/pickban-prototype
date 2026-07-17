@@ -1,11 +1,19 @@
 (function initializeBuildSuggestionView(globalScope, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory(require("./summoner-spell-metadata.js"));
+    module.exports = factory(
+      require("./summoner-spell-metadata.js"),
+      require("./build-suggestion-consensus.js"),
+    );
     return;
   }
 
-  globalScope.buildSuggestionView = factory(globalScope.summonerSpellMetadata || {});
-})(typeof globalThis !== "undefined" ? globalThis : this, (summonerSpellMetadata = {}) => {
+  globalScope.buildSuggestionView = factory(
+    globalScope.summonerSpellMetadata || {},
+    globalScope.buildSuggestionConsensus || {},
+  );
+})(
+  typeof globalThis !== "undefined" ? globalThis : this,
+  (summonerSpellMetadata = {}, buildSuggestionConsensus = {}) => {
   const DEFAULT_BUILD_SUGGESTION_TAB = "summary";
   const BUILD_SUGGESTION_TABS = [{ value: "summary", label: "Summary" }];
   const validTabs = new Set(BUILD_SUGGESTION_TABS.map((tab) => tab.value));
@@ -17,6 +25,14 @@
     typeof summonerSpellMetadata.getSummonerSpellName === "function"
       ? summonerSpellMetadata.getSummonerSpellName
       : () => "";
+  const getBuildChoiceKey =
+    typeof buildSuggestionConsensus.getBuildChoiceKey === "function"
+      ? buildSuggestionConsensus.getBuildChoiceKey
+      : () => null;
+  const isBuildChoiceUnanimous =
+    typeof buildSuggestionConsensus.isBuildChoiceUnanimous === "function"
+      ? buildSuggestionConsensus.isBuildChoiceUnanimous
+      : () => false;
 
   function normalizeBuildSuggestionTab(value) {
     return validTabs.has(value) ? value : DEFAULT_BUILD_SUGGESTION_TAB;
@@ -77,6 +93,7 @@
       mostPickedItemBuild,
       boots,
       notes: [...runeNotes, ...spellNotes, ...startingItemNotes, ...skillPriorityNotes],
+      consensus: options?.consensus || null,
       runeImportStatesByPageKey: normalizeRuneImportStates(options?.runeImportStatesByPageKey),
       slotGroupMap: buildSlotGroupMap(slotGroups),
     });
@@ -95,6 +112,7 @@
     mostPickedItemBuild,
     boots,
     notes,
+    consensus,
     runeImportStatesByPageKey,
     slotGroupMap,
   }) {
@@ -133,25 +151,27 @@
     return `
       <div class="build-view build-view--summary">
         ${renderInlineNotes(notes)}
-        ${renderBuildSummaryGlobalNote()}
+        ${renderBuildSummaryGlobalNote(consensus)}
         <div class="build-summary-top-grid">
           <div class="build-summary-rune-stack">
             ${renderRuneRecommendationsSection(
               runeRecommendations,
               slotGroupMap,
               runeImportStatesByPageKey,
+              consensus,
             )}
-            ${renderSpellRecommendationsSection(spellRecommendations)}
+            ${renderSpellRecommendationsSection(spellRecommendations, consensus)}
           </div>
           <div class="build-summary-side-stack">
-            ${renderStartingItemsSection(startingItemRecommendations)}
-            ${renderSkillPrioritySection(skillPriorityRecommendations)}
-            ${renderBootsSection(highlightedBoots)}
+            ${renderStartingItemsSection(startingItemRecommendations, consensus)}
+            ${renderSkillPrioritySection(skillPriorityRecommendations, consensus)}
+            ${renderBootsSection(highlightedBoots, consensus)}
           </div>
         </div>
         ${renderItemsSection({
           highestWinBuild: highestWinItemBuild,
           mostPickedBuild: mostPickedItemBuild,
+          consensus,
         })}
       </div>
     `;
@@ -164,6 +184,7 @@
     runeImportStatesByPageKey,
     slotGroupMap,
     emptyMessage,
+    consensus,
   }) {
     if (!page) {
       return `
@@ -190,7 +211,7 @@
     const runeImportState = pageKey ? runeImportStatesByPageKey[pageKey] || null : null;
 
     return `
-      <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
+      <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}${getRecommendationUnanimousClassName(consensus, "runes", page)}">
         <header class="build-summary-column-header">
           <div class="build-summary-column-header-top">
             <div class="build-summary-column-heading">
@@ -232,6 +253,7 @@
     recommendations,
     slotGroupMap,
     runeImportStatesByPageKey = {},
+    consensus = null,
   ) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
@@ -265,6 +287,7 @@
                 runeImportStatesByPageKey,
                 slotGroupMap,
                 emptyMessage: "",
+                consensus,
               }),
             )
             .join("")}
@@ -273,7 +296,7 @@
     `;
   }
 
-  function renderSpellRecommendationsSection(recommendations) {
+  function renderSpellRecommendationsSection(recommendations, consensus) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended summoner spells">
@@ -297,13 +320,13 @@
           </div>
         </header>
         <div class="build-spell-card-list build-spell-card-list--spells${recommendations.length === 1 ? " build-spell-card-list--single" : ""}">
-          ${recommendations.map((spellSet) => renderSpellSetCard(spellSet)).join("")}
+          ${recommendations.map((spellSet) => renderSpellSetCard(spellSet, consensus)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderStartingItemsSection(recommendations) {
+  function renderStartingItemsSection(recommendations, consensus) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended starting items">
@@ -327,13 +350,13 @@
           </div>
         </header>
         <div class="build-spell-card-list">
-          ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet)).join("")}
+          ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet, consensus)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderSkillPrioritySection(recommendations) {
+  function renderSkillPrioritySection(recommendations, consensus) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended skill max priority">
@@ -357,13 +380,13 @@
           </div>
         </header>
         <div class="build-skill-priority-list${recommendations.length === 1 ? " build-skill-priority-list--single" : ""}">
-          ${recommendations.map((skill) => renderSkillPriorityCard(skill)).join("")}
+          ${recommendations.map((skill) => renderSkillPriorityCard(skill, consensus)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderBootsSection(boots) {
+  function renderBootsSection(boots, consensus) {
     if (!Array.isArray(boots) || boots.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended boots">
@@ -385,13 +408,13 @@
           </div>
         </header>
         <div class="build-summary-boot-list">
-          ${boots.map((boot) => renderCompactBootCard(boot)).join("")}
+          ${boots.map((boot) => renderCompactBootCard(boot, consensus)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderItemsSection({ highestWinBuild, mostPickedBuild }) {
+  function renderItemsSection({ highestWinBuild, mostPickedBuild, consensus }) {
     const hasItems =
       Array.isArray(highestWinBuild?.selections) || Array.isArray(mostPickedBuild?.selections);
 
@@ -422,12 +445,14 @@
             title: "Highest Win",
             tone: "highest-win",
             build: highestWinBuild,
+            consensus,
             emptyMessage: "No highest-win item path was available.",
           })}
           ${renderItemBuildColumn({
             title: "Most Picked",
             tone: "most-picked",
             build: mostPickedBuild,
+            consensus,
             emptyMessage: "No most-picked item path was available.",
           })}
         </div>
@@ -435,7 +460,7 @@
     `;
   }
 
-  function renderItemBuildColumn({ title, tone, build, emptyMessage }) {
+  function renderItemBuildColumn({ title, tone, build, emptyMessage, consensus }) {
     const selections = getOrderedSelections(build?.selections);
 
     if (selections.length === 0) {
@@ -450,7 +475,7 @@
     }
 
     return `
-      <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
+      <section class="build-item-column build-item-column--${escapeAttribute(tone)}${getDirectUnanimousClassName(consensus, "items", tone, getBuildChoiceKey("items", build))}">
         <header class="build-item-column-header">
           <h4>${escapeHtml(title)}</h4>
         </header>
@@ -641,9 +666,9 @@
     `;
   }
 
-  function renderCompactBootCard(boot) {
+  function renderCompactBootCard(boot, consensus) {
     return `
-      <article class="build-compact-boot-card ${getOptionHighlightClassName("build-compact-boot-card", boot)}">
+      <article class="build-compact-boot-card ${getOptionHighlightClassName("build-compact-boot-card", boot)}${getRecommendationUnanimousClassName(consensus, "boots", boot)}">
         <div class="build-compact-boot-card-top">
           <img
             src="${escapeAttribute(boot?.icon || "")}"
@@ -665,13 +690,13 @@
     `;
   }
 
-  function renderStartingItemSetCard(itemSet) {
+  function renderStartingItemSetCard(itemSet, consensus) {
     const selections = Array.isArray(itemSet?.selections)
       ? itemSet.selections.filter((selection) => selection && (selection.icon || selection.name))
       : [];
 
     return `
-      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", itemSet)}">
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", itemSet)}${getRecommendationUnanimousClassName(consensus, "startingItems", itemSet)}">
         <div class="build-spell-card-top">
           <div class="build-spell-card-icons">
             ${selections.map((selection) => renderStartingItemSelection(selection)).join("")}
@@ -690,11 +715,11 @@
     `;
   }
 
-  function renderSkillPriorityCard(skill) {
+  function renderSkillPriorityCard(skill, consensus) {
     const abilityKey = normalizeAbilityKey(skill?.abilityKey);
 
     return `
-      <article class="build-skill-priority-card ${getOptionHighlightClassName("build-skill-priority-card", skill)}">
+      <article class="build-skill-priority-card ${getOptionHighlightClassName("build-skill-priority-card", skill)}${getRecommendationUnanimousClassName(consensus, "skillPriority", skill)}">
         <div class="build-skill-priority-card-top">
           <span class="build-skill-priority-ability" aria-hidden="true">
             ${escapeHtml(abilityKey || "?")}
@@ -727,7 +752,7 @@
     `;
   }
 
-  function renderSpellSetCard(spellSet) {
+  function renderSpellSetCard(spellSet, consensus) {
     const selections = normalizeSpellSelections(spellSet).filter(
       (selection) => selection && (selection.icon || selection.name),
     );
@@ -737,7 +762,7 @@
     };
 
     return `
-      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", normalizedSpellSet)}">
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", normalizedSpellSet)}${getRecommendationUnanimousClassName(consensus, "spells", normalizedSpellSet)}">
         <div class="build-spell-card-top">
           <div class="build-spell-card-icons">
             ${selections.map((selection) => renderSpellSelection(selection)).join("")}
@@ -905,6 +930,31 @@
     }
 
     return "";
+  }
+
+  function getRecommendationUnanimousClassName(consensus, category, option) {
+    const choiceKey = getBuildChoiceKey(category, option);
+    const representedTones = [];
+    if (option?.isHighestWin) {
+      representedTones.push("highestWin");
+    }
+    if (option?.isMostPicked) {
+      representedTones.push("mostPicked");
+    }
+
+    return representedTones.length > 0 &&
+      representedTones.every((tone) =>
+        isBuildChoiceUnanimous(consensus, category, tone, choiceKey),
+      )
+      ? " build-choice--unanimous"
+      : "";
+  }
+
+  function getDirectUnanimousClassName(consensus, category, tone, choiceKey) {
+    const normalizedTone = tone === "highest-win" ? "highestWin" : "mostPicked";
+    return isBuildChoiceUnanimous(consensus, category, normalizedTone, choiceKey)
+      ? " build-choice--unanimous"
+      : "";
   }
 
   function buildRecommendedRunePages(highestWinPage, mostPickedPage) {
@@ -1189,10 +1239,10 @@
     `;
   }
 
-  function renderBuildSummaryGlobalNote() {
+  function renderBuildSummaryGlobalNote(consensus) {
     return `
       <p class="build-summary-global-note">
-        Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available.
+        Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available.${consensus?.complete ? " Gold borders mark choices shared by Lane Weight ×1–×4." : ""}
       </p>
     `;
   }

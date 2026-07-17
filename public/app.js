@@ -5,6 +5,9 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
+  buildBuildSuggestionConsensus,
+} = globalThis.buildSuggestionConsensus;
+const {
   completeBanSuggestionRequest,
   createInitialBanSuggestionState,
   failBanSuggestionRequest,
@@ -27,6 +30,11 @@ const {
   getRankFilterOptions,
   normalizeRankFilter,
 } = globalThis.rankFilters;
+const {
+  DEFAULT_LANE_OPPONENT_WEIGHT,
+  getLaneOpponentWeightOptions,
+  normalizeLaneOpponentWeight,
+} = globalThis.laneOpponentWeight;
 const {
   BUILD_SUGGESTION_TABS,
   DEFAULT_BUILD_SUGGESTION_TAB,
@@ -69,6 +77,10 @@ const {
   resolveAllyRoleAssignment,
 } = globalThis.roles;
 
+const LANE_OPPONENT_WEIGHTS = getLaneOpponentWeightOptions().map(
+  (option) => option.value,
+);
+
 const state = {
   champions: [],
   championById: new Map(),
@@ -82,13 +94,14 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.6.19",
+  version: "0.7.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
   resultSortMode: PROJECTED_WIN_RATE_SORT_MODE,
   firstPickSortMode: DEFAULT_FIRST_PICK_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
+  laneOpponentWeight: DEFAULT_LANE_OPPONENT_WEIGHT,
   autoImport: createInitialAutoImportState(),
   banSuggestions: createInitialBanSuggestionState(),
   banSuggestionRequestsByKey: {},
@@ -121,6 +134,7 @@ const pickers = {
 };
 
 const rankFilterSelect = document.getElementById("rank-filter");
+const laneOpponentWeightSelect = document.getElementById("lane-opponent-weight");
 const fetchButton = document.getElementById("fetch-button");
 const autoImportButton = document.getElementById("auto-import-button");
 const autoImportBanner = document.getElementById("auto-import-banner");
@@ -151,6 +165,9 @@ const versionText = document.getElementById("app-version");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
 const buildSuggestionCloseButton = document.getElementById("build-suggestion-close");
+const buildSuggestionLaneWeightSelect = document.getElementById(
+  "build-suggestion-lane-weight",
+);
 const buildSuggestionChampionIcon = document.getElementById("build-suggestion-champion-icon");
 const buildSuggestionTitle = document.getElementById("build-suggestion-title");
 const buildSuggestionMeta = document.getElementById("build-suggestion-meta");
@@ -179,11 +196,17 @@ async function initialize() {
   });
   await loadAppConfig();
   initializeRankFilterOptions();
+  initializeLaneOpponentWeightOptions();
 
   wirePicker("allies");
   wirePicker("enemies");
 
   rankFilterSelect.addEventListener("change", handleRankFilterChange);
+  laneOpponentWeightSelect.addEventListener("change", handleLaneOpponentWeightChange);
+  buildSuggestionLaneWeightSelect.addEventListener(
+    "change",
+    handleBuildSuggestionLaneWeightChange,
+  );
   resultsRoleSelect.addEventListener("change", handleResultsRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   autoImportButton.addEventListener("click", handleStartAutoImport);
@@ -283,7 +306,14 @@ function getEnemyChampionNames() {
 }
 
 function getCurrentSuggestionCacheKey() {
-  return buildSuggestionCacheKey(state.rankFilter, state.allies, state.enemies);
+  return buildSuggestionCacheKey(
+    state.rankFilter,
+    state.allies,
+    state.enemies,
+    isDraftProjectionModeActive()
+      ? DEFAULT_LANE_OPPONENT_WEIGHT
+      : state.laneOpponentWeight,
+  );
 }
 
 function getCurrentResultsBundle() {
@@ -364,6 +394,17 @@ function initializeRankFilterOptions() {
     .join("");
 }
 
+function initializeLaneOpponentWeightOptions() {
+  const optionsMarkup = getLaneOpponentWeightOptions()
+    .map((option) => `<option value="${option.value}">Lane Weight ${option.label}</option>`)
+    .join("");
+
+  laneOpponentWeightSelect.innerHTML = optionsMarkup;
+  buildSuggestionLaneWeightSelect.innerHTML = getLaneOpponentWeightOptions()
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+}
+
 function renderControls() {
   const selectedRole = syncSelectedResultRole();
   const availableRoleOptions = getAvailableResultRoleOptions();
@@ -373,6 +414,8 @@ function renderControls() {
 
   rankFilterSelect.value = state.rankFilter;
   rankFilterSelect.disabled = isInteractionLocked();
+  laneOpponentWeightSelect.value = String(state.laneOpponentWeight);
+  laneOpponentWeightSelect.disabled = isInteractionLocked();
   resultsRoleSelect.innerHTML = availableRoleOptions
     .map((option) => `<option value="${option.value}">${option.label}</option>`)
     .join("");
@@ -528,6 +571,11 @@ function createInitialBuildSuggestionModalState() {
     loading: false,
     allyId: "",
     cacheKey: "",
+    requestKey: "",
+    cacheKeysByLaneWeight: {},
+    laneOpponentWeight: DEFAULT_LANE_OPPONENT_WEIGHT,
+    pendingLaneWeights: [],
+    errorsByLaneWeight: {},
     payload: null,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
@@ -577,14 +625,38 @@ async function handleOpenBuildSuggestions(allyId) {
     return;
   }
 
-  const cacheKey = buildBuildSuggestionCacheKey(state.rankFilter, ally, state.enemies);
+  const rankFilter = state.rankFilter;
+  const enemySelections = [...state.enemies];
+  const enemyNames = getEnemyChampionNames();
+  const cacheKeysByLaneWeight = Object.fromEntries(
+    LANE_OPPONENT_WEIGHTS.map((laneOpponentWeight) => [
+      laneOpponentWeight,
+      buildBuildSuggestionCacheKey(
+        rankFilter,
+        ally,
+        enemySelections,
+        laneOpponentWeight,
+      ),
+    ]),
+  );
+  const requestKey = cacheKeysByLaneWeight[LANE_OPPONENT_WEIGHTS[0]];
+  const pendingLaneWeights = LANE_OPPONENT_WEIGHTS.filter(
+    (laneOpponentWeight) =>
+      !state.buildSuggestionCache[cacheKeysByLaneWeight[laneOpponentWeight]],
+  );
+  const cacheKey = cacheKeysByLaneWeight[state.laneOpponentWeight];
   const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
 
   state.buildSuggestionModal = {
     open: true,
-    loading: !cachedPayload,
+    loading: !cachedPayload && pendingLaneWeights.includes(state.laneOpponentWeight),
     allyId,
     cacheKey,
+    requestKey,
+    cacheKeysByLaneWeight,
+    laneOpponentWeight: state.laneOpponentWeight,
+    pendingLaneWeights,
+    errorsByLaneWeight: {},
     payload: cachedPayload,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
@@ -592,18 +664,39 @@ async function handleOpenBuildSuggestions(allyId) {
   };
   renderBuildSuggestionModal();
 
-  if (cachedPayload) {
-    return;
-  }
+  await Promise.all(
+    pendingLaneWeights.map((laneOpponentWeight) =>
+      fetchAndCacheBuildSuggestionVariant({
+        ally,
+        cacheKey: cacheKeysByLaneWeight[laneOpponentWeight],
+        enemyNames,
+        laneOpponentWeight,
+        rankFilter,
+        requestKey,
+      }),
+    ),
+  );
+}
+
+async function fetchAndCacheBuildSuggestionVariant({
+  ally,
+  cacheKey,
+  enemyNames,
+  laneOpponentWeight,
+  rankFilter,
+  requestKey,
+}) {
+  let errorMessage = "";
 
   try {
     const { response, payload } = await postJson("/build-suggestions", {
-      rankFilter: state.rankFilter,
+      rankFilter,
+      laneOpponentWeight,
       ally: {
         champion: ally.name,
         role: ally.role,
       },
-      enemies: getEnemyChampionNames(),
+      enemies: enemyNames,
     });
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
@@ -611,26 +704,58 @@ async function handleOpenBuildSuggestions(allyId) {
     }
 
     state.buildSuggestionCache[cacheKey] = payload;
-    if (
-      state.buildSuggestionModal.open &&
-      state.buildSuggestionModal.cacheKey === cacheKey
-    ) {
-      state.buildSuggestionModal.payload = payload;
-      state.buildSuggestionModal.loading = false;
-      state.buildSuggestionModal.error = "";
-      renderBuildSuggestionModal();
-    }
   } catch (error) {
-    if (
-      state.buildSuggestionModal.open &&
-      state.buildSuggestionModal.cacheKey === cacheKey
-    ) {
-      state.buildSuggestionModal.loading = false;
-      state.buildSuggestionModal.error =
-        error.message || "Failed to load build recommendations.";
-      renderBuildSuggestionModal();
-    }
+    errorMessage = error.message || "Failed to load build recommendations.";
   }
+
+  if (
+    !state.buildSuggestionModal.open ||
+    state.buildSuggestionModal.requestKey !== requestKey
+  ) {
+    return;
+  }
+
+  state.buildSuggestionModal.pendingLaneWeights =
+    state.buildSuggestionModal.pendingLaneWeights.filter(
+      (weight) => weight !== laneOpponentWeight,
+    );
+  state.buildSuggestionModal.errorsByLaneWeight = {
+    ...state.buildSuggestionModal.errorsByLaneWeight,
+    [laneOpponentWeight]: errorMessage,
+  };
+  syncBuildSuggestionModalActiveVariant();
+  renderBuildSuggestionModal();
+}
+
+function syncBuildSuggestionModalActiveVariant() {
+  const modalState = state.buildSuggestionModal;
+  const laneOpponentWeight =
+    normalizeLaneOpponentWeight(modalState.laneOpponentWeight) ||
+    DEFAULT_LANE_OPPONENT_WEIGHT;
+  const cacheKey = modalState.cacheKeysByLaneWeight?.[laneOpponentWeight] || "";
+  const payload = cacheKey ? state.buildSuggestionCache[cacheKey] || null : null;
+
+  modalState.laneOpponentWeight = laneOpponentWeight;
+  modalState.cacheKey = cacheKey;
+  modalState.payload = payload;
+  modalState.loading =
+    !payload && modalState.pendingLaneWeights.includes(laneOpponentWeight);
+  modalState.error = modalState.errorsByLaneWeight?.[laneOpponentWeight] || "";
+}
+
+function getBuildSuggestionConsensusForModal() {
+  const modalState = state.buildSuggestionModal;
+  const payloadsByLaneWeight = Object.fromEntries(
+    LANE_OPPONENT_WEIGHTS.map((laneOpponentWeight) => {
+      const cacheKey = modalState.cacheKeysByLaneWeight?.[laneOpponentWeight];
+      return [
+        laneOpponentWeight,
+        cacheKey ? state.buildSuggestionCache[cacheKey] || null : null,
+      ];
+    }),
+  );
+
+  return buildBuildSuggestionConsensus(payloadsByLaneWeight);
 }
 
 function closeBuildSuggestionModal() {
@@ -1388,21 +1513,82 @@ async function handleFetchSuggestions() {
   clearStatus();
 
   try {
-    const { response, payload } = await postJson("/suggest", {
-      rankFilter: state.rankFilter,
-      allies: buildAllyRequestSelections(),
-      enemies: getEnemyChampionNames(),
+    const rankFilter = state.rankFilter;
+    const allies = [...state.allies];
+    const enemies = [...state.enemies];
+    const allySelections = buildAllyRequestSelections();
+    const enemyNames = getEnemyChampionNames();
+    const canShareOneResultAcrossWeights = enemies.length === 0;
+    const requestedLaneWeights = canShareOneResultAcrossWeights
+      ? [state.laneOpponentWeight]
+      : LANE_OPPONENT_WEIGHTS;
+    const outcomes = await Promise.all(
+      requestedLaneWeights.map(async (laneOpponentWeight) => {
+        try {
+          const { response, payload } = await postJson("/suggest", {
+            rankFilter,
+            laneOpponentWeight,
+            allies: allySelections,
+            enemies: enemyNames,
+          });
+          updateLolalyticsRequestStats(payload?.requestStats);
+          if (!response.ok) {
+            throw new Error(
+              payload.error ||
+                `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
+            );
+          }
+
+          return { laneOpponentWeight, payload, error: "" };
+        } catch (error) {
+          return {
+            laneOpponentWeight,
+            payload: null,
+            error:
+              error.message ||
+              `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
+          };
+        }
+      }),
+    );
+    const successfulOutcomes = outcomes.filter((outcome) => outcome.payload);
+    const selectedRole = syncSelectedResultRole();
+
+    successfulOutcomes.forEach((outcome) => {
+      const weightsToCache = canShareOneResultAcrossWeights
+        ? LANE_OPPONENT_WEIGHTS
+        : [outcome.laneOpponentWeight];
+      weightsToCache.forEach((laneOpponentWeight) => {
+        const variantCacheKey = buildSuggestionCacheKey(
+          rankFilter,
+          allies,
+          enemies,
+          laneOpponentWeight,
+        );
+        state.resultsCache[variantCacheKey] = buildResultsBundle(
+          outcome.payload,
+          availableRoleValues,
+          selectedRole,
+        );
+      });
     });
-    updateLolalyticsRequestStats(payload?.requestStats);
-    if (!response.ok) {
+
+    const activeOutcome = outcomes.find(
+      (outcome) => outcome.laneOpponentWeight === state.laneOpponentWeight,
+    );
+    if (!state.resultsCache[cacheKey]) {
       throw new Error(
-        payload.error ||
+        activeOutcome?.error ||
           `Failed to fetch ${getRankFilterDisplayLabel().toLowerCase()} role suggestions.`,
       );
     }
 
-    const selectedRole = syncSelectedResultRole();
-    state.resultsCache[cacheKey] = buildResultsBundle(payload, availableRoleValues, selectedRole);
+    const failedWeights = outcomes
+      .filter((outcome) => outcome.error)
+      .map((outcome) => `×${outcome.laneOpponentWeight}`);
+    if (failedWeights.length > 0) {
+      setError(`Could not cache Lane Weight ${formatList(failedWeights)}. Retry to load them.`);
+    }
   } catch (error) {
     setError(
       error.message ||
@@ -1490,6 +1676,39 @@ function handleRankFilterChange(event) {
   renderAll();
 }
 
+function handleLaneOpponentWeightChange(event) {
+  const normalizedWeight =
+    normalizeLaneOpponentWeight(event.target.value) || DEFAULT_LANE_OPPONENT_WEIGHT;
+  if (normalizedWeight === state.laneOpponentWeight) {
+    return;
+  }
+
+  state.laneOpponentWeight = normalizedWeight;
+  if (state.buildSuggestionModal.open) {
+    state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
+    syncBuildSuggestionModalActiveVariant();
+  }
+  clearStatus();
+  renderAll();
+}
+
+function handleBuildSuggestionLaneWeightChange(event) {
+  const normalizedWeight =
+    normalizeLaneOpponentWeight(event.target.value) || DEFAULT_LANE_OPPONENT_WEIGHT;
+  if (
+    normalizedWeight === state.laneOpponentWeight &&
+    normalizedWeight === state.buildSuggestionModal.laneOpponentWeight
+  ) {
+    return;
+  }
+
+  state.laneOpponentWeight = normalizedWeight;
+  state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
+  syncBuildSuggestionModalActiveVariant();
+  clearStatus();
+  renderAll();
+}
+
 function handleResultsRoleChange(event) {
   const normalizedRole = normalizeRole(event.target.value) || DEFAULT_TARGET_ROLE;
   if (normalizedRole === state.selectedResultRole) {
@@ -1570,8 +1789,12 @@ function renderBuildSuggestionModal() {
     buildSuggestionTabs.innerHTML = "";
     buildSuggestionErrors.innerHTML = "";
     buildSuggestionBody.innerHTML = "";
+    buildSuggestionLaneWeightSelect.disabled = true;
     return;
   }
+
+  buildSuggestionLaneWeightSelect.value = String(modalState.laneOpponentWeight);
+  buildSuggestionLaneWeightSelect.disabled = state.shuttingDown;
 
   if (ally?.icon) {
     buildSuggestionChampionIcon.classList.remove("hidden");
@@ -1622,6 +1845,7 @@ function renderBuildSuggestionModal() {
     : modalState.error
       ? '<div class="build-empty-state">The build recommendation request failed.</div>'
       : renderBuildSuggestionBody(payload, modalState.activeTab, {
+          consensus: getBuildSuggestionConsensusForModal(),
           runeImportStatesByPageKey: modalState.runeImportStatesByPageKey,
         });
   if (!modalState.loading && !modalState.error) {
@@ -1653,7 +1877,7 @@ async function handleImportBuildSuggestionRunes(payload, pageKey) {
     return;
   }
 
-  const cacheKey = modalState.cacheKey;
+  const requestKey = modalState.requestKey;
   setBuildSuggestionRuneImportState(pageKey, {
     status: "importing",
     message: "Importing runes into the League Client...",
@@ -1672,7 +1896,7 @@ async function handleImportBuildSuggestionRunes(payload, pageKey) {
       );
     }
 
-    if (!isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey)) {
+    if (!isCurrentBuildSuggestionRuneImportTarget(requestKey, pageKey)) {
       return;
     }
 
@@ -1681,7 +1905,7 @@ async function handleImportBuildSuggestionRunes(payload, pageKey) {
       message: importPayload.message || "Imported runes into the League Client.",
     });
   } catch (error) {
-    if (!isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey)) {
+    if (!isCurrentBuildSuggestionRuneImportTarget(requestKey, pageKey)) {
       return;
     }
 
@@ -1703,10 +1927,10 @@ function getBuildSuggestionRuneRecommendationByKey(payload, pageKey) {
   return recommendations.find((page) => getRunePageRecommendationKey(page) === pageKey) || null;
 }
 
-function isCurrentBuildSuggestionRuneImportTarget(cacheKey, pageKey) {
+function isCurrentBuildSuggestionRuneImportTarget(requestKey, pageKey) {
   return (
     state.buildSuggestionModal.open &&
-    state.buildSuggestionModal.cacheKey === cacheKey &&
+    state.buildSuggestionModal.requestKey === requestKey &&
     Boolean(state.buildSuggestionModal.runeImportStatesByPageKey?.[pageKey])
   );
 }
@@ -2248,7 +2472,11 @@ function formatRoleLabels(roles = []) {
 function updateLolalyticsRequestStats(requestStats = null) {
   const lifetimeAccessCount = Number(requestStats?.lolalyticsLifetimeAccessCount);
   if (Number.isFinite(lifetimeAccessCount)) {
-    state.lolalyticsLifetimeAccessCount = Math.max(0, lifetimeAccessCount);
+    state.lolalyticsLifetimeAccessCount = Math.max(
+      state.lolalyticsLifetimeAccessCount,
+      0,
+      lifetimeAccessCount,
+    );
     renderResultsRequestStat();
   }
 }
@@ -2624,6 +2852,7 @@ function renderActionState() {
   const autoImportBusy = state.autoImport.polling || state.autoImport.status === "connecting";
 
   rankFilterSelect.disabled = state.loading || state.shuttingDown;
+  laneOpponentWeightSelect.disabled = state.loading || state.shuttingDown;
   resultsRoleSelect.disabled =
     state.loading || state.shuttingDown || isDraftProjectionMode || availableRoleCount === 0;
   fetchButton.disabled =

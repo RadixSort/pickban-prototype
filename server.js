@@ -302,6 +302,7 @@ function sendJsonError(response, error, extraPayload = {}) {
 app.post("/suggest", withLolalyticsRequestStats(async (request, response) => {
   const {
     rankFilter,
+    laneOpponentWeight,
     allies,
     enemies,
     targetRoles,
@@ -334,6 +335,7 @@ app.post("/suggest", withLolalyticsRequestStats(async (request, response) => {
     : await buildSuggestionsForRoles({
         allies,
         enemies,
+        laneOpponentWeight,
         rankFilter,
         selectedChampionKeys,
         targetRoles,
@@ -463,6 +465,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
       role: normalizedRequest.ally.role,
     },
     normalizedRequest.enemies,
+    normalizedRequest.laneOpponentWeight,
   );
   const cachedPayload = buildSuggestionQueryCache.get(aggregatedCacheKey);
   if (cachedPayload) {
@@ -507,6 +510,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
   );
   const aggregatedResults = buildBuildSuggestionResults({
     matchupBuilds: matchupBuildsWithLaneLikelihoods,
+    laneOpponentWeight: normalizedRequest.laneOpponentWeight,
   });
   const payload = buildBuildSuggestionsPayload({
     normalizedRequest,
@@ -535,27 +539,42 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
 function attachCachedLaneOpponentLikelihoods(matchupBuilds, normalizedRequest) {
   const role = normalizeRole(normalizedRequest?.ally?.role);
   const rankFilter = normalizedRequest?.rankFilter;
-  const cachedRoleLikelihoods = allyRoleLikelihoodsCache.get(rankFilter) || {};
-  const cachedTierRows = role && rankFilter
-    ? tierListRowsCache.get(buildTierListDataUrl(role, rankFilter)) || []
-    : [];
-  const tierLanePercentByChampionKey = new Map(
-    cachedTierRows.map((row) => [String(row?.championKey || ""), row?.lanePercent]),
-  );
 
   return matchupBuilds.map((matchup) => {
     const championKey = String(matchup?.enemyChampionKey || "");
-    const laneOpponentLikelihood =
-      cachedRoleLikelihoods?.[championKey]?.[role]?.lanePercent ??
-      tierLanePercentByChampionKey.get(championKey);
+    const laneOpponentLikelihood = getCachedLaneOpponentLikelihood(
+      championKey,
+      role,
+      rankFilter,
+    );
 
-    return Number.isFinite(Number(laneOpponentLikelihood))
+    return laneOpponentLikelihood != null
       ? {
           ...matchup,
-          laneOpponentLikelihood: Number(laneOpponentLikelihood),
+          laneOpponentLikelihood,
         }
       : matchup;
   });
+}
+
+function getCachedLaneOpponentLikelihood(championKey, role, rankFilter) {
+  const normalizedRole = normalizeRole(role);
+  const normalizedChampionKey = String(championKey || "");
+  if (!normalizedRole || !normalizedChampionKey || !rankFilter) {
+    return null;
+  }
+
+  const cachedRoleLikelihoods = allyRoleLikelihoodsCache.get(rankFilter) || {};
+  const cachedTierRows =
+    tierListRowsCache.get(buildTierListDataUrl(normalizedRole, rankFilter)) || [];
+  const laneOpponentLikelihood =
+    cachedRoleLikelihoods?.[normalizedChampionKey]?.[normalizedRole]?.lanePercent ??
+    cachedTierRows.find(
+      (row) => String(row?.championKey || "") === normalizedChampionKey,
+    )?.lanePercent;
+  const numericLikelihood = Number(laneOpponentLikelihood);
+
+  return Number.isFinite(numericLikelihood) ? numericLikelihood : null;
 }
 
 server = app.listen(PORT, () => {
@@ -594,6 +613,7 @@ process.on("SIGTERM", () => {
 async function buildSuggestionsForRoles({
   allies,
   enemies,
+  laneOpponentWeight,
   rankFilter,
   selectedChampionKeys,
   targetRoles,
@@ -629,6 +649,7 @@ async function buildSuggestionsForRoles({
     buildSuggestionOutcome({
       allies,
       enemies,
+      laneOpponentWeight,
       rankFilter,
       selectedChampionKeys,
       targetRole,
@@ -771,6 +792,7 @@ function buildFirstPickSuggestionOutcome({
 function buildSuggestionOutcome({
   allies,
   enemies,
+  laneOpponentWeight,
   rankFilter,
   selectedChampionKeys,
   targetRole,
@@ -788,9 +810,20 @@ function buildSuggestionOutcome({
   const allyResults = allyTargetRoleRowResults.map((targetRoleRowResults) =>
     createRowPromiseResult(getTargetRoleRowResult(targetRoleRowResults, targetRole)),
   );
-  const enemyResults = enemyTargetRoleRowResults.map((targetRoleRowResults) =>
-    createRowPromiseResult(getTargetRoleRowResult(targetRoleRowResults, targetRole)),
-  );
+  const enemyResults = enemyTargetRoleRowResults.map((targetRoleRowResults, index) => {
+    const enemyChampion = enemies[index];
+    return createRowPromiseResult(
+      getTargetRoleRowResult(targetRoleRowResults, targetRole),
+      {
+        opponentChampionKey: String(enemyChampion?.key || ""),
+        laneOpponentLikelihood: getCachedLaneOpponentLikelihood(
+          enemyChampion?.key,
+          targetRole,
+          rankFilter,
+        ),
+      },
+    );
+  });
   const {
     partialFailures,
     results,
@@ -801,6 +834,7 @@ function buildSuggestionOutcome({
     selectedChampionKeys,
     targetRole,
     championByKey,
+    laneOpponentWeight,
   });
   const meta = buildSuggestionMeta(rankFilter, targetRole, allies, enemies, partialFailures);
 
@@ -929,7 +963,7 @@ function buildDraftCounterResult(ally, enemyChampion, targetRoleRowResult) {
   };
 }
 
-function createRowPromiseResult(targetRoleRowResult) {
+function createRowPromiseResult(targetRoleRowResult, metadata = {}) {
   if (targetRoleRowResult.status !== "fulfilled") {
     return {
       status: "rejected",
@@ -941,6 +975,7 @@ function createRowPromiseResult(targetRoleRowResult) {
     status: "fulfilled",
     value: {
       rows: targetRoleRowResult.value,
+      ...metadata,
     },
   };
 }

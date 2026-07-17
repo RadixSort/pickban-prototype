@@ -32,9 +32,11 @@ Keep cross-runtime rules in their existing focused modules:
 
 - roles: `public/roles.js`
 - rank filters: `public/rank-filters.js`
+- lane-opponent multiplier and shared-lane rules: `public/lane-opponent-weight.js`, `lib/lane-opponent-weight.js`
 - summoner spell names and icons: `public/summoner-spell-metadata.js`
 - result ranking: `public/result-ranking.js`
 - frontend cache keys: `public/suggestion-cache.js`, `public/build-suggestion-cache.js`
+- cross-weight build consensus: `public/build-suggestion-consensus.js`
 - ban UI lifecycle: `public/ban-suggestion-state.js`
 - request validation: `lib/request-normalization.js`, `lib/requested-target-roles.js`
 - route response shaping: `lib/server-route-helpers.js`
@@ -60,9 +62,11 @@ Live Lolalytics requests use `queue=ranked`, `region=all`, and `patch=30` for th
 
 ### Suggestions
 
-`POST /suggest` accepts a rank filter, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching.
+`POST /suggest` accepts a rank filter, a lane-opponent weight of 1, 2, 3, or 4, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching. The lane weight defaults to 3.
 
 An empty draft returns PBI tier lists. A populated draft fetches tier data first, then ally-synergy and role-scoped enemy-counter rows only for roles with usable tier candidates. Multi-role requests share identical upstream resources.
+
+Draft-aware champion suggestions give every inferred same-lane enemy the selected number of contributions while every other enemy contributes once. Bottom and Support share a lane. If no enemy defaults to the target lane, exactly one fulfilled enemy result is assigned as the lane opponent using cached target-role lane share, then usable row count and champion key as stable fallbacks. Counter scores and enemy-facing projected-win-rate samples use the same contributions.
 
 Candidates must have at least 10% lane share and 0.5% pick rate. Selected champions and negative Projected Agency results are excluded.
 
@@ -80,7 +84,9 @@ Candidates must have at least 10% lane share and 0.5% pick rate. Selected champi
 
 Rune aggregation sums each element's games and wins across the weighted matchups. For each highest-win or most-picked recommendation, the selected keystone determines the primary tree, the independently selected secondary tree determines the secondary pool, and primary runes, two distinct secondary rows, and three legal stat shards are chosen one by one. The displayed page-level metrics are averages of its selected elements, not observations of that exact complete page.
 
-Build aggregation gives each enemy whose inferred default role matches the allied builder's role a 3x data weight. Every matching enemy is weighted independently. When no enemy is inferred in the allied builder's role, the server still triples one matchup: the highest explicit lane-likelihood value when available, then the largest matchup sample as the fallback signal.
+Build aggregation uses the same selected 1x, 2x, 3x, or 4x lane-opponent contribution count before merging runes, summoner spells, starting items, skill priorities, boots, or item paths. Every matching enemy is weighted independently, and Bottom/Support share a lane. When no enemy is inferred in the allied builder's lane, the server still assigns one matchup: the highest explicit lane-likelihood value when available, then the largest matchup sample and champion key as stable fallback signals.
+
+The browser requests and caches all four build variants when the popup opens. The header and popup Lane Weight selectors share state, so switching either changes the visible cached variant without closing the popup. `public/build-suggestion-consensus.js` compares highest-win and most-picked choice keys across all four complete payloads; rune, spell, starter, skill, boot, and ordered item-path cards receive the unanimous gold-border class only when every weight agrees.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 
@@ -95,14 +101,16 @@ The browser polls independently of suggestion requests. Session changes, phase e
 Per target role:
 
 - `synergyScore`: average allied matchup values.
-- `counterScore`: average counter values after opponent-lane weighting.
-- Counter weight is `0.5` across unrelated lanes and `1` for same-lane, Bottom/Support pairs, or missing lane metadata.
-- `projectedWinRate`: average allied win rates and enemy-facing win rates reoriented to the candidate.
+- `counterScore`: weighted average of counter values using the selected lane-opponent multiplier.
+- Same-role enemies and Bottom/Support pairs receive the selected 1x, 2x, 3x, or 4x contributions; other enemies receive one.
+- `projectedWinRate`: average allied win rates and enemy-facing win rates reoriented to the candidate, using those same enemy contributions.
 - Low/High skill estimates subtract/add the gap between the tier's best worldwide win rate and candidate base win rate.
 - `projectedAgency = synergyScore + counterScore`.
 - First-pick `PBI = (winRate - averageWinRate) * 100 * pickRate / (100 - banRate)`, rounded.
 
 Backend draft-aware order is Projected Win Rate, Projected Agency, Counter, then champion name. The frontend can re-sort without changing server results.
+
+The full-team `/draft-outlook` is separate from the user-selectable suggestion/build multiplier and retains its existing counter-agency lane adjustment.
 
 ## Caching and failures
 
@@ -116,7 +124,7 @@ All server caches use an eight-hour TTL and least-recently-used bounds:
 
 Remote cache keys are full URLs. Identical in-flight requests share one promise; pending entries use the 15-second request timeout rather than the normal TTL. Resolved Qwik objects use lifetime-bound `WeakMap` caches.
 
-Browser suggestion and build caches last for the page session. Ban results last only for the current champion-select session. Live-draft and rune-import calls are never cached.
+Browser suggestion and build caches last for the page session and include the lane-opponent multiplier in their keys. A populated champion-suggestion fetch and each build-popup load proactively fill the ×1 through ×4 entries; enemy-free suggestions reuse one equivalent result across all four keys. Ban results last only for the current champion-select session. Live-draft and rune-import calls are never cached.
 
 Lolalytics requests time out after 15 seconds. Suggestion, draft, and build flows preserve partial failures when a useful result remains. Ban counter failures fall back per lane; the route fails only if five recommendations cannot be produced.
 

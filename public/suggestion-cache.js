@@ -1,21 +1,40 @@
 (function initializeSuggestionCache(globalScope, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory(require("./roles.js"));
+    module.exports = factory(
+      require("./roles.js"),
+      require("./lane-opponent-weight.js"),
+    );
     return;
   }
 
-  globalScope.suggestionCache = factory(globalScope.roles || {});
-})(typeof globalThis !== "undefined" ? globalThis : this, (roles = {}) => {
+  globalScope.suggestionCache = factory(
+    globalScope.roles || {},
+    globalScope.laneOpponentWeight || {},
+  );
+})(typeof globalThis !== "undefined" ? globalThis : this, (roles = {}, laneWeights = {}) => {
   const normalizeRole =
     typeof roles.normalizeRole === "function"
       ? roles.normalizeRole
       : (value) => (typeof value === "string" ? value.trim().toLowerCase() : null);
+  const defaultLaneOpponentWeight = laneWeights.DEFAULT_LANE_OPPONENT_WEIGHT || 3;
+  const normalizeLaneOpponentWeight =
+    typeof laneWeights.normalizeLaneOpponentWeight === "function"
+      ? laneWeights.normalizeLaneOpponentWeight
+      : (value) => {
+          const numericValue = Number(value);
+          return [1, 2, 3, 4].includes(numericValue) ? numericValue : null;
+        };
 
   /**
    * Cache frontend results by the full draft state that affects the payload:
-   * rank filter, ally picks, ally role assignments, and enemy picks.
+   * rank filter, lane-opponent weight, ally picks and roles, and enemy picks.
    */
-  function buildSuggestionCacheKey(rankFilter = "", allies = [], enemies = []) {
+  function buildSuggestionCacheKey(
+    rankFilter = "",
+    allies = [],
+    enemies = [],
+    laneOpponentWeight = defaultLaneOpponentWeight,
+  ) {
     const normalizedRankFilter =
       typeof rankFilter === "string" && rankFilter.trim() ? rankFilter.trim().toLowerCase() : "";
     const allyEntries = allies
@@ -34,8 +53,10 @@
       .map((enemy) => getChampionKey(enemy))
       .filter(Boolean)
       .sort();
+    const normalizedLaneOpponentWeight =
+      normalizeLaneOpponentWeight(laneOpponentWeight) || defaultLaneOpponentWeight;
 
-    return `rank=${normalizedRankFilter}|allies=${allyEntries.join(",")}|enemies=${enemyEntries.join(",")}`;
+    return `rank=${normalizedRankFilter}|laneWeight=${normalizedLaneOpponentWeight}|allies=${allyEntries.join(",")}|enemies=${enemyEntries.join(",")}`;
   }
 
   function getChampionKey(selection) {

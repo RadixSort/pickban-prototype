@@ -8,6 +8,9 @@ const {
   getRunePageRecommendationKey,
   renderBuildSuggestionBody,
 } = require("../public/build-suggestion-view.js");
+const {
+  buildBuildSuggestionConsensus,
+} = require("../public/build-suggestion-consensus.js");
 
 function createOption({
   id,
@@ -522,6 +525,19 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Highest Win page/);
   assert.doesNotMatch(html, /Most Picked page/);
   assert.doesNotMatch(html, /Overview/);
+});
+
+test("renderBuildSuggestionBody gives unanimous choices a golden-border class", () => {
+  const payload = createPayload();
+  const consensus = buildBuildSuggestionConsensus(
+    Object.fromEntries([1, 2, 3, 4].map((weight) => [weight, createPayload()])),
+  );
+  const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {
+    consensus,
+  });
+
+  assert.match(html, /Gold borders mark choices shared by Lane Weight ×1–×4./);
+  assert.ok(countMatches(html, /build-choice--unanimous/g) >= 8);
 });
 
 test("renderBuildSuggestionBody repairs cached spell placeholder names and icons", () => {

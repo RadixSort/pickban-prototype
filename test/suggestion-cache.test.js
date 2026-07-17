@@ -37,3 +37,10 @@ test("buildSuggestionCacheKey changes when a champion is added or removed", () =
 
   assert.notEqual(before, after);
 });
+
+test("buildSuggestionCacheKey changes with the lane opponent weight", () => {
+  const before = buildSuggestionCacheKey("all", [], [{ key: 40 }], 1);
+  const after = buildSuggestionCacheKey("all", [], [{ key: 40 }], 4);
+
+  assert.notEqual(before, after);
+});

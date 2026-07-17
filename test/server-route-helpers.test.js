@@ -50,6 +50,7 @@ test("normalizeSuggestRequest composes shared /suggest normalization helpers", (
       rankFilter: "Diamond+",
       allies: [{ champion: "Nami", role: "sup" }],
       enemies: ["Blitzcrank"],
+      laneOpponentWeight: "2",
     },
     {
       championByName,
@@ -63,6 +64,7 @@ test("normalizeSuggestRequest composes shared /suggest normalization helpers", (
   );
 
   assert.equal(normalized.rankFilter, "diamond_plus");
+  assert.equal(normalized.laneOpponentWeight, 2);
   assert.deepEqual(
     normalized.allies.map((ally) => ({
       champion: ally.champion.name,
@@ -210,6 +212,7 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         championByName.get(normalizeChampionName("Blitzcrank")),
         championByName.get(normalizeChampionName("Leona")),
       ],
+      laneOpponentWeight: 2,
       rankFilter: "emerald_plus",
     },
     aggregatedResults: {
@@ -284,6 +287,7 @@ test("build suggestion helper payloads preserve request and summary fields", () 
       role: "support",
     },
     enemies: ["Blitzcrank", "Leona"],
+    laneOpponentWeight: 2,
     rankFilter: "emerald_plus",
   });
   assert.deepEqual(payload.summary, {

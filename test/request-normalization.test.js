@@ -6,6 +6,7 @@ const {
   normalizeBuildSuggestionRequest,
   normalizeDraftProjectionRequest,
   normalizeChampionSelections,
+  normalizeRequestedLaneOpponentWeight,
   normalizeRequestedRankFilter,
   validateAllyRoleAssignments,
   validateNoOpposingChampionSelections,
@@ -89,6 +90,20 @@ test("normalizeRequestedRankFilter defaults and rejects unsupported rank filters
   );
 });
 
+test("normalizeRequestedLaneOpponentWeight defaults and validates UI multipliers", () => {
+  assert.equal(normalizeRequestedLaneOpponentWeight(null), 3);
+  assert.equal(normalizeRequestedLaneOpponentWeight("2"), 2);
+  assert.equal(normalizeRequestedLaneOpponentWeight(4), 4);
+  assert.throws(
+    () => normalizeRequestedLaneOpponentWeight(5),
+    /must be one of 1, 2, 3, or 4/i,
+  );
+  assert.throws(
+    () => normalizeRequestedLaneOpponentWeight(true),
+    /must be one of 1, 2, 3, or 4/i,
+  );
+});
+
 test("validateAllyRoleAssignments rejects duplicate normalized roles", () => {
   assert.throws(
     () =>
@@ -115,6 +130,7 @@ test("normalizeBuildSuggestionRequest validates ally role, partial enemies, and 
   const request = normalizeBuildSuggestionRequest(
     {
       rankFilter: "diamond+",
+      laneOpponentWeight: 2,
       ally: {
         champion: "Ahri",
         role: "mid",
@@ -136,6 +152,7 @@ test("normalizeBuildSuggestionRequest validates ally role, partial enemies, and 
       role: "middle",
     },
     enemies: [championByName.get("jarvaniv")],
+    laneOpponentWeight: 2,
   });
 });
 

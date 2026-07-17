@@ -497,7 +497,7 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   );
 });
 
-test("POST /suggest halves cross-lane counters without penalizing Bottom-Support", async (t) => {
+test("POST /suggest applies the selected weight to Bottom-Support lane opponents", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (
       url.pathname === "/mega/" &&
@@ -519,14 +519,15 @@ test("POST /suggest halves cross-lane counters without penalizing Bottom-Support
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "counter") {
       const enemySlug = url.searchParams.get("c");
       const opponentRole = enemySlug === "vi" ? "jungle" : "bottom";
+      const isBottomLaneOpponent = opponentRole === "bottom";
       return jsonResponse(
         createCounterMegaData(
           [
             {
               championKey: "117",
               role: "support",
-              enemyWinRate: 50,
-              delta2Score: -10,
+              enemyWinRate: isBottomLaneOpponent ? 40 : 60,
+              delta2Score: isBottomLaneOpponent ? -10 : -2,
             },
           ],
           { opponentRole },
@@ -539,15 +540,16 @@ test("POST /suggest halves cross-lane counters without penalizing Bottom-Support
 
   const response = await postJson(baseUrl, "/suggest", {
     rankFilter: "emerald_plus",
+    laneOpponentWeight: 2,
     role: "support",
     enemies: ["Vi", "Jhin"],
   });
 
   assert.equal(response.status, 200);
   assert.equal(response.body.resultsByRole.support[0].candidate, "Lulu");
-  assert.equal(response.body.resultsByRole.support[0].counterScore, 7.5);
-  assert.equal(response.body.resultsByRole.support[0].projectedAgency, 7.5);
-  assert.equal(response.body.resultsByRole.support[0].projectedWinRate, 50);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].counterScore - 22 / 3) < 1e-12);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedAgency - 22 / 3) < 1e-12);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedWinRate - 160 / 3) < 1e-12);
   assert.deepEqual(response.body.requestStats, {
     lolalyticsLiveAccessCount: 3,
     lolalyticsLifetimeAccessCount: 3,
@@ -1178,6 +1180,7 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
       role: "middle",
     },
     enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
+    laneOpponentWeight: 3,
     rankFilter: "emerald_plus",
   });
   assert.equal(firstResponse.body.summary.enemyCount, 5);
@@ -1319,7 +1322,7 @@ test("POST /build-suggestions composes rendered rune histograms without complete
   assert.equal(Math.round(response.body.runes.mostPickedPage.pickRate), 61);
 });
 
-test("POST /build-suggestions triples all inferred same-lane enemy matchups", async (t) => {
+test("POST /build-suggestions applies the selected weight to all same-lane enemies", async (t) => {
   const { baseUrl } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -1345,6 +1348,7 @@ test("POST /build-suggestions triples all inferred same-lane enemy matchups", as
 
   const response = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
+    laneOpponentWeight: 2,
     ally: {
       champion: "Yorick",
       role: "top",
@@ -1354,10 +1358,10 @@ test("POST /build-suggestions triples all inferred same-lane enemy matchups", as
 
   assert.equal(response.status, 200);
   assert.equal(response.body.summary.sourceMatchups, 4);
-  assert.equal(response.body.runes.mostPickedPage.games, 611);
-  assert.equal(response.body.runes.highestWinPage.games, 183);
-  assert.equal(response.body.spells.mostPickedSet.games, 800);
-  assert.equal(response.body.spells.highestWinSet.games, 200);
+  assert.equal(response.body.runes.mostPickedPage.games, 428);
+  assert.equal(response.body.runes.highestWinPage.games, 128);
+  assert.equal(response.body.spells.mostPickedSet.games, 560);
+  assert.equal(response.body.spells.highestWinSet.games, 140);
 });
 
 test("POST /build-suggestions accepts partial enemy teams", async (t) => {

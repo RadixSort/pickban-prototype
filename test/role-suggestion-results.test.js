@@ -59,6 +59,7 @@ test("buildRoleSuggestionResults aggregates ally and enemy scores, filters picks
     selectedChampionKeys: new Set(["333"]),
     targetRole: "support",
     championByKey,
+    laneOpponentWeight: 1,
   });
 
   assert.deepEqual(roleSuggestionResults.partialFailures, [
@@ -127,14 +128,14 @@ test("buildRoleSuggestionResults defaults to projected win rate ordering", () =>
   );
 });
 
-test("buildRoleSuggestionResults halves cross-lane counters except Bottom-Support", () => {
+test("buildRoleSuggestionResults weights Bottom and Support as the same lane", () => {
   const roleSuggestionResults = buildRoleSuggestionResults({
     enemyResults: [
       {
         status: "fulfilled",
         value: {
           rows: new Map([
-            ["111", { value: 10, winRate: 50, opponentRole: "jungle" }],
+            ["111", { value: 2, winRate: 60, opponentRole: "jungle" }],
           ]),
         },
       },
@@ -142,7 +143,7 @@ test("buildRoleSuggestionResults halves cross-lane counters except Bottom-Suppor
         status: "fulfilled",
         value: {
           rows: new Map([
-            ["111", { value: 10, winRate: 50, opponentRole: "bottom" }],
+            ["111", { value: 10, winRate: 40, opponentRole: "bottom" }],
           ]),
         },
       },
@@ -152,11 +153,49 @@ test("buildRoleSuggestionResults halves cross-lane counters except Bottom-Suppor
     ]),
     targetRole: "support",
     championByKey,
+    laneOpponentWeight: 2,
   });
 
-  assert.equal(roleSuggestionResults.results[0].counterScore, 7.5);
-  assert.equal(roleSuggestionResults.results[0].projectedWinRate, 50);
-  assert.equal(roleSuggestionResults.results[0].projectedAgency, 7.5);
+  assert.ok(Math.abs(roleSuggestionResults.results[0].counterScore - 22 / 3) < 1e-12);
+  assert.ok(Math.abs(roleSuggestionResults.results[0].projectedWinRate - 160 / 3) < 1e-12);
+  assert.ok(Math.abs(roleSuggestionResults.results[0].projectedAgency - 22 / 3) < 1e-12);
+});
+
+test("buildRoleSuggestionResults weights one most-likely enemy in off-meta drafts", () => {
+  const roleSuggestionResults = buildRoleSuggestionResults({
+    enemyResults: [
+      {
+        status: "fulfilled",
+        value: {
+          opponentChampionKey: "vi",
+          laneOpponentLikelihood: 4,
+          rows: new Map([
+            ["111", { value: 2, winRate: 60, opponentRole: "jungle" }],
+          ]),
+        },
+      },
+      {
+        status: "fulfilled",
+        value: {
+          opponentChampionKey: "neeko",
+          laneOpponentLikelihood: 19,
+          rows: new Map([
+            ["111", { value: 8, winRate: 40, opponentRole: "middle" }],
+          ]),
+        },
+      },
+    ],
+    eligibleTierStats: new Map([
+      ["111", { lanePercent: 90, pickRate: 12, winRate: 51.2 }],
+    ]),
+    targetRole: "support",
+    championByKey,
+    laneOpponentWeight: 4,
+  });
+
+  assert.equal(roleSuggestionResults.results[0].counterScore, 6.8);
+  assert.equal(roleSuggestionResults.results[0].projectedWinRate, 56);
+  assert.equal(roleSuggestionResults.results[0].projectedAgency, 6.8);
 });
 
 test("buildRoleSuggestionResults throws when matchup rows reference missing champion metadata", () => {

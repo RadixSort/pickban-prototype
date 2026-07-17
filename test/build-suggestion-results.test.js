@@ -55,7 +55,7 @@ function createMatchupBuild({
   };
 }
 
-test("buildBuildSuggestionResults triples every likely same-lane matchup independently", () => {
+test("buildBuildSuggestionResults triples likely lanes across runes, spells, boots, and items", () => {
   const matchupSpecs = [
     { enemyRole: "top", spellIds: [4, 12] },
     { enemyRole: "top", spellIds: [4, 6] },
@@ -63,6 +63,7 @@ test("buildBuildSuggestionResults triples every likely same-lane matchup indepen
     { enemyRole: "support", spellIds: [3, 4] },
   ];
   const aggregated = buildBuildSuggestionResults({
+    laneOpponentWeight: 3,
     matchupBuilds: matchupSpecs.map(({ enemyRole, spellIds }) =>
       createMatchupBuild({
         totalGames: 10,
@@ -76,7 +77,30 @@ test("buildBuildSuggestionResults triples every likely same-lane matchup indepen
         statOptions: [],
         pageCandidates: [],
         spellOptions: [createSpellSetOption({ spellIds, games: 10, wins: 5 })],
-        boots: [],
+        itemSlotOptions: [
+          [createItemOption({
+            itemId: enemyRole === "top" ? 3118 : 6655,
+            name: enemyRole === "top" ? "Malignance" : "Luden's Companion",
+            games: 10,
+            wins: 5,
+            purchaseMinute: 11,
+          })],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        boots: [{
+          itemId: enemyRole === "top" ? 3006 : 3158,
+          icon: enemyRole === "top" ? "3006.webp" : "3158.webp",
+          name:
+            enemyRole === "top"
+              ? "Berserker's Greaves"
+              : "Ionian Boots of Lucidity",
+          games: 10,
+          wins: 5,
+        }],
       }),
     ),
   });
@@ -89,6 +113,18 @@ test("buildBuildSuggestionResults triples every likely same-lane matchup indepen
   assert.equal(spellGamesBySet.get("4-6"), 30);
   assert.equal(spellGamesBySet.get("4-14"), 30);
   assert.equal(spellGamesBySet.get("3-4"), 10);
+  assert.equal(
+    aggregated.boots.options.find((option) => option.itemId === 3006)?.games,
+    90,
+  );
+  assert.equal(
+    aggregated.boots.options.find((option) => option.itemId === 3158)?.games,
+    10,
+  );
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].itemId, 3118);
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].games, 90);
+  assert.equal(aggregated.items.highestWinBuild.selections[0].itemId, 3118);
+  assert.equal(aggregated.items.highestWinBuild.selections[0].games, 90);
 });
 
 test("buildBuildSuggestionResults triples at least one most-likely lane opponent", () => {
@@ -98,6 +134,7 @@ test("buildBuildSuggestionResults triples at least one most-likely lane opponent
     { enemyChampionKey: "3", laneOpponentLikelihood: 8, spellIds: [4, 14] },
   ];
   const aggregated = buildBuildSuggestionResults({
+    laneOpponentWeight: 3,
     matchupBuilds: matchupSpecs.map((spec) => ({
       ...createMatchupBuild({
         totalGames: 10,
@@ -129,6 +166,38 @@ test("buildBuildSuggestionResults triples at least one most-likely lane opponent
   assert.equal(spellGamesBySet.get("4-6"), 30);
   assert.equal(spellGamesBySet.get("4-12"), 10);
   assert.equal(spellGamesBySet.get("4-14"), 10);
+});
+
+test("buildBuildSuggestionResults treats Bottom and Support as the same lane", () => {
+  const aggregated = buildBuildSuggestionResults({
+    laneOpponentWeight: 4,
+    matchupBuilds: [
+      { enemyRole: "bottom", spellIds: [4, 7] },
+      { enemyRole: "jungle", spellIds: [4, 11] },
+    ].map(({ enemyRole, spellIds }) =>
+      createMatchupBuild({
+        totalGames: 10,
+        fetchedAt: "2026-07-17T12:00:00.000Z",
+        role: "support",
+        enemyRole,
+        primaryStyleOptions: [],
+        secondaryStyleOptions: [],
+        primarySlotOptions: [[], [], [], []],
+        secondarySlotOptions: [[], [], [], []],
+        statOptions: [],
+        pageCandidates: [],
+        spellOptions: [createSpellSetOption({ spellIds, games: 10, wins: 5 })],
+        boots: [],
+      }),
+    ),
+  });
+  const spellGamesBySet = new Map(
+    aggregated.spells.options.map((option) => [option.setKey, option.games]),
+  );
+
+  assert.equal(aggregated.totalGames, 50);
+  assert.equal(spellGamesBySet.get("4-7"), 40);
+  assert.equal(spellGamesBySet.get("4-11"), 10);
 });
 
 function createPageCandidate({

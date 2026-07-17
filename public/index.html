@@ -17,6 +17,12 @@
             >
             <div class="hero-toolbar">
               <select id="rank-filter" class="hero-rank-filter" aria-label="Rank filter"></select>
+              <select
+                id="lane-opponent-weight"
+                class="hero-lane-weight"
+                aria-label="Lane Weight"
+                title="Weight likely lane opponents in champion and build suggestions"
+              ></select>
               <button id="auto-import-button" class="secondary-button action-button action-button--auto" type="button">
                 Auto Import
               </button>
@@ -199,15 +205,24 @@
             </div>
             <p id="build-suggestion-meta" class="build-modal-meta"></p>
           </div>
-          <button
-            id="build-suggestion-close"
-            class="build-modal-close"
-            type="button"
-            aria-label="Back to draft"
-            title="Back"
-          >
-            <span class="build-modal-close-icon" aria-hidden="true">&#8592;</span>
-          </button>
+          <div class="build-modal-actions">
+            <label class="build-lane-weight-control" for="build-suggestion-lane-weight">
+              <span>Lane Weight</span>
+              <select
+                id="build-suggestion-lane-weight"
+                aria-label="Build recommendation lane weight"
+              ></select>
+            </label>
+            <button
+              id="build-suggestion-close"
+              class="build-modal-close"
+              type="button"
+              aria-label="Back to draft"
+              title="Back"
+            >
+              <span class="build-modal-close-icon" aria-hidden="true">&#8592;</span>
+            </button>
+          </div>
         </header>
 
         <div id="build-suggestion-tabs" class="build-modal-tabs" role="tablist" aria-label="Build suggestion views"></div>
@@ -217,15 +232,17 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.6.18</span>
+      <span id="app-version">v0.7.0</span>
     </div>
 
     <script src="/roles.js" defer></script>
     <script src="/rank-filters.js" defer></script>
+    <script src="/lane-opponent-weight.js" defer></script>
     <script src="/result-ranking.js" defer></script>
     <script src="/suggestion-filters.js" defer></script>
     <script src="/suggestion-cache.js" defer></script>
     <script src="/build-suggestion-cache.js" defer></script>
+    <script src="/build-suggestion-consensus.js" defer></script>
     <script src="/ban-suggestion-state.js" defer></script>
     <script src="/draft-projection-view.js" defer></script>
     <script src="/rune-metadata.js" defer></script>

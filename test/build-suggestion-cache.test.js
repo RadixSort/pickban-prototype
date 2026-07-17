@@ -32,3 +32,11 @@ test("buildBuildSuggestionCacheKey changes when the ally role changes", () => {
 
   assert.notEqual(before, after);
 });
+
+test("buildBuildSuggestionCacheKey changes with the lane opponent weight", () => {
+  const ally = { key: 103, role: "middle" };
+  const before = buildBuildSuggestionCacheKey("emerald_plus", ally, [{ key: 89 }], 1);
+  const after = buildBuildSuggestionCacheKey("emerald_plus", ally, [{ key: 89 }], 4);
+
+  assert.notEqual(before, after);
+});
