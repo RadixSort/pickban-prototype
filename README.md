@@ -31,6 +31,8 @@ Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gol
 
 The app supports at most five champions per team and never allows the same champion on both teams.
 
+Rune recommendations combine the pick frequency and win rate of each rune element across the selected enemy matchups. The app builds the highest-win and most-picked pages element by element instead of choosing one observed complete page.
+
 ### Scores
 
 - **Synergy**: candidate performance with selected allies.

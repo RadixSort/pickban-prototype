@@ -156,6 +156,7 @@ function createPayload() {
         ],
       },
       highestWinPage: {
+        isComposite: true,
         winRate: 50.9,
         pickRate: 76.8,
         games: 1264,
@@ -184,6 +185,7 @@ function createPayload() {
         },
       },
       mostPickedPage: {
+        isComposite: true,
         winRate: 50.1,
         pickRate: 73.5,
         games: 1209,
@@ -207,7 +209,7 @@ function createPayload() {
         },
       },
       highlighting: {
-        notes: ["No locked page met the prior threshold."],
+        notes: ["No complete composite rune recommendation met the prior threshold."],
       },
     },
     spells: {
@@ -445,7 +447,10 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Skill Max Priority/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
-  assert.match(html, /Most picked and highest win build options are shown below when available\./);
+  assert.match(
+    html,
+    /Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available\./,
+  );
   assert.match(html, /Precision \+ Sorcery/);
   assert.match(html, /Precision \+ Resolve/);
   assert.match(html, /Flash \+ Ignite/);
@@ -462,10 +467,12 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Void Staff/);
   assert.match(html, /11 min/);
   assert.match(html, /33 min/);
-  assert.match(html, /No locked page met the prior threshold\./);
+  assert.match(html, /No complete composite rune recommendation met the prior threshold\./);
   assert.match(html, /Lethal Tempo/);
   assert.match(html, /Gathering Storm/);
   assert.match(html, /Adaptive Force/);
+  assert.equal(countMatches(html, /Composed from individual rune performance across matchups\./g), 2);
+  assert.equal(countMatches(html, /Avg Win/g), 2);
   assert.match(html, /50\.1%/);
   assert.match(html, /47\.2%/);
   assert.match(html, /Lethal Tempo[\s\S]*50\.1% win[\s\S]*73\.5% pick/);
@@ -485,7 +492,7 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.equal(
     countMatches(
       html,
-      /Most picked and highest win build options are shown below when available\./g,
+      /Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available\./g,
     ),
     1,
   );

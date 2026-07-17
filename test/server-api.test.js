@@ -81,6 +81,7 @@ function createRenderedQwikBuildPageHtml({
   totalGames = 100,
   mostPickedRuneGames = 60,
   highestWinRuneGames = 5,
+  includeRunePageCandidates = true,
 } = {}) {
   const qwikSnapshot = {
     refs: {},
@@ -102,15 +103,19 @@ function createRenderedQwikBuildPageHtml({
               n: 80,
               wr: 55,
             },
-            runes: {
-              wr: 55,
-              n: mostPickedRuneGames,
-              set: {
-                pri: [8010, 9111, 9103, 8299],
-                sec: [8446, 8451],
-                mod: [5005, 5008, 5001],
-              },
-            },
+            ...(includeRunePageCandidates
+              ? {
+                  runes: {
+                    wr: 55,
+                    n: mostPickedRuneGames,
+                    set: {
+                      pri: [8010, 9111, 9103, 8299],
+                      sec: [8446, 8451],
+                      mod: [5005, 5008, 5001],
+                    },
+                  },
+                }
+              : {}),
           },
           win: {
             sums: {
@@ -118,15 +123,19 @@ function createRenderedQwikBuildPageHtml({
               n: 20,
               wr: 65,
             },
-            runes: {
-              wr: 80,
-              n: highestWinRuneGames,
-              set: {
-                pri: [8992, 8224, 8210, 8237],
-                sec: [8444, 8453],
-                mod: [5008, 5008, 5011],
-              },
-            },
+            ...(includeRunePageCandidates
+              ? {
+                  runes: {
+                    wr: 80,
+                    n: highestWinRuneGames,
+                    set: {
+                      pri: [8992, 8224, 8210, 8237],
+                      sec: [8444, 8453],
+                      mod: [5008, 5008, 5011],
+                    },
+                  },
+                }
+              : {}),
           },
         },
         runes: {
@@ -1257,7 +1266,7 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   );
 });
 
-test("POST /build-suggestions prefers rendered matchup runes over generic mega runes", async (t) => {
+test("POST /build-suggestions composes rendered rune histograms without complete pages", async (t) => {
   const { baseUrl } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -1277,6 +1286,7 @@ test("POST /build-suggestions prefers rendered matchup runes over generic mega r
           totalGames: 100,
           mostPickedRuneGames: 60,
           highestWinRuneGames: 5,
+          includeRunePageCandidates: false,
         }),
       );
     }
@@ -1302,12 +1312,14 @@ test("POST /build-suggestions prefers rendered matchup runes over generic mega r
     response.body.runes.highestWinPage.selections.primary.map((selection) => selection.id),
     [8992, 8224, 8210, 8237],
   );
-  assert.equal(response.body.runes.highestWinPage.games, 5);
-  assert.equal(response.body.runes.highestWinPage.pickRate, 5);
-  assert.equal(response.body.runes.mostPickedPage.pickRate, 60);
+  assert.equal(response.body.runes.highestWinPage.isComposite, true);
+  assert.equal(response.body.runes.mostPickedPage.isComposite, true);
+  assert.equal(response.body.runes.highestWinPage.games, 55);
+  assert.equal(Math.round(response.body.runes.highestWinPage.pickRate), 18);
+  assert.equal(Math.round(response.body.runes.mostPickedPage.pickRate), 61);
 });
 
-test("POST /build-suggestions doubles all inferred same-lane enemy matchups", async (t) => {
+test("POST /build-suggestions triples all inferred same-lane enemy matchups", async (t) => {
   const { baseUrl } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -1342,10 +1354,10 @@ test("POST /build-suggestions doubles all inferred same-lane enemy matchups", as
 
   assert.equal(response.status, 200);
   assert.equal(response.body.summary.sourceMatchups, 4);
-  assert.equal(response.body.runes.mostPickedPage.games, 420);
-  assert.equal(response.body.runes.highestWinPage.games, 35);
-  assert.equal(response.body.spells.mostPickedSet.games, 560);
-  assert.equal(response.body.spells.highestWinSet.games, 140);
+  assert.equal(response.body.runes.mostPickedPage.games, 611);
+  assert.equal(response.body.runes.highestWinPage.games, 183);
+  assert.equal(response.body.spells.mostPickedSet.games, 800);
+  assert.equal(response.body.spells.highestWinSet.games, 200);
 });
 
 test("POST /build-suggestions accepts partial enemy teams", async (t) => {

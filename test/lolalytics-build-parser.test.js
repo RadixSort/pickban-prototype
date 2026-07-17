@@ -192,6 +192,17 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
       { id: 8300, games: 70 },
     ],
   );
+  assert.deepEqual(
+    parsed.runes.statOptions.map((option) => ({
+      id: option.id,
+      slotIndexes: option.slotIndexes,
+    })),
+    [
+      { id: 5005, slotIndexes: [0] },
+      { id: 5008, slotIndexes: [0, 1] },
+      { id: 5011, slotIndexes: [2] },
+    ],
+  );
   assert.equal(parsed.runes.pageCandidates.length, 1);
   assert.deepEqual(
     parsed.runes.pageCandidates[0].primaryRuneIds,

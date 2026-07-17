@@ -76,9 +76,11 @@ Candidates must have at least 10% lane share and 0.5% pick rate. Selected champi
 
 ### Builds and rune import
 
-`POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for matchup rune pages and inactive item tabs, with visible HTML sections as fallback. Rendered Qwik rune data overrides mega rune data when present because the mega endpoint can return generic champion-role runes even when a matchup filter is requested. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
+`POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for matchup rune-element distributions and inactive item tabs, with visible HTML sections as fallback. Rendered Qwik rune data overrides mega rune data when it contains a usable element histogram because the mega endpoint can return generic champion-role runes even when a matchup filter is requested. Complete source rune pages are optional. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
 
-Build aggregation gives each enemy whose inferred default role matches the allied builder's role a 2x data weight. Every matching enemy is weighted independently; the server does not force one unique lane-opponent assignment.
+Rune aggregation sums each element's games and wins across the weighted matchups. For each highest-win or most-picked recommendation, the selected keystone determines the primary tree, the independently selected secondary tree determines the secondary pool, and primary runes, two distinct secondary rows, and three legal stat shards are chosen one by one. The displayed page-level metrics are averages of its selected elements, not observations of that exact complete page.
+
+Build aggregation gives each enemy whose inferred default role matches the allied builder's role a 3x data weight. Every matching enemy is weighted independently. When no enemy is inferred in the allied builder's role, the server still triples one matchup: the highest explicit lane-likelihood value when available, then the largest matchup sample as the fallback signal.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 

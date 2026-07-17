@@ -55,7 +55,7 @@ function createMatchupBuild({
   };
 }
 
-test("buildBuildSuggestionResults doubles every likely same-lane matchup independently", () => {
+test("buildBuildSuggestionResults triples every likely same-lane matchup independently", () => {
   const matchupSpecs = [
     { enemyRole: "top", spellIds: [4, 12] },
     { enemyRole: "top", spellIds: [4, 6] },
@@ -84,11 +84,51 @@ test("buildBuildSuggestionResults doubles every likely same-lane matchup indepen
     aggregated.spells.options.map((option) => [option.setKey, option.games]),
   );
 
-  assert.equal(aggregated.totalGames, 70);
-  assert.equal(spellGamesBySet.get("4-12"), 20);
-  assert.equal(spellGamesBySet.get("4-6"), 20);
-  assert.equal(spellGamesBySet.get("4-14"), 20);
+  assert.equal(aggregated.totalGames, 100);
+  assert.equal(spellGamesBySet.get("4-12"), 30);
+  assert.equal(spellGamesBySet.get("4-6"), 30);
+  assert.equal(spellGamesBySet.get("4-14"), 30);
   assert.equal(spellGamesBySet.get("3-4"), 10);
+});
+
+test("buildBuildSuggestionResults triples at least one most-likely lane opponent", () => {
+  const matchupSpecs = [
+    { enemyChampionKey: "1", laneOpponentLikelihood: 12, spellIds: [4, 12] },
+    { enemyChampionKey: "2", laneOpponentLikelihood: 37, spellIds: [4, 6] },
+    { enemyChampionKey: "3", laneOpponentLikelihood: 8, spellIds: [4, 14] },
+  ];
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: matchupSpecs.map((spec) => ({
+      ...createMatchupBuild({
+        totalGames: 10,
+        fetchedAt: "2026-07-17T12:00:00.000Z",
+        role: "middle",
+        enemyRole: "support",
+        primaryStyleOptions: [],
+        secondaryStyleOptions: [],
+        primarySlotOptions: [[], [], [], []],
+        secondarySlotOptions: [[], [], [], []],
+        statOptions: [],
+        pageCandidates: [],
+        spellOptions: [createSpellSetOption({
+          spellIds: spec.spellIds,
+          games: 10,
+          wins: 5,
+        })],
+        boots: [],
+      }),
+      enemyChampionKey: spec.enemyChampionKey,
+      laneOpponentLikelihood: spec.laneOpponentLikelihood,
+    })),
+  });
+  const spellGamesBySet = new Map(
+    aggregated.spells.options.map((option) => [option.setKey, option.games]),
+  );
+
+  assert.equal(aggregated.totalGames, 50);
+  assert.equal(spellGamesBySet.get("4-6"), 30);
+  assert.equal(spellGamesBySet.get("4-12"), 10);
+  assert.equal(spellGamesBySet.get("4-14"), 10);
 });
 
 function createPageCandidate({
@@ -178,12 +218,14 @@ function createSkillOption({ abilityKey, games, wins }) {
   };
 }
 
-test("buildBuildSuggestionResults aggregates overview groups, exact pages, items, and boots", () => {
+test("buildBuildSuggestionResults aggregates rune histograms, items, and boots", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
       createMatchupBuild({
         totalGames: 100,
         fetchedAt: "2026-03-19T20:15:00.000Z",
+        role: "middle",
+        enemyRole: "middle",
         primaryStyleOptions: [
           { id: 8000, icon: "precision.png", name: "Precision", games: 100, wins: 55 },
         ],
@@ -269,6 +311,8 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
       createMatchupBuild({
         totalGames: 100,
         fetchedAt: "2026-03-19T20:30:00.000Z",
+        role: "middle",
+        enemyRole: "middle",
         primaryStyleOptions: [
           { id: 8200, icon: "sorcery.png", name: "Sorcery", games: 100, wins: 57 },
         ],
@@ -352,16 +396,34 @@ test("buildBuildSuggestionResults aggregates overview groups, exact pages, items
   });
 
   assert.equal(aggregated.lastUpdatedAt, "2026-03-19T20:30:00.000Z");
-  assert.equal(aggregated.runes.mostPickedPage.pageKey, "page-a");
-  assert.equal(aggregated.runes.highestWinPage.pageKey, "page-c");
+  assert.equal(aggregated.runes.mostPickedPage.isComposite, true);
+  assert.equal(aggregated.runes.highestWinPage.isComposite, true);
+  assert.deepEqual(
+    aggregated.runes.mostPickedPage.selections.primary.map((selection) => selection.id),
+    [8008, 9111, 9103, 8014],
+  );
+  assert.deepEqual(
+    aggregated.runes.mostPickedPage.selections.modifiers.map((selection) => selection.id),
+    [5008, 5008, 5011],
+  );
+  assert.deepEqual(
+    aggregated.runes.highestWinPage.selections.primary.map((selection) => selection.id),
+    [8229, 8226, 8233, 8236],
+  );
+  assert.deepEqual(
+    aggregated.runes.highestWinPage.selections.secondary.map((selection) => selection.id),
+    [8446, 8473],
+  );
+  assert.notEqual(aggregated.runes.mostPickedPage.pageKey, "page-a");
+  assert.notEqual(aggregated.runes.highestWinPage.pageKey, "page-c");
   assert.deepEqual(aggregated.spells.mostPickedSet.spellIds, [4, 12]);
   assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 14]);
   assert.deepEqual(aggregated.startingItems.mostPickedSet.itemIds, [1056, 2003]);
   assert.deepEqual(aggregated.startingItems.highestWinSet.itemIds, [1082, 2031]);
   assert.equal(aggregated.skillPriority.mostPickedSkill.abilityKey, "Q");
   assert.equal(aggregated.skillPriority.highestWinSkill.abilityKey, "E");
-  assert.equal(aggregated.skillPriority.mostPickedSkill.games, 100);
-  assert.equal(aggregated.skillPriority.highestWinSkill.games, 60);
+  assert.equal(aggregated.skillPriority.mostPickedSkill.games, 300);
+  assert.equal(aggregated.skillPriority.highestWinSkill.games, 180);
 
   const primaryStyleGroup = aggregated.runes.overview.slotGroups.find(
     (group) => group.key === "primary-style",
@@ -498,7 +560,7 @@ test("buildBuildSuggestionResults prefers tab-specific item slots when available
   assert.equal(aggregated.items.highestWinBuild.selections[0].name, "Sundered Sky");
 });
 
-test("buildBuildSuggestionResults reports when no page crosses the highest-win threshold", () => {
+test("buildBuildSuggestionResults reports when no rune element crosses the highest-win threshold", () => {
   const aggregated = buildBuildSuggestionResults({
     highestWinPageThresholdPct: 60,
     matchupBuilds: [
@@ -507,9 +569,23 @@ test("buildBuildSuggestionResults reports when no page crosses the highest-win t
         fetchedAt: "2026-03-19T20:15:00.000Z",
         primaryStyleOptions: [{ id: 8000, icon: "", name: "Precision", games: 100, wins: 55 }],
         secondaryStyleOptions: [{ id: 8300, icon: "", name: "Inspiration", games: 100, wins: 55 }],
-        primarySlotOptions: [[], [], [], []],
-        secondarySlotOptions: [[], [], [], []],
-        statOptions: [],
+        primarySlotOptions: [
+          [{ id: 8008, icon: "", name: "Lethal Tempo", games: 40, wins: 24, styleId: 8000, styleName: "Precision" }],
+          [{ id: 9111, icon: "", name: "Triumph", games: 40, wins: 24, styleId: 8000, styleName: "Precision" }],
+          [{ id: 9103, icon: "", name: "Legend: Bloodline", games: 40, wins: 24, styleId: 8000, styleName: "Precision" }],
+          [{ id: 8014, icon: "", name: "Coup de Grace", games: 40, wins: 24, styleId: 8000, styleName: "Precision" }],
+        ],
+        secondarySlotOptions: [
+          [],
+          [{ id: 8304, icon: "", name: "Magical Footwear", games: 40, wins: 24, styleId: 8300, styleName: "Inspiration" }],
+          [],
+          [{ id: 8347, icon: "", name: "Cosmic Insight", games: 40, wins: 24, styleId: 8300, styleName: "Inspiration" }],
+        ],
+        statOptions: [
+          { id: 5005, icon: "", name: "Attack Speed", games: 40, wins: 24 },
+          { id: 5008, icon: "", name: "Adaptive Force", games: 40, wins: 24 },
+          { id: 5011, icon: "", name: "Health", games: 40, wins: 24 },
+        ],
         pageCandidates: [
           createPageCandidate({
             pageKey: "page-a",
@@ -532,7 +608,7 @@ test("buildBuildSuggestionResults reports when no page crosses the highest-win t
   assert.match(aggregated.runes.highlighting.notes[0], /60%/i);
 });
 
-test("buildBuildSuggestionResults uses a 1% default threshold for highest-win build options", () => {
+test("buildBuildSuggestionResults uses a 1% default threshold for highest-win build elements", () => {
   const aggregated = buildBuildSuggestionResults({
     matchupBuilds: [
       createMatchupBuild({
@@ -540,9 +616,27 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win bu
         fetchedAt: "2026-03-19T20:15:00.000Z",
         primaryStyleOptions: [{ id: 8000, icon: "", name: "Precision", games: 1000, wins: 500 }],
         secondaryStyleOptions: [{ id: 8300, icon: "", name: "Inspiration", games: 1000, wins: 500 }],
-        primarySlotOptions: [[], [], [], []],
-        secondarySlotOptions: [[], [], [], []],
-        statOptions: [],
+        primarySlotOptions: [
+          [
+            { id: 8008, icon: "", name: "Lethal Tempo", games: 15, wins: 12, styleId: 8000, styleName: "Precision" },
+            { id: 8021, icon: "", name: "Fleet Footwork", games: 9, wins: 9, styleId: 8000, styleName: "Precision" },
+            { id: 8010, icon: "", name: "Conqueror", games: 976, wins: 400, styleId: 8000, styleName: "Precision" },
+          ],
+          [{ id: 9111, icon: "", name: "Triumph", games: 15, wins: 12, styleId: 8000, styleName: "Precision" }],
+          [{ id: 9103, icon: "", name: "Legend: Bloodline", games: 15, wins: 12, styleId: 8000, styleName: "Precision" }],
+          [{ id: 8014, icon: "", name: "Coup de Grace", games: 15, wins: 12, styleId: 8000, styleName: "Precision" }],
+        ],
+        secondarySlotOptions: [
+          [],
+          [{ id: 8304, icon: "", name: "Magical Footwear", games: 15, wins: 12, styleId: 8300, styleName: "Inspiration" }],
+          [],
+          [{ id: 8347, icon: "", name: "Cosmic Insight", games: 15, wins: 12, styleId: 8300, styleName: "Inspiration" }],
+        ],
+        statOptions: [
+          { id: 5005, icon: "", name: "Attack Speed", games: 15, wins: 12 },
+          { id: 5008, icon: "", name: "Adaptive Force", games: 15, wins: 12 },
+          { id: 5011, icon: "", name: "Health", games: 15, wins: 12 },
+        ],
         pageCandidates: [
           createPageCandidate({
             pageKey: "page-over-threshold",
@@ -589,7 +683,11 @@ test("buildBuildSuggestionResults uses a 1% default threshold for highest-win bu
     ],
   });
 
-  assert.equal(aggregated.runes.highestWinPage.pageKey, "page-over-threshold");
+  assert.equal(aggregated.runes.highestWinPage.selections.primary[0].id, 8008);
+  assert.equal(
+    aggregated.runes.highestWinPage.selections.primary.some((selection) => selection.id === 8021),
+    false,
+  );
   assert.deepEqual(aggregated.spells.highestWinSet.spellIds, [4, 12]);
   assert.deepEqual(aggregated.startingItems.highestWinSet.itemIds, [1056, 2003]);
   assert.equal(aggregated.skillPriority.highestWinSkill.abilityKey, "E");

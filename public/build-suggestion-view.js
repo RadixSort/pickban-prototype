@@ -200,10 +200,23 @@
             ${renderRuneImportAction(pageKey, runeImportState)}
           </div>
           <div class="build-summary-metric-grid">
-            ${renderSummaryMetric("Win", formatPercent(page.winRate), "win")}
-            ${renderSummaryMetric("Pick", formatPercent(page.pickRate), "pick")}
-            ${renderSummaryMetric("Games", formatCount(page.games), "games")}
+            ${renderSummaryMetric(
+              page.isComposite ? "Avg Win" : "Win",
+              formatPercent(page.winRate),
+              "win",
+            )}
+            ${renderSummaryMetric(
+              page.isComposite ? "Avg Pick" : "Pick",
+              formatPercent(page.pickRate),
+              "pick",
+            )}
+            ${renderSummaryMetric(
+              page.isComposite ? "Avg Games" : "Games",
+              formatCount(page.games),
+              "games",
+            )}
           </div>
+          ${page.isComposite ? '<p class="build-summary-caption">Composed from individual rune performance across matchups.</p>' : ""}
           ${renderRuneImportStatus(runeImportState)}
         </header>
         <div class="build-summary-section-list">
@@ -229,7 +242,7 @@
             </div>
           </header>
           <div class="build-summary-column-empty">
-            No locked rune page recommendations were available.
+            No complete rune recommendations were available.
           </div>
         </section>
       `;
@@ -1179,7 +1192,7 @@
   function renderBuildSummaryGlobalNote() {
     return `
       <p class="build-summary-global-note">
-        Most picked and highest win build options are shown below when available.
+        Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available.
       </p>
     `;
   }

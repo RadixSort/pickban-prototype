@@ -501,8 +501,12 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     });
   }
 
-  const aggregatedResults = buildBuildSuggestionResults({
+  const matchupBuildsWithLaneLikelihoods = attachCachedLaneOpponentLikelihoods(
     matchupBuilds,
+    normalizedRequest,
+  );
+  const aggregatedResults = buildBuildSuggestionResults({
+    matchupBuilds: matchupBuildsWithLaneLikelihoods,
   });
   const payload = buildBuildSuggestionsPayload({
     normalizedRequest,
@@ -527,6 +531,32 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     requestStats: buildLolalyticsRequestStats(),
   });
 }));
+
+function attachCachedLaneOpponentLikelihoods(matchupBuilds, normalizedRequest) {
+  const role = normalizeRole(normalizedRequest?.ally?.role);
+  const rankFilter = normalizedRequest?.rankFilter;
+  const cachedRoleLikelihoods = allyRoleLikelihoodsCache.get(rankFilter) || {};
+  const cachedTierRows = role && rankFilter
+    ? tierListRowsCache.get(buildTierListDataUrl(role, rankFilter)) || []
+    : [];
+  const tierLanePercentByChampionKey = new Map(
+    cachedTierRows.map((row) => [String(row?.championKey || ""), row?.lanePercent]),
+  );
+
+  return matchupBuilds.map((matchup) => {
+    const championKey = String(matchup?.enemyChampionKey || "");
+    const laneOpponentLikelihood =
+      cachedRoleLikelihoods?.[championKey]?.[role]?.lanePercent ??
+      tierLanePercentByChampionKey.get(championKey);
+
+    return Number.isFinite(Number(laneOpponentLikelihood))
+      ? {
+          ...matchup,
+          laneOpponentLikelihood: Number(laneOpponentLikelihood),
+        }
+      : matchup;
+  });
+}
 
 server = app.listen(PORT, () => {
   console.log(
@@ -1386,7 +1416,18 @@ function hasBuildList(value) {
 }
 
 function hasUsableRuneData(runes) {
-  return hasBuildList(runes?.pageCandidates);
+  const primarySlots = runes?.primarySlotOptions;
+  const secondarySlots = runes?.secondarySlotOptions;
+
+  return (
+    Array.isArray(primarySlots) &&
+    primarySlots.length >= 4 &&
+    primarySlots.every(hasBuildList) &&
+    Array.isArray(secondarySlots) &&
+    secondarySlots.slice(1).filter(hasBuildList).length >= 2 &&
+    hasBuildList(runes?.secondaryStyleOptions) &&
+    hasBuildList(runes?.statOptions)
+  );
 }
 
 function hasNestedBuildList(value) {
