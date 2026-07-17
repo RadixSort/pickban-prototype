@@ -14,6 +14,7 @@
     { value: "emerald_plus", label: "Emerald+", tierQueryValue: null },
     { value: "diamond_plus", label: "Diamond+", tierQueryValue: "diamond_plus" },
     { value: "d2_plus", label: "D2+", tierQueryValue: "d2_plus" },
+    { value: "master_plus", label: "Master+", tierQueryValue: "master_plus" },
   ];
 
   const rankFilterByValue = new Map(RANK_FILTER_OPTIONS.map((option) => [option.value, option]));
@@ -41,6 +42,10 @@
     ["d2+", "d2_plus"],
     ["d2plus", "d2_plus"],
     ["d2_plus", "d2_plus"],
+    ["master", "master_plus"],
+    ["master+", "master_plus"],
+    ["masterplus", "master_plus"],
+    ["master_plus", "master_plus"],
   ]);
 
   function normalizeRankFilter(value) {

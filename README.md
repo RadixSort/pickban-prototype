@@ -19,6 +19,8 @@ Open `http://localhost:3000` and leave the terminal running. After the first set
 
 ## Use the app
 
+Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default.
+
 1. Click **Fetch Suggestions** with an empty draft for first-pick lists.
 2. Add allies and enemies, assign any known ally roles, then fetch again for draft-aware suggestions.
 3. Switch **Target role** to inspect each open role. Use **+** to add a result to the allied draft.

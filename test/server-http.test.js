@@ -135,7 +135,7 @@ test("GET /app-config returns the local app metadata", async (t) => {
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.match(payload.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(payload.lolalyticsDataWindowDays, 14);
+  assert.equal(payload.lolalyticsDataWindowDays, 30);
   assert.equal(payload.canShutdown, true);
   assert.equal(typeof payload.shutdownToken, "string");
   assert.equal(payload.shutdownToken.length, 48);

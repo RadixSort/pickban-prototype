@@ -74,6 +74,10 @@ async function getJson(baseUrl, endpoint) {
 }
 
 function createRenderedQwikBuildPageHtml({
+  allyChampionKey = 103,
+  enemyChampionKey = 89,
+  role = "middle",
+  enemyRole = "support",
   totalGames = 100,
   mostPickedRuneGames = 60,
   highestWinRuneGames = 5,
@@ -85,10 +89,10 @@ function createRenderedQwikBuildPageHtml({
     objs: [
       {
         header: {
-          cid: 103,
-          vs: 89,
-          lane: "middle",
-          vsLane: "support",
+          cid: allyChampionKey,
+          vs: enemyChampionKey,
+          lane: role,
+          vsLane: enemyRole,
           n: totalGames,
         },
         summary: {
@@ -1247,7 +1251,7 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
         entry.pathname.startsWith("/lol/ahri/vs/") &&
         new URLSearchParams(entry.search).get("tier") === "emerald_plus" &&
         new URLSearchParams(entry.search).get("lane") === "middle" &&
-        new URLSearchParams(entry.search).get("patch") === "14",
+        new URLSearchParams(entry.search).get("patch") === "30",
     ),
     5,
   );
@@ -1301,6 +1305,47 @@ test("POST /build-suggestions prefers rendered matchup runes over generic mega r
   assert.equal(response.body.runes.highestWinPage.games, 5);
   assert.equal(response.body.runes.highestWinPage.pickRate, 5);
   assert.equal(response.body.runes.mostPickedPage.pickRate, 60);
+});
+
+test("POST /build-suggestions doubles all inferred same-lane enemy matchups", async (t) => {
+  const { baseUrl } = await startServerWithMock(t, ({ url }) => {
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
+      return jsonResponse(
+        createRuneBuildMegaData({
+          role: "top",
+          totalGames: 100,
+        }),
+      );
+    }
+
+    if (url.pathname.startsWith("/lol/yorick/vs/") && url.pathname.endsWith("/build/")) {
+      const enemyRole = url.pathname.includes("/sona/") ? "support" : "top";
+      return textResponse(
+        createRenderedQwikBuildPageHtml({
+          role: "top",
+          enemyRole,
+        }),
+      );
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Yorick",
+      role: "top",
+    },
+    enemies: ["Sion", "Olaf", "Ornn", "Sona"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.summary.sourceMatchups, 4);
+  assert.equal(response.body.runes.mostPickedPage.games, 420);
+  assert.equal(response.body.runes.highestWinPage.games, 35);
+  assert.equal(response.body.spells.mostPickedSet.games, 560);
+  assert.equal(response.body.spells.highestWinSet.games, 140);
 });
 
 test("POST /build-suggestions accepts partial enemy teams", async (t) => {

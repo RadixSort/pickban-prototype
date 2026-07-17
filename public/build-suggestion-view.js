@@ -1,14 +1,22 @@
 (function initializeBuildSuggestionView(globalScope, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(require("./summoner-spell-metadata.js"));
     return;
   }
 
-  globalScope.buildSuggestionView = factory();
-})(typeof globalThis !== "undefined" ? globalThis : this, () => {
+  globalScope.buildSuggestionView = factory(globalScope.summonerSpellMetadata || {});
+})(typeof globalThis !== "undefined" ? globalThis : this, (summonerSpellMetadata = {}) => {
   const DEFAULT_BUILD_SUGGESTION_TAB = "summary";
   const BUILD_SUGGESTION_TABS = [{ value: "summary", label: "Summary" }];
   const validTabs = new Set(BUILD_SUGGESTION_TABS.map((tab) => tab.value));
+  const buildSummonerSpellIconUrl =
+    typeof summonerSpellMetadata.buildSummonerSpellIconUrl === "function"
+      ? summonerSpellMetadata.buildSummonerSpellIconUrl
+      : () => "";
+  const getSummonerSpellName =
+    typeof summonerSpellMetadata.getSummonerSpellName === "function"
+      ? summonerSpellMetadata.getSummonerSpellName
+      : () => "";
 
   function normalizeBuildSuggestionTab(value) {
     return validTabs.has(value) ? value : DEFAULT_BUILD_SUGGESTION_TAB;
@@ -707,19 +715,23 @@
   }
 
   function renderSpellSetCard(spellSet) {
-    const selections = Array.isArray(spellSet?.selections)
-      ? spellSet.selections.filter((selection) => selection && (selection.icon || selection.name))
-      : [];
+    const selections = normalizeSpellSelections(spellSet).filter(
+      (selection) => selection && (selection.icon || selection.name),
+    );
+    const normalizedSpellSet = {
+      ...spellSet,
+      selections,
+    };
 
     return `
-      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", spellSet)}">
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", normalizedSpellSet)}">
         <div class="build-spell-card-top">
           <div class="build-spell-card-icons">
             ${selections.map((selection) => renderSpellSelection(selection)).join("")}
           </div>
           <div class="build-spell-card-copy">
-            <h4>${escapeHtml(getSpellSetTitle(spellSet))}</h4>
-            ${renderHighlightLegend(spellSet)}
+            <h4>${escapeHtml(getSpellSetTitle(normalizedSpellSet))}</h4>
+            ${renderHighlightLegend(normalizedSpellSet)}
           </div>
         </div>
         <div class="build-summary-metric-grid">
@@ -729,6 +741,30 @@
         </div>
       </article>
     `;
+  }
+
+  function normalizeSpellSelections(spellSet) {
+    const sourceSelections = Array.isArray(spellSet?.selections)
+      ? spellSet.selections.filter(Boolean)
+      : [];
+    const spellIds = Array.isArray(spellSet?.spellIds) && spellSet.spellIds.length > 0
+      ? spellSet.spellIds
+      : sourceSelections.map((selection) => selection?.id);
+
+    return spellIds.map((rawSpellId, index) => {
+      const spellId = Number(rawSpellId);
+      const sourceSelection =
+        sourceSelections.find((selection) => Number(selection?.id) === spellId) ||
+        sourceSelections[index] ||
+        {};
+
+      return {
+        ...sourceSelection,
+        id: Number.isInteger(spellId) ? spellId : rawSpellId,
+        icon: buildSummonerSpellIconUrl(spellId) || sourceSelection.icon || "",
+        name: getSummonerSpellName(spellId) || sourceSelection.name || `Spell ${rawSpellId}`,
+      };
+    });
   }
 
   function renderSpellSelection(selection) {

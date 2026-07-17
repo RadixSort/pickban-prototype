@@ -517,6 +517,26 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Overview/);
 });
 
+test("renderBuildSuggestionBody repairs cached spell placeholder names and icons", () => {
+  const payload = createPayload();
+  payload.spells.highestWinSet.selections = [
+    { id: 4, icon: "", name: "Spell 4" },
+    { id: 14, icon: "", name: "Spell 14" },
+  ];
+  payload.spells.mostPickedSet.selections = [
+    { id: 4, icon: "", name: "Spell 4" },
+    { id: 12, icon: "", name: "Spell 12" },
+  ];
+
+  const html = renderBuildSuggestionBody(payload);
+
+  assert.match(html, /Flash \+ Ignite/);
+  assert.match(html, /Flash \+ Teleport/);
+  assert.match(html, /https:\/\/cdn5\.lolalytics\.com\/spell64\/14\.webp/);
+  assert.match(html, /https:\/\/cdn5\.lolalytics\.com\/spell64\/12\.webp/);
+  assert.doesNotMatch(html, /Spell (?:4|12|14)/);
+});
+
 test("renderBuildSuggestionBody renders unknown item purchase minutes as empty", () => {
   const payload = createPayload();
   payload.items.highestWinBuild.selections[0].purchaseMinute = null;

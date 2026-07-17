@@ -8,6 +8,8 @@ const {
 function createMatchupBuild({
   totalGames,
   fetchedAt,
+  role = null,
+  enemyRole = null,
   primaryStyleOptions,
   secondaryStyleOptions,
   primarySlotOptions,
@@ -25,6 +27,8 @@ function createMatchupBuild({
   return {
     totalGames,
     fetchedAt,
+    role,
+    enemyRole,
     runes: {
       primaryStyleOptions,
       secondaryStyleOptions,
@@ -50,6 +54,42 @@ function createMatchupBuild({
     boots,
   };
 }
+
+test("buildBuildSuggestionResults doubles every likely same-lane matchup independently", () => {
+  const matchupSpecs = [
+    { enemyRole: "top", spellIds: [4, 12] },
+    { enemyRole: "top", spellIds: [4, 6] },
+    { enemyRole: "top", spellIds: [4, 14] },
+    { enemyRole: "support", spellIds: [3, 4] },
+  ];
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: matchupSpecs.map(({ enemyRole, spellIds }) =>
+      createMatchupBuild({
+        totalGames: 10,
+        fetchedAt: "2026-07-17T12:00:00.000Z",
+        role: "top",
+        enemyRole,
+        primaryStyleOptions: [],
+        secondaryStyleOptions: [],
+        primarySlotOptions: [[], [], [], []],
+        secondarySlotOptions: [[], [], [], []],
+        statOptions: [],
+        pageCandidates: [],
+        spellOptions: [createSpellSetOption({ spellIds, games: 10, wins: 5 })],
+        boots: [],
+      }),
+    ),
+  });
+  const spellGamesBySet = new Map(
+    aggregated.spells.options.map((option) => [option.setKey, option.games]),
+  );
+
+  assert.equal(aggregated.totalGames, 70);
+  assert.equal(spellGamesBySet.get("4-12"), 20);
+  assert.equal(spellGamesBySet.get("4-6"), 20);
+  assert.equal(spellGamesBySet.get("4-14"), 20);
+  assert.equal(spellGamesBySet.get("3-4"), 10);
+});
 
 function createPageCandidate({
   pageKey,

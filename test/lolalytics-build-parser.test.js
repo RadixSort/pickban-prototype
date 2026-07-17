@@ -256,6 +256,36 @@ test("parseLolalyticsMatchupBuildData normalizes styles, exact page candidates, 
   );
 });
 
+test("parseLolalyticsMatchupBuildData restores canonical spell metadata when Lolalytics omits it", () => {
+  const parsed = parseLolalyticsMatchupBuildData(
+    {
+      header: {
+        n: 100,
+      },
+      spells: [
+        ["4_12", 52, 60, 60],
+      ],
+    },
+    {},
+  );
+
+  assert.deepEqual(
+    parsed.spells.options[0].selections,
+    [
+      {
+        id: 4,
+        icon: "https://cdn5.lolalytics.com/spell64/4.webp",
+        name: "Flash",
+      },
+      {
+        id: 12,
+        icon: "https://cdn5.lolalytics.com/spell64/12.webp",
+        name: "Teleport",
+      },
+    ],
+  );
+});
+
 test("parseLolalyticsMatchupBuildData falls back to summary skill max priorities", () => {
   const parsed = parseLolalyticsMatchupBuildData({
     header: {
@@ -303,6 +333,7 @@ test("parseLolalyticsRuneBuildData normalizes the current mega rune payload shap
       header: {
         n: 112627,
         defaultLane: "middle",
+        defaultVsLane: "top",
         lane: "middle",
       },
       summary: {
@@ -376,6 +407,7 @@ test("parseLolalyticsRuneBuildData normalizes the current mega rune payload shap
   assert.equal(parsed.enemyChampionKey, "89");
   assert.equal(parsed.role, "middle");
   assert.equal(parsed.totalGames, 112627);
+  assert.equal(parsed.enemyRole, "top");
   assert.equal(parsed.runes.pageCandidates.length, 1);
   assert.deepEqual(parsed.runes.pageCandidates[0].primaryRuneIds, [8112, 8139, 8140, 8106]);
   assert.deepEqual(

@@ -80,8 +80,8 @@ const { buildBuildSuggestionCacheKey } = require(path.join(
 ));
 
 const PORT = process.env.PORT || 3000;
-const PATCH_WINDOW = "14";
-const LOLALYTICS_DATA_WINDOW_DAYS = Number.parseInt(PATCH_WINDOW, 10);
+const LOLALYTICS_DATA_WINDOW_DAYS = 30;
+const PATCH_WINDOW = String(LOLALYTICS_DATA_WINDOW_DAYS);
 const QUEUE = "ranked";
 const REGION = "all";
 const MIN_ROLE_TIER_LIST_PICK_RATE = 0.5;
@@ -1360,6 +1360,7 @@ function mergeParsedBuildSources(primaryBuildData, renderedBuildData) {
 
   return {
     ...primaryBuildData,
+    enemyRole: renderedBuildData.enemyRole || primaryBuildData.enemyRole || null,
     totalGames: renderedRunes ? renderedBuildData.totalGames : primaryBuildData.totalGames,
     runes: renderedRunes || primaryBuildData.runes,
     spells: hasBuildList(renderedBuildData.spells?.options)

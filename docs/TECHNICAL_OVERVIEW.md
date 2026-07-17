@@ -32,6 +32,7 @@ Keep cross-runtime rules in their existing focused modules:
 
 - roles: `public/roles.js`
 - rank filters: `public/rank-filters.js`
+- summoner spell names and icons: `public/summoner-spell-metadata.js`
 - result ranking: `public/result-ranking.js`
 - frontend cache keys: `public/suggestion-cache.js`, `public/build-suggestion-cache.js`
 - ban UI lifecycle: `public/ban-suggestion-state.js`
@@ -55,6 +56,8 @@ Static assets use `Cache-Control: no-store`.
 
 ## Request behavior
 
+Live Lolalytics requests use `queue=ranked`, `region=all`, and `patch=30` for the last 30 days. `public/rank-filters.js` centralizes the supported All Ranks through Master+ tiers and their upstream query values; Emerald+ remains the default.
+
 ### Suggestions
 
 `POST /suggest` accepts a rank filter, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching.
@@ -74,6 +77,8 @@ Candidates must have at least 10% lane share and 0.5% pick rate. Selected champi
 ### Builds and rune import
 
 `POST /build-suggestions` fetches one mega rune payload and one rendered matchup page per enemy in parallel. `lib/lolalytics-build-parser.js` prefers embedded Qwik data for matchup rune pages and inactive item tabs, with visible HTML sections as fallback. Rendered Qwik rune data overrides mega rune data when present because the mega endpoint can return generic champion-role runes even when a matchup filter is requested. Partial matchup failures are allowed, but runes, spells, boots, and both five-item paths are required for success.
+
+Build aggregation gives each enemy whose inferred default role matches the allied builder's role a 2x data weight. Every matching enemy is weighted independently; the server does not force one unique lane-opponent assignment.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 
@@ -125,7 +130,7 @@ Release commits must update the version in both `package.json` and `package-lock
 - Rendered matchup pages retain usable Qwik data or recognizable build sections.
 - League Client lockfile and local gameflow, champion-select, and perks endpoints remain compatible.
 - Riot/League references keep a visible non-endorsement footnote.
-- Patch window, queue, region, request timeout, cache limits, and eligibility thresholds remain hard-coded in `server.js`.
+- Data window, queue, region, request timeout, cache limits, and eligibility thresholds remain hard-coded in `server.js`.
 
 When live data fails without a local change, check these boundaries first.
 
