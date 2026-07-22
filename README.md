@@ -19,13 +19,13 @@ Open `http://localhost:3000` and leave the terminal running. After the first set
 
 ## Use the app
 
-Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default. The **Lane Weight ×1/×2/×3/×4** control sets how strongly likely lane opponents influence both champion and build recommendations. Defaults follow the viewed role: Support and Jungle use ×2, Bot and Mid use ×3, and Top uses ×4. A manual weight remains selected while switching between roles with the same default; switching to a role with a different default selects that role's default.
+Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default. The **Lane Weight ×1/×2/×3/×4** control sets how strongly likely lane opponents influence both champion and build recommendations. Defaults follow the viewed role: Support and Jungle use ×1, Bot and Mid use ×2, and Top uses ×3. A manual weight remains selected while switching between roles with the same default; switching to a role with a different default selects that role's default.
 
 1. Click **Fetch Suggestions** with an empty draft for first-pick lists.
 2. Add allies and enemies, assign any known ally roles, then fetch again for draft-aware suggestions.
 3. Switch **Target role** to inspect each open role. Use **+** to add a result to the allied draft.
 4. Choose **Champion Skill Level** and a table heading to change draft-aware ranking.
-5. Click **Build** on an assigned ally after adding at least one enemy. The popup has its own **Lane Weight** selector for instant comparison.
+5. Click **Build** on an assigned ally after adding at least one enemy. The popup starts at that ally role's default Lane Weight and has its own selector for instant comparison without changing the suggestion view.
 6. Click **Import Runes** on a build page while League is in champion select.
 7. With five allies in five unique roles, click **Who will win?** for the team projection.
 
@@ -35,7 +35,7 @@ Rune recommendations combine the pick frequency and win rate of each rune elemen
 
 Bottom and Support count as the same lane for this weighting. If none of the selected enemies defaults to the target lane, PickBan still assigns the most likely off-meta enemy as one lane opponent. Build weighting applies to runes, summoner spells, starting items, skill priorities, boots, and item paths together.
 
-Fetching champion or build recommendations preloads and caches every Lane Weight variant for the current draft. Switching either selector then reuses those results without closing the build popup or repeating the calculation. In build recommendations, a gold border marks a highest-win or most-picked choice that is identical at ×1, ×2, ×3, and ×4.
+Fetching champion or build recommendations preloads and caches every Lane Weight variant for the current draft. Switching a selector then reuses those results without repeating the calculation. In build recommendations, a gold border marks a highest-win or most-picked choice that is identical at ×1, ×2, ×3, and ×4.
 
 ### Scores
 

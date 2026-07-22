@@ -62,7 +62,7 @@ Live Lolalytics requests use `queue=ranked`, `region=all`, and `patch=30` for th
 
 ### Suggestions
 
-`POST /suggest` accepts a rank filter, a lane-opponent weight of 1, 2, 3, or 4, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching. The API lane-weight fallback is 3. In the browser, defaults follow the viewed role: Support/Jungle use 2, Bottom/Middle use 3, and Top uses 4. A manual selection persists across role switches with the same default and resets when the next role has a different default.
+`POST /suggest` accepts a rank filter, a lane-opponent weight of 1, 2, 3, or 4, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching. The API lane-weight fallback is 3. In the browser, defaults follow the viewed role: Support/Jungle use 1, Bottom/Middle use 2, and Top uses 3. A manual selection persists across role switches with the same default and resets when the next role has a different default.
 
 An empty draft returns PBI tier lists. A populated draft fetches tier data first, then ally-synergy and role-scoped enemy-counter rows only for roles with usable tier candidates. Multi-role requests share identical upstream resources.
 
@@ -86,7 +86,7 @@ Rune aggregation sums each element's games and wins across the weighted matchups
 
 Build aggregation uses the same selected 1x, 2x, 3x, or 4x lane-opponent contribution count before merging runes, summoner spells, starting items, skill priorities, boots, or item paths. Every matching enemy is weighted independently, and Bottom/Support share a lane. When no enemy is inferred in the allied builder's lane, the server still assigns one matchup: the highest explicit lane-likelihood value when available, then the largest matchup sample and champion key as stable fallback signals.
 
-The browser requests and caches all four build variants when the popup opens. The header and popup Lane Weight selectors share state, so switching either changes the visible cached variant without closing the popup. `public/build-suggestion-consensus.js` compares highest-win and most-picked choice keys across all four complete payloads; rune, spell, starter, skill, boot, and ordered item-path cards receive the unanimous gold-border class only when every weight agrees.
+The browser requests and caches all four build variants when the popup opens. The popup starts at the assigned ally role's default weight (Support/Jungle 1, Bottom/Middle 2, Top 3), and its selector changes only the visible cached build variant. The suggestion-view selector remains independent. `public/build-suggestion-consensus.js` compares highest-win and most-picked choice keys across all four complete payloads; rune, spell, starter, skill, boot, and ordered item-path cards receive the unanimous gold-border class only when every weight agrees.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 

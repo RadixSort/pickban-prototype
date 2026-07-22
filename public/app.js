@@ -391,10 +391,6 @@ function selectResultRole(nextRole) {
     previousRole,
     selectedRole,
   );
-  if (state.buildSuggestionModal.open) {
-    state.buildSuggestionModal.laneOpponentWeight = state.laneOpponentWeight;
-    syncBuildSuggestionModalActiveVariant();
-  }
 
   const currentBundle = getCurrentResultsBundle();
   if (currentBundle) {
@@ -662,17 +658,18 @@ async function handleOpenBuildSuggestions(allyId) {
     (laneOpponentWeight) =>
       !state.buildSuggestionCache[cacheKeysByLaneWeight[laneOpponentWeight]],
   );
-  const cacheKey = cacheKeysByLaneWeight[state.laneOpponentWeight];
+  const laneOpponentWeight = getDefaultLaneOpponentWeightForRole(ally.role);
+  const cacheKey = cacheKeysByLaneWeight[laneOpponentWeight];
   const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
 
   state.buildSuggestionModal = {
     open: true,
-    loading: !cachedPayload && pendingLaneWeights.includes(state.laneOpponentWeight),
+    loading: !cachedPayload && pendingLaneWeights.includes(laneOpponentWeight),
     allyId,
     cacheKey,
     requestKey,
     cacheKeysByLaneWeight,
-    laneOpponentWeight: state.laneOpponentWeight,
+    laneOpponentWeight,
     pendingLaneWeights,
     errorsByLaneWeight: {},
     payload: cachedPayload,
@@ -1706,10 +1703,6 @@ function handleLaneOpponentWeightChange(event) {
   if (currentBundle) {
     currentBundle.selectedRole = state.selectedResultRole;
   }
-  if (state.buildSuggestionModal.open) {
-    state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
-    syncBuildSuggestionModalActiveVariant();
-  }
   clearStatus();
   renderAll();
 }
@@ -1717,22 +1710,14 @@ function handleLaneOpponentWeightChange(event) {
 function handleBuildSuggestionLaneWeightChange(event) {
   const normalizedWeight =
     normalizeLaneOpponentWeight(event.target.value) || DEFAULT_LANE_OPPONENT_WEIGHT;
-  if (
-    normalizedWeight === state.laneOpponentWeight &&
-    normalizedWeight === state.buildSuggestionModal.laneOpponentWeight
-  ) {
+  if (normalizedWeight === state.buildSuggestionModal.laneOpponentWeight) {
     return;
   }
 
-  state.laneOpponentWeight = normalizedWeight;
-  const currentBundle = getCurrentResultsBundle();
-  if (currentBundle) {
-    currentBundle.selectedRole = state.selectedResultRole;
-  }
   state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
   syncBuildSuggestionModalActiveVariant();
   clearStatus();
-  renderAll();
+  renderBuildSuggestionModal();
 }
 
 function handleResultsRoleChange(event) {

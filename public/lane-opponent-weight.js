@@ -14,11 +14,11 @@
     Object.freeze({ value: 4, label: "×4" }),
   ]);
   const DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE = Object.freeze({
-    top: 4,
-    jungle: 2,
-    middle: 3,
-    bottom: 3,
-    support: 2,
+    top: 3,
+    jungle: 1,
+    middle: 2,
+    bottom: 2,
+    support: 1,
   });
   const SHARED_BOTTOM_LANE_ROLES = new Set(["bottom", "support"]);
   const normalizeRole =
