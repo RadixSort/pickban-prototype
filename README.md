@@ -19,7 +19,7 @@ Open `http://localhost:3000` and leave the terminal running. After the first set
 
 ## Use the app
 
-Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default. The **Lane Weight ×1/×2/×3/×4** control sets how strongly likely lane opponents influence both champion and build recommendations; ×3 is the default.
+Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default. The **Lane Weight ×1/×2/×3/×4** control sets how strongly likely lane opponents influence both champion and build recommendations. Defaults follow the viewed role: Support and Jungle use ×2, Bot and Mid use ×3, and Top uses ×4. A manual weight remains selected while switching between roles with the same default; switching to a role with a different default selects that role's default.
 
 1. Click **Fetch Suggestions** with an empty draft for first-pick lists.
 2. Add allies and enemies, assign any known ally roles, then fetch again for draft-aware suggestions.

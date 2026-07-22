@@ -3,6 +3,9 @@ const assert = require("node:assert/strict");
 
 const {
   DEFAULT_LANE_OPPONENT_WEIGHT,
+  DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE,
+  getDefaultLaneOpponentWeightForRole,
+  getLaneOpponentWeightAfterRoleChange,
   getLaneOpponentWeightOptions,
   normalizeLaneOpponentWeight,
   rolesShareLane,
@@ -25,6 +28,30 @@ test("lane opponent weights expose only the supported UI options", () => {
   assert.equal(normalizeLaneOpponentWeight(true), null);
   assert.equal(normalizeLaneOpponentWeight(4), 4);
   assert.equal(normalizeLaneOpponentWeight(5), null);
+});
+
+test("lane opponent weight defaults follow the viewed role", () => {
+  assert.deepEqual(DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE, {
+    top: 4,
+    jungle: 2,
+    middle: 3,
+    bottom: 3,
+    support: 2,
+  });
+  assert.equal(getDefaultLaneOpponentWeightForRole("sup"), 2);
+  assert.equal(getDefaultLaneOpponentWeightForRole("jg"), 2);
+  assert.equal(getDefaultLaneOpponentWeightForRole("bot"), 3);
+  assert.equal(getDefaultLaneOpponentWeightForRole("mid"), 3);
+  assert.equal(getDefaultLaneOpponentWeightForRole("top"), 4);
+  assert.equal(getDefaultLaneOpponentWeightForRole("unknown"), 3);
+});
+
+test("manual lane weights hold until the viewed role has a different default", () => {
+  assert.equal(getLaneOpponentWeightAfterRoleChange(4, "support", "jungle"), 4);
+  assert.equal(getLaneOpponentWeightAfterRoleChange(1, "middle", "bottom"), 1);
+  assert.equal(getLaneOpponentWeightAfterRoleChange(4, "jungle", "middle"), 3);
+  assert.equal(getLaneOpponentWeightAfterRoleChange(1, "bottom", "top"), 4);
+  assert.equal(getLaneOpponentWeightAfterRoleChange(1, "top", "support"), 2);
 });
 
 test("Bottom and Support are the same lane", () => {

@@ -13,6 +13,13 @@
     Object.freeze({ value: 3, label: "×3" }),
     Object.freeze({ value: 4, label: "×4" }),
   ]);
+  const DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE = Object.freeze({
+    top: 4,
+    jungle: 2,
+    middle: 3,
+    bottom: 3,
+    support: 2,
+  });
   const SHARED_BOTTOM_LANE_ROLES = new Set(["bottom", "support"]);
   const normalizeRole =
     typeof roles.normalizeRole === "function"
@@ -39,6 +46,26 @@
     return LANE_OPPONENT_WEIGHT_OPTIONS.map((option) => ({ ...option }));
   }
 
+  function getDefaultLaneOpponentWeightForRole(role) {
+    const normalizedRole = normalizeRole(role);
+    return (
+      DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE[normalizedRole] || DEFAULT_LANE_OPPONENT_WEIGHT
+    );
+  }
+
+  function getLaneOpponentWeightAfterRoleChange(
+    currentWeight,
+    previousRole,
+    nextRole,
+  ) {
+    const previousDefault = getDefaultLaneOpponentWeightForRole(previousRole);
+    const nextDefault = getDefaultLaneOpponentWeightForRole(nextRole);
+    const normalizedCurrentWeight =
+      normalizeLaneOpponentWeight(currentWeight) || previousDefault;
+
+    return previousDefault === nextDefault ? normalizedCurrentWeight : nextDefault;
+  }
+
   function rolesShareLane(leftRole, rightRole) {
     const normalizedLeftRole = normalizeRole(leftRole);
     const normalizedRightRole = normalizeRole(rightRole);
@@ -56,7 +83,10 @@
 
   return {
     DEFAULT_LANE_OPPONENT_WEIGHT,
+    DEFAULT_LANE_OPPONENT_WEIGHT_BY_ROLE,
     LANE_OPPONENT_WEIGHT_OPTIONS,
+    getDefaultLaneOpponentWeightForRole,
+    getLaneOpponentWeightAfterRoleChange,
     getLaneOpponentWeightOptions,
     normalizeLaneOpponentWeight,
     rolesShareLane,

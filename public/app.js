@@ -32,6 +32,8 @@ const {
 } = globalThis.rankFilters;
 const {
   DEFAULT_LANE_OPPONENT_WEIGHT,
+  getDefaultLaneOpponentWeightForRole,
+  getLaneOpponentWeightAfterRoleChange,
   getLaneOpponentWeightOptions,
   normalizeLaneOpponentWeight,
 } = globalThis.laneOpponentWeight;
@@ -94,14 +96,14 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.7.0",
+  version: "0.7.1",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
   resultSortMode: PROJECTED_WIN_RATE_SORT_MODE,
   firstPickSortMode: DEFAULT_FIRST_PICK_SORT_MODE,
   rankFilter: DEFAULT_RANK_FILTER,
-  laneOpponentWeight: DEFAULT_LANE_OPPONENT_WEIGHT,
+  laneOpponentWeight: getDefaultLaneOpponentWeightForRole(DEFAULT_TARGET_ROLE),
   autoImport: createInitialAutoImportState(),
   banSuggestions: createInitialBanSuggestionState(),
   banSuggestionRequestsByKey: {},
@@ -375,13 +377,29 @@ function getSelectedResultRole() {
 
 function syncSelectedResultRole() {
   const selectedRole = getSelectedResultRole();
+  selectResultRole(selectedRole);
+  return selectedRole;
+}
+
+function selectResultRole(nextRole) {
+  const selectedRole = normalizeRole(nextRole) || DEFAULT_TARGET_ROLE;
+  const previousRole = state.selectedResultRole;
+
   state.selectedResultRole = selectedRole;
+  state.laneOpponentWeight = getLaneOpponentWeightAfterRoleChange(
+    state.laneOpponentWeight,
+    previousRole,
+    selectedRole,
+  );
+  if (state.buildSuggestionModal.open) {
+    state.buildSuggestionModal.laneOpponentWeight = state.laneOpponentWeight;
+    syncBuildSuggestionModalActiveVariant();
+  }
+
   const currentBundle = getCurrentResultsBundle();
   if (currentBundle) {
     currentBundle.selectedRole = selectedRole;
   }
-
-  return selectedRole;
 }
 
 function getRankFilterDisplayLabel() {
@@ -1631,7 +1649,7 @@ function handleResetDraft() {
 
   state.allies = [];
   state.enemies = [];
-  state.selectedResultRole = DEFAULT_TARGET_ROLE;
+  selectResultRole(DEFAULT_TARGET_ROLE);
   state.autoImport.lastAppliedSignature = "";
   pickers.allies.input.value = "";
   pickers.enemies.input.value = "";
@@ -1684,6 +1702,10 @@ function handleLaneOpponentWeightChange(event) {
   }
 
   state.laneOpponentWeight = normalizedWeight;
+  const currentBundle = getCurrentResultsBundle();
+  if (currentBundle) {
+    currentBundle.selectedRole = state.selectedResultRole;
+  }
   if (state.buildSuggestionModal.open) {
     state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
     syncBuildSuggestionModalActiveVariant();
@@ -1703,6 +1725,10 @@ function handleBuildSuggestionLaneWeightChange(event) {
   }
 
   state.laneOpponentWeight = normalizedWeight;
+  const currentBundle = getCurrentResultsBundle();
+  if (currentBundle) {
+    currentBundle.selectedRole = state.selectedResultRole;
+  }
   state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
   syncBuildSuggestionModalActiveVariant();
   clearStatus();
@@ -1715,11 +1741,7 @@ function handleResultsRoleChange(event) {
     return;
   }
 
-  state.selectedResultRole = normalizedRole;
-  const currentBundle = getCurrentResultsBundle();
-  if (currentBundle) {
-    currentBundle.selectedRole = normalizedRole;
-  }
+  selectResultRole(normalizedRole);
 
   renderControls();
   renderResults();

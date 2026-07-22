@@ -62,7 +62,7 @@ Live Lolalytics requests use `queue=ranked`, `region=all`, and `patch=30` for th
 
 ### Suggestions
 
-`POST /suggest` accepts a rank filter, a lane-opponent weight of 1, 2, 3, or 4, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching. The lane weight defaults to 3.
+`POST /suggest` accepts a rank filter, a lane-opponent weight of 1, 2, 3, or 4, allies, enemies, and optional target roles. It validates known champions, team limits, duplicate roles, opposing duplicate champions, and target roles before fetching. The API lane-weight fallback is 3. In the browser, defaults follow the viewed role: Support/Jungle use 2, Bottom/Middle use 3, and Top uses 4. A manual selection persists across role switches with the same default and resets when the next role has a different default.
 
 An empty draft returns PBI tier lists. A populated draft fetches tier data first, then ally-synergy and role-scoped enemy-counter rows only for roles with usable tier candidates. Multi-role requests share identical upstream resources.
 
