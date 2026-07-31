@@ -49,7 +49,7 @@ Draft-aware rows highlight the top ten projected win rates. Yellow marks picks t
 
 ## Auto Import (Windows)
 
-Click **Auto Import** after the League Client enters Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select. PickBan imports visible picks, allied hovers, and known ally roles while leaving manual selections alone unless live data conflicts.
+Click **Auto Import** after the League Client enters Practice Tool, Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select. PickBan imports visible picks, allied hovers, and known ally roles while leaving manual selections alone unless live data conflicts.
 
 During bans, the app shows one recommendation for each role:
 
@@ -77,7 +77,7 @@ Use the red **X** in the app or press `Ctrl+C` in the terminal.
 - **Data fails to load**: check internet access and retry; Lolalytics may be unavailable or may have changed its response format.
 - **Build is disabled**: assign the ally a role and add an enemy. Hover the button for the missing requirement.
 - **Rune import fails**: confirm League is in champion select and the account has an editable saved rune page.
-- **Auto Import is disabled**: confirm the local Windows client is in a supported draft or ranked queue.
+- **Auto Import is disabled**: confirm the local Windows client is in Practice Tool or a supported draft or ranked queue.
 
 ## Development
 

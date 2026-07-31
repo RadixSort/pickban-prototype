@@ -237,7 +237,75 @@ test("GET /live-draft returns normalized League champ-select picks", async (t) =
   await stopServer(child);
 });
 
-test("GET /live-draft disables auto import outside draft and ranked queues", async (t) => {
+test("GET /live-draft imports Practice Tool champion select", async (t) => {
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "ChampSelect",
+          gameData: {
+            queue: {
+              id: 0,
+            },
+          },
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-champ-select/v1/session") {
+      return {
+        body: {
+          localPlayerCellId: 1,
+          myTeam: [
+            {
+              cellId: 1,
+              championId: 103,
+              assignedPosition: "middle",
+            },
+          ],
+          theirTeam: [],
+        },
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const response = await getJson(baseUrl, "/live-draft");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, "active");
+  assert.deepEqual(response.body.queue, {
+    id: 0,
+    description: "Practice Tool",
+    type: "practice",
+  });
+  assert.deepEqual(response.body.allies.map(({ champion, championKey, role }) => ({
+    champion,
+    championKey,
+    role,
+  })), [
+    {
+      champion: "Ahri",
+      championKey: "103",
+      role: "middle",
+    },
+  ]);
+
+  await stopServer(child);
+});
+
+test("GET /live-draft disables auto import outside supported queues", async (t) => {
   const riotClient = await startMockRiotClient(({ url }) => {
     if (url.pathname === "/lol-gameflow/v1/session") {
       return {

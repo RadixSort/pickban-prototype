@@ -93,7 +93,7 @@ The popup opens with every enemy explicitly selected. Its scroll container keeps
 
 ### Live draft
 
-`GET /live-draft` reads local League endpoints only after Auto Import is enabled in the browser. Supported queue IDs are 400, 420, and 440. The normalized payload includes visible picks, temporary allied hovers, roles, phase, session identity, hover intents, and champions unavailable for bans.
+`GET /live-draft` reads local League endpoints only after Auto Import is enabled in the browser. Supported queue IDs are 0 (Practice Tool), 400, 420, and 440. The normalized payload includes visible picks, temporary allied hovers, roles, phase, session identity, hover intents, and champions unavailable for bans.
 
 The browser polls independently of suggestion requests. Session changes, phase exit, or disconnection invalidate ban state so late responses cannot reopen the panel.
 

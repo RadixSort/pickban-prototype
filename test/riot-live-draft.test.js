@@ -242,6 +242,50 @@ test("buildLiveDraftImport removes temporary hovers when a locked ally owns the 
   ]);
 });
 
+test("buildLiveDraftImport supports Practice Tool champion select", () => {
+  const payload = buildLiveDraftImport({
+    championByKey,
+    normalizeRole,
+    gameflowSession: {
+      phase: "ChampSelect",
+      gameData: {
+        queue: {
+          id: 0,
+        },
+      },
+    },
+    champSelectSession: {
+      localPlayerCellId: 1,
+      myTeam: [
+        {
+          cellId: 1,
+          championId: 103,
+          assignedPosition: "middle",
+        },
+      ],
+      theirTeam: [],
+    },
+  });
+
+  assert.equal(payload.status, "active");
+  assert.deepEqual(payload.queue, {
+    id: 0,
+    description: "Practice Tool",
+    type: "practice",
+  });
+  assert.deepEqual(payload.allies.map(({ champion, championKey, role }) => ({
+    champion,
+    championKey,
+    role,
+  })), [
+    {
+      champion: "Ahri",
+      championKey: "103",
+      role: "middle",
+    },
+  ]);
+});
+
 test("buildLiveDraftImport disables unsupported queues without returning picks", () => {
   const payload = buildLiveDraftImport({
     championByKey,
