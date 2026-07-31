@@ -102,8 +102,7 @@ select {
   flex-wrap: nowrap;
 }
 
-.hero-rank-filter,
-.hero-lane-weight {
+.hero-rank-filter {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(10, 15, 22, 0.95);
@@ -114,14 +113,6 @@ select {
 }
 
 .hero-rank-filter:focus {
-  border-color: var(--accent);
-}
-
-.hero-lane-weight {
-  min-width: 112px;
-}
-
-.hero-lane-weight:focus {
   border-color: var(--accent);
 }
 
@@ -373,6 +364,25 @@ select {
   gap: 8px;
 }
 
+.enemy-role-list {
+  display: grid;
+  width: 100%;
+}
+
+.enemy-role-row {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(12, 17, 26, 0.88);
+}
+
+.enemy-lane-select {
+  border-color: rgba(224, 98, 98, 0.26);
+}
+
+.enemy-lane-select:focus {
+  border-color: rgba(224, 98, 98, 0.72);
+}
+
 .role-panel {
   margin-top: 14px;
   padding: 0;
@@ -575,6 +585,22 @@ select {
 
 .champion-chip:hover {
   border-color: var(--accent);
+}
+
+.champion-chip-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.champion-chip-role {
+  color: rgba(184, 194, 211, 0.78);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .chip-close {
@@ -1276,9 +1302,12 @@ select {
 .build-modal-dialog {
   position: relative;
   width: min(1680px, calc(100% - 16px));
+  height: calc(100vh - 16px);
+  height: calc(100dvh - 16px);
   max-height: calc(100vh - 16px);
   margin: 8px auto;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   overflow: hidden;
   border: 1px solid rgba(211, 188, 124, 0.22);
@@ -1329,33 +1358,143 @@ select {
 .build-modal-actions {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
-.build-lane-weight-control {
+.build-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.build-counter-filter-sticky {
+  --build-counter-filter-five-portrait-span: 270px;
+  --build-counter-filter-fade-width: 42px;
+  position: sticky;
+  top: 0;
+  z-index: 6;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  padding: 2px 2px 10px;
+  background:
+    linear-gradient(
+      to left,
+      rgba(13, 18, 26, 0.98) 0,
+      rgba(13, 18, 26, 0.98) var(--build-counter-filter-five-portrait-span),
+      rgba(13, 18, 26, 0.68)
+        calc(var(--build-counter-filter-five-portrait-span) + 10px),
+      rgba(13, 18, 26, 0.18)
+        calc(var(--build-counter-filter-five-portrait-span) + 30px),
+      rgba(13, 18, 26, 0)
+        calc(
+          var(--build-counter-filter-five-portrait-span) +
+            var(--build-counter-filter-fade-width)
+        )
+    );
+}
+
+.build-counter-filter {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.build-counter-filter-label {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.build-lane-weight-control select {
-  min-width: 82px;
-  border: 1px solid rgba(211, 188, 124, 0.28);
-  border-radius: 10px;
-  background: rgba(10, 15, 22, 0.95);
-  color: var(--text);
-  padding: 9px 10px;
-  outline: none;
+.build-counter-filter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.build-lane-weight-control select:focus {
-  border-color: var(--accent);
+.build-counter-filter-champion,
+.build-counter-filter-clear {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    filter 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.build-counter-filter-champion {
+  border: 1px solid rgba(224, 98, 98, 0.22);
+  background: rgba(9, 13, 20, 0.88);
+  padding: 2px;
+}
+
+.build-counter-filter-champion img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.build-counter-filter-champion:hover:not(:disabled),
+.build-counter-filter-champion--selected {
+  border-color: rgba(224, 98, 98, 0.78);
+  transform: translateY(-1px);
+}
+
+.build-counter-filter-champion--selected {
+  box-shadow: 0 0 0 1px rgba(224, 98, 98, 0.18);
+}
+
+.build-counter-filter-champion--excluded {
+  opacity: 0.28;
+  filter: grayscale(1);
+}
+
+.build-counter-filter-champion--excluded:hover:not(:disabled) {
+  opacity: 0.72;
+  filter: grayscale(0.35);
+}
+
+.build-counter-filter-clear {
+  border: 1px solid rgba(224, 98, 98, 0.46);
+  background: rgba(64, 21, 25, 0.74);
+  color: #ffc5c5;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.build-counter-filter-clear:hover:not(:disabled) {
+  border-color: rgba(243, 119, 119, 0.84);
+  background: rgba(91, 26, 32, 0.92);
+  transform: translateY(-1px);
+}
+
+.build-counter-filter-champion:focus-visible,
+.build-counter-filter-clear:focus-visible {
+  outline: 2px solid rgba(224, 98, 98, 0.54);
+  outline-offset: 2px;
+}
+
+.build-counter-filter-champion:disabled,
+.build-counter-filter-clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.build-counter-filter-clear:disabled {
+  cursor: default;
+  opacity: 0.62;
 }
 
 .build-modal-close {
@@ -1440,9 +1579,11 @@ select {
 
 .build-modal-body {
   min-height: 0;
-  max-height: calc(100vh - 184px);
-  overflow: auto;
-  padding-right: 2px;
+}
+
+.build-modal-body--refreshing {
+  pointer-events: none;
+  cursor: progress;
 }
 
 .build-view {
@@ -1520,6 +1661,15 @@ select {
   align-items: start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.build-summary-column-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .build-summary-column-heading {
@@ -1837,13 +1987,59 @@ select {
 }
 
 .build-item-column-header {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .build-item-column-header h4 {
   margin: 0;
   font-size: 0.96rem;
+}
+
+.build-item-scope-toggle {
+  flex: 0 0 auto;
+  min-height: 30px;
+  border: 1px solid rgba(156, 173, 194, 0.24);
+  border-radius: 999px;
+  background: rgba(7, 11, 17, 0.62);
+  color: rgba(230, 237, 246, 0.88);
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.build-item-scope-toggle:hover:not(:disabled) {
+  border-color: rgba(183, 204, 229, 0.46);
+  background: rgba(26, 37, 52, 0.88);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.build-item-scope-toggle:focus-visible {
+  outline: 2px solid rgba(138, 184, 222, 0.52);
+  outline-offset: 2px;
+}
+
+.build-item-scope-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.build-item-scope-toggle-icon {
+  color: rgba(167, 192, 220, 0.86);
+  font-size: 0.9rem;
 }
 
 .build-item-list {
@@ -2269,17 +2465,6 @@ select {
   color: #bfeeed;
 }
 
-.build-summary-column.build-choice--unanimous,
-.build-spell-card.build-choice--unanimous,
-.build-skill-priority-card.build-choice--unanimous,
-.build-compact-boot-card.build-choice--unanimous,
-.build-item-column.build-choice--unanimous {
-  border-color: rgba(241, 197, 83, 0.92);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 218, 118, 0.28),
-    0 0 18px rgba(225, 170, 49, 0.16);
-}
-
 .app-version-badge {
   position: fixed;
   right: 18px;
@@ -2396,11 +2581,6 @@ select {
     min-width: 0;
   }
 
-  .hero-lane-weight {
-    flex: 0 1 130px;
-    min-width: 112px;
-  }
-
   .target-role-control {
     width: 100%;
   }
@@ -2447,6 +2627,8 @@ select {
 
   .build-modal-dialog {
     width: min(100% - 12px, 1680px);
+    height: calc(100vh - 12px);
+    height: calc(100dvh - 12px);
     margin: 8px auto;
     padding: 14px;
     max-height: calc(100vh - 12px);
@@ -2457,12 +2639,13 @@ select {
   }
 
   .build-modal-actions {
-    width: 100%;
-    justify-content: space-between;
+    position: absolute;
+    top: 14px;
+    right: 14px;
   }
 
-  .build-modal-body {
-    max-height: calc(100vh - 196px);
+  .build-modal-heading {
+    padding-right: 52px;
   }
 
   .build-summary-top-grid,

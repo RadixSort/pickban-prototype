@@ -89,6 +89,10 @@
     return roleFromLikelihoods || availableRoleOptions[0]?.value || null;
   }
 
+  function getMostLikelyRole(roleLikelihoodsByRole = null) {
+    return getMostLikelyAvailableRole(ROLE_OPTIONS, roleLikelihoodsByRole);
+  }
+
   function resolveAllyRoleAssignment(
     allies = [],
     allyId = null,
@@ -273,6 +277,7 @@
     ROLE_OPTIONS,
     getAutoAssignableAllyRole,
     getAssignableAllyRoleOptions,
+    getMostLikelyRole,
     getRoleLabel,
     getSuggestedAllyRole,
     getTargetRoleOptions,

@@ -27,7 +27,7 @@
 
   /**
    * Cache frontend results by the full draft state that affects the payload:
-   * rank filter, lane-opponent weight, ally picks and roles, and enemy picks.
+   * rank filter, lane-opponent weight, and both teams' picks and roles.
    */
   function buildSuggestionCacheKey(
     rankFilter = "",
@@ -50,7 +50,15 @@
       .filter(Boolean)
       .sort();
     const enemyEntries = enemies
-      .map((enemy) => getChampionKey(enemy))
+      .map((enemy) => {
+        const championKey = getChampionKey(enemy);
+        if (!championKey) {
+          return null;
+        }
+
+        const assignedRole = normalizeRole(enemy?.role ?? enemy?.lane ?? null) || "";
+        return `${championKey}:${assignedRole}`;
+      })
       .filter(Boolean)
       .sort();
     const normalizedLaneOpponentWeight =

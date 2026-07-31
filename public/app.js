@@ -5,8 +5,9 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
-  buildBuildSuggestionConsensus,
-} = globalThis.buildSuggestionConsensus;
+  filterBuildCounterEnemies,
+  toggleBuildCounterFilter,
+} = globalThis.buildCounterFilter;
 const {
   completeBanSuggestionRequest,
   createInitialBanSuggestionState,
@@ -40,9 +41,15 @@ const {
 const {
   BUILD_SUGGESTION_TABS,
   DEFAULT_BUILD_SUGGESTION_TAB,
+  DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+  DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+  LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE,
+  LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE,
   getRecommendedRunePages,
   getRunePageRecommendationKey,
   normalizeBuildSuggestionTab,
+  normalizeItemRecommendationScope,
+  normalizeRuneRecommendationScope,
   renderBuildSuggestionBody,
 } = globalThis.buildSuggestionView;
 const {
@@ -78,6 +85,10 @@ const {
   normalizeRole,
   resolveAllyRoleAssignment,
 } = globalThis.roles;
+const {
+  assignEnemyRoles,
+  resolveEnemyRoleSelection,
+} = globalThis.enemyRoleAssignments;
 
 const LANE_OPPONENT_WEIGHTS = getLaneOpponentWeightOptions().map(
   (option) => option.value,
@@ -96,7 +107,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.7.1",
+  version: "0.7.2",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -108,6 +119,7 @@ const state = {
   banSuggestions: createInitialBanSuggestionState(),
   banSuggestionRequestsByKey: {},
   buildSuggestionCache: {},
+  buildSuggestionRequestsByKey: {},
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
   lolalyticsDataWindowDays: 30,
   lolalyticsLifetimeAccessCount: 0,
@@ -167,15 +179,16 @@ const versionText = document.getElementById("app-version");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
 const buildSuggestionCloseButton = document.getElementById("build-suggestion-close");
-const buildSuggestionLaneWeightSelect = document.getElementById(
-  "build-suggestion-lane-weight",
-);
 const buildSuggestionChampionIcon = document.getElementById("build-suggestion-champion-icon");
 const buildSuggestionTitle = document.getElementById("build-suggestion-title");
 const buildSuggestionMeta = document.getElementById("build-suggestion-meta");
+const buildSuggestionCounterFilter = document.getElementById(
+  "build-suggestion-counter-filter",
+);
 const buildSuggestionTabs = document.getElementById("build-suggestion-tabs");
 const buildSuggestionErrors = document.getElementById("build-suggestion-errors");
 const buildSuggestionBody = document.getElementById("build-suggestion-body");
+const buildSuggestionScroll = buildSuggestionModal.querySelector(".build-modal-scroll");
 
 initialize().catch((error) => {
   setError(error.message || "Failed to initialize champion metadata.");
@@ -205,10 +218,6 @@ async function initialize() {
 
   rankFilterSelect.addEventListener("change", handleRankFilterChange);
   laneOpponentWeightSelect.addEventListener("change", handleLaneOpponentWeightChange);
-  buildSuggestionLaneWeightSelect.addEventListener(
-    "change",
-    handleBuildSuggestionLaneWeightChange,
-  );
   resultsRoleSelect.addEventListener("change", handleResultsRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   autoImportButton.addEventListener("click", handleStartAutoImport);
@@ -303,8 +312,18 @@ function buildAllyRequestSelections() {
   });
 }
 
-function getEnemyChampionNames() {
-  return state.enemies.map((champion) => champion.name);
+function buildEnemyRequestSelections(enemies = state.enemies) {
+  return enemies.map((champion) => {
+    const selection = {
+      champion: champion.name,
+    };
+    const role = normalizeRole(champion.role);
+    if (role) {
+      selection.role = role;
+    }
+
+    return selection;
+  });
 }
 
 function getCurrentSuggestionCacheKey() {
@@ -414,9 +433,6 @@ function initializeLaneOpponentWeightOptions() {
     .join("");
 
   laneOpponentWeightSelect.innerHTML = optionsMarkup;
-  buildSuggestionLaneWeightSelect.innerHTML = getLaneOpponentWeightOptions()
-    .map((option) => `<option value="${option.value}">${option.label}</option>`)
-    .join("");
 }
 
 function renderControls() {
@@ -480,6 +496,12 @@ function renderPicker(side) {
   if (picker.selected) {
     picker.selected.innerHTML = "";
 
+    if (side === "enemies") {
+      renderEnemyRoleAssignments(picker.selected, selectedChampions);
+      renderSuggestions(side);
+      return;
+    }
+
     for (const champion of selectedChampions) {
       const chip = document.createElement("button");
       chip.type = "button";
@@ -491,12 +513,57 @@ function renderPicker(side) {
         <span>${champion.name}</span>
         <span class="chip-close" aria-hidden="true">×</span>
       `;
+      chip.setAttribute("aria-label", `Remove ${champion.name}`);
       chip.addEventListener("click", () => removeChampion(side, champion.id));
       picker.selected.appendChild(chip);
     }
   }
 
   renderSuggestions(side);
+}
+
+function renderEnemyRoleAssignments(container, enemies) {
+  container.classList.add("enemy-role-list");
+
+  for (const enemy of enemies) {
+    const row = document.createElement("div");
+    row.className = "role-row enemy-role-row";
+
+    const main = document.createElement("div");
+    main.className = "role-row-main";
+    main.innerHTML = `
+      <img src="${enemy.icon}" alt="${enemy.name}" width="36" height="36" />
+      <span class="role-row-name">${enemy.name}</span>
+    `;
+
+    const select = document.createElement("select");
+    select.className = "lane-select enemy-lane-select";
+    select.disabled = isInteractionLocked();
+    select.setAttribute("aria-label", `Assign enemy lane for ${enemy.name}`);
+    select.innerHTML = '<option value="">Assign lane</option>' + buildRoleOptionsMarkup();
+    select.value = normalizeRole(enemy.role) || "";
+    select.addEventListener("change", (event) =>
+      assignEnemyRole(enemy.id, event.target.value),
+    );
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "role-remove-action";
+    removeButton.disabled = isInteractionLocked();
+    removeButton.title = `Remove ${enemy.name}`;
+    removeButton.setAttribute("aria-label", `Remove ${enemy.name}`);
+    removeButton.innerHTML = '<span aria-hidden="true">&times;</span>';
+    removeButton.addEventListener("click", () => removeChampion("enemies", enemy.id));
+
+    const controls = document.createElement("div");
+    controls.className = "role-row-controls";
+    controls.appendChild(select);
+    controls.appendChild(removeButton);
+
+    row.appendChild(main);
+    row.appendChild(controls);
+    container.appendChild(row);
+  }
 }
 
 function renderAllyRoleAssignments() {
@@ -586,14 +653,28 @@ function createInitialBuildSuggestionModalState() {
     allyId: "",
     cacheKey: "",
     requestKey: "",
-    cacheKeysByLaneWeight: {},
-    laneOpponentWeight: DEFAULT_LANE_OPPONENT_WEIGHT,
-    pendingLaneWeights: [],
-    errorsByLaneWeight: {},
+    enemies: [],
+    selectedCounterChampionKeys: [],
     payload: null,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+    itemRecommendationScopes: createDefaultItemRecommendationScopes(),
+    runeRecommendationScopes: createDefaultRuneRecommendationScopes(),
     runeImportStatesByPageKey: {},
+  };
+}
+
+function createDefaultItemRecommendationScopes() {
+  return {
+    highestWin: DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+    mostPicked: DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+  };
+}
+
+function createDefaultRuneRecommendationScopes() {
+  return {
+    highestWin: DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+    mostPicked: DEFAULT_RUNE_RECOMMENDATION_SCOPE,
   };
 }
 
@@ -640,78 +721,107 @@ async function handleOpenBuildSuggestions(allyId) {
   }
 
   const rankFilter = state.rankFilter;
-  const enemySelections = [...state.enemies];
-  const enemyNames = getEnemyChampionNames();
-  const cacheKeysByLaneWeight = Object.fromEntries(
-    LANE_OPPONENT_WEIGHTS.map((laneOpponentWeight) => [
-      laneOpponentWeight,
-      buildBuildSuggestionCacheKey(
-        rankFilter,
-        ally,
-        enemySelections,
-        laneOpponentWeight,
-      ),
-    ]),
-  );
-  const requestKey = cacheKeysByLaneWeight[LANE_OPPONENT_WEIGHTS[0]];
-  const pendingLaneWeights = LANE_OPPONENT_WEIGHTS.filter(
-    (laneOpponentWeight) =>
-      !state.buildSuggestionCache[cacheKeysByLaneWeight[laneOpponentWeight]],
-  );
-  const laneOpponentWeight = getDefaultLaneOpponentWeightForRole(ally.role);
-  const cacheKey = cacheKeysByLaneWeight[laneOpponentWeight];
+  const enemySelections = state.enemies.map((enemy) => ({ ...enemy }));
+  const cacheKey = buildBuildSuggestionCacheKey(rankFilter, ally, enemySelections);
   const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
 
   state.buildSuggestionModal = {
     open: true,
-    loading: !cachedPayload && pendingLaneWeights.includes(laneOpponentWeight),
+    loading: !cachedPayload,
     allyId,
     cacheKey,
-    requestKey,
-    cacheKeysByLaneWeight,
-    laneOpponentWeight,
-    pendingLaneWeights,
-    errorsByLaneWeight: {},
+    requestKey: cacheKey,
+    enemies: enemySelections,
+    selectedCounterChampionKeys: enemySelections.map((enemy) => String(enemy.key)),
     payload: cachedPayload,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
+    itemRecommendationScopes: createDefaultItemRecommendationScopes(),
+    runeRecommendationScopes: createDefaultRuneRecommendationScopes(),
     runeImportStatesByPageKey: {},
   };
   renderBuildSuggestionModal();
+  await loadBuildSuggestionForCurrentCounterFilter();
+}
 
-  await Promise.all(
-    pendingLaneWeights.map((laneOpponentWeight) =>
-      fetchAndCacheBuildSuggestionVariant({
-        ally,
-        cacheKey: cacheKeysByLaneWeight[laneOpponentWeight],
-        enemyNames,
-        laneOpponentWeight,
-        rankFilter,
-        requestKey,
-      }),
-    ),
+function getBuildSuggestionFilteredEnemies(modalState = state.buildSuggestionModal) {
+  return filterBuildCounterEnemies(
+    modalState.enemies,
+    modalState.selectedCounterChampionKeys,
   );
 }
 
-async function fetchAndCacheBuildSuggestionVariant({
+async function loadBuildSuggestionForCurrentCounterFilter() {
+  const modalState = state.buildSuggestionModal;
+  const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
+  if (!modalState.open || !ally) {
+    return;
+  }
+
+  const enemySelections = getBuildSuggestionFilteredEnemies(modalState);
+  const cacheKey = buildBuildSuggestionCacheKey(
+    state.rankFilter,
+    ally,
+    enemySelections,
+  );
+  const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
+
+  modalState.cacheKey = cacheKey;
+  modalState.requestKey = cacheKey;
+  modalState.payload = cachedPayload || modalState.payload;
+  modalState.loading = !cachedPayload;
+  modalState.error = "";
+  renderBuildSuggestionModal();
+
+  if (cachedPayload) {
+    return;
+  }
+
+  let requestPromise = state.buildSuggestionRequestsByKey[cacheKey];
+  if (!requestPromise) {
+    requestPromise = fetchBuildSuggestionPayload({
+      ally,
+      cacheKey,
+      enemySelections,
+      rankFilter: state.rankFilter,
+    });
+    state.buildSuggestionRequestsByKey[cacheKey] = requestPromise;
+  }
+
+  const outcome = await requestPromise;
+  if (state.buildSuggestionRequestsByKey[cacheKey] === requestPromise) {
+    delete state.buildSuggestionRequestsByKey[cacheKey];
+  }
+
+  if (
+    !state.buildSuggestionModal.open ||
+    state.buildSuggestionModal.requestKey !== cacheKey
+  ) {
+    return;
+  }
+
+  state.buildSuggestionModal.loading = false;
+  if (outcome.payload) {
+    state.buildSuggestionModal.payload = outcome.payload;
+  }
+  state.buildSuggestionModal.error = outcome.error;
+  renderBuildSuggestionModal();
+}
+
+async function fetchBuildSuggestionPayload({
   ally,
   cacheKey,
-  enemyNames,
-  laneOpponentWeight,
+  enemySelections,
   rankFilter,
-  requestKey,
 }) {
-  let errorMessage = "";
-
   try {
     const { response, payload } = await postJson("/build-suggestions", {
       rankFilter,
-      laneOpponentWeight,
       ally: {
         champion: ally.name,
         role: ally.role,
       },
-      enemies: enemyNames,
+      enemies: buildEnemyRequestSelections(enemySelections),
     });
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
@@ -719,58 +829,40 @@ async function fetchAndCacheBuildSuggestionVariant({
     }
 
     state.buildSuggestionCache[cacheKey] = payload;
+    return {
+      payload,
+      error: "",
+    };
   } catch (error) {
-    errorMessage = error.message || "Failed to load build recommendations.";
+    return {
+      payload: null,
+      error: error.message || "Failed to load build recommendations.",
+    };
   }
+}
 
-  if (
-    !state.buildSuggestionModal.open ||
-    state.buildSuggestionModal.requestKey !== requestKey
-  ) {
+function handleBuildCounterFilterToggle(championKey) {
+  const modalState = state.buildSuggestionModal;
+  if (!modalState.open || state.shuttingDown) {
     return;
   }
 
-  state.buildSuggestionModal.pendingLaneWeights =
-    state.buildSuggestionModal.pendingLaneWeights.filter(
-      (weight) => weight !== laneOpponentWeight,
-    );
-  state.buildSuggestionModal.errorsByLaneWeight = {
-    ...state.buildSuggestionModal.errorsByLaneWeight,
-    [laneOpponentWeight]: errorMessage,
-  };
-  syncBuildSuggestionModalActiveVariant();
-  renderBuildSuggestionModal();
-}
-
-function syncBuildSuggestionModalActiveVariant() {
-  const modalState = state.buildSuggestionModal;
-  const laneOpponentWeight =
-    normalizeLaneOpponentWeight(modalState.laneOpponentWeight) ||
-    DEFAULT_LANE_OPPONENT_WEIGHT;
-  const cacheKey = modalState.cacheKeysByLaneWeight?.[laneOpponentWeight] || "";
-  const payload = cacheKey ? state.buildSuggestionCache[cacheKey] || null : null;
-
-  modalState.laneOpponentWeight = laneOpponentWeight;
-  modalState.cacheKey = cacheKey;
-  modalState.payload = payload;
-  modalState.loading =
-    !payload && modalState.pendingLaneWeights.includes(laneOpponentWeight);
-  modalState.error = modalState.errorsByLaneWeight?.[laneOpponentWeight] || "";
-}
-
-function getBuildSuggestionConsensusForModal() {
-  const modalState = state.buildSuggestionModal;
-  const payloadsByLaneWeight = Object.fromEntries(
-    LANE_OPPONENT_WEIGHTS.map((laneOpponentWeight) => {
-      const cacheKey = modalState.cacheKeysByLaneWeight?.[laneOpponentWeight];
-      return [
-        laneOpponentWeight,
-        cacheKey ? state.buildSuggestionCache[cacheKey] || null : null,
-      ];
-    }),
+  modalState.selectedCounterChampionKeys = toggleBuildCounterFilter(
+    modalState.selectedCounterChampionKeys,
+    championKey,
+    modalState.enemies.map((enemy) => enemy.key),
   );
+  void loadBuildSuggestionForCurrentCounterFilter();
+}
 
-  return buildBuildSuggestionConsensus(payloadsByLaneWeight);
+function handleClearBuildCounterFilter() {
+  if (!state.buildSuggestionModal.open || state.shuttingDown) {
+    return;
+  }
+
+  state.buildSuggestionModal.selectedCounterChampionKeys =
+    state.buildSuggestionModal.enemies.map((enemy) => String(enemy.key));
+  void loadBuildSuggestionForCurrentCounterFilter();
 }
 
 function closeBuildSuggestionModal() {
@@ -865,11 +957,15 @@ async function addChampion(side, championId) {
   const selectedChampion = createSelectedChampion(champion, side);
   state[side].push(selectedChampion);
 
-  let allyRoleLikelihoodsByRole = null;
+  let roleLikelihoodsByRole = null;
+  if (side === "allies" || side === "enemies") {
+    roleLikelihoodsByRole = await loadAllyRoleLikelihoodsForChampion(selectedChampion);
+  }
   if (side === "allies") {
-    allyRoleLikelihoodsByRole = await loadAllyRoleLikelihoodsForChampion(selectedChampion);
-    applySuggestedAllyRole(champion.id, allyRoleLikelihoodsByRole);
+    applySuggestedAllyRole(champion.id, roleLikelihoodsByRole);
     applyAutoAssignedLastAllyRole();
+  } else if (side === "enemies") {
+    applyAutomaticEnemyRoleAssignments();
   }
   pickers[side].input.value = "";
   closeBuildSuggestionModal();
@@ -887,6 +983,9 @@ function createSelectedChampion(champion, side, options = {}) {
 
   if (side === "allies") {
     selected.role = "";
+  } else if (side === "enemies") {
+    selected.role = "";
+    selected.roleManuallyAssigned = false;
   }
 
   if (options.liveCellId != null) {
@@ -909,6 +1008,9 @@ function removeChampion(side, championId) {
   }
 
   state[side] = state[side].filter((champion) => champion.id !== championId);
+  if (side === "enemies") {
+    applyAutomaticEnemyRoleAssignments();
+  }
   closeBuildSuggestionModal();
   clearStatus();
   renderAll();
@@ -1033,6 +1135,43 @@ function applySuggestedAllyRole(championId, roleLikelihoodsByRole = null) {
 function getCachedAllyRoleLikelihoodsByChampionKey() {
   const normalizedRankFilter = normalizeRankFilter(state.rankFilter) || DEFAULT_RANK_FILTER;
   return state.allyRoleLikelihoodsByRank[normalizedRankFilter] || null;
+}
+
+function assignEnemyRole(championId, role) {
+  if (isInteractionLocked()) {
+    return;
+  }
+
+  state.enemies = resolveEnemyRoleSelection(
+    state.enemies,
+    championId,
+    role,
+  );
+  closeBuildSuggestionModal();
+  clearStatus();
+  renderAll();
+}
+
+function applyAutomaticEnemyRoleAssignments() {
+  state.enemies = assignEnemyRoles(
+    state.enemies,
+    getCachedAllyRoleLikelihoodsByChampionKey(),
+  );
+}
+
+async function ensureEnemyRoleAssignmentsLoaded() {
+  if (state.enemies.length === 0) {
+    return;
+  }
+
+  try {
+    await ensureAllyRoleLikelihoodsLoaded(state.rankFilter);
+  } catch (_error) {
+    // Stable fallback roles keep the draft usable if lane likelihoods are unavailable.
+  }
+
+  applyAutomaticEnemyRoleAssignments();
+  renderPicker("enemies");
 }
 
 async function loadAllyRoleLikelihoodsForChampion(champion) {
@@ -1200,6 +1339,7 @@ async function handleLiveDraftImportPayload(payload) {
   if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
     shouldRefreshSuggestions = applyLiveDraftImport(payload);
     state.autoImport.lastAppliedSignature = nextSignature;
+    await ensureEnemyRoleAssignmentsLoaded();
   }
 
   const assignedRole = getAutoImportSuggestedRole();
@@ -1391,7 +1531,11 @@ function upsertLiveDraftSelection(side, liveSelection, liveChampionKeys) {
     if (side === "allies") {
       nextSelection.role = liveSelection.role || selections[targetIndex].role || "";
     } else {
-      delete nextSelection.role;
+      const isSameChampion =
+        String(selections[targetIndex].key) === String(liveSelection.key);
+      nextSelection.role = isSameChampion ? selections[targetIndex].role || "" : "";
+      nextSelection.roleManuallyAssigned =
+        isSameChampion && Boolean(selections[targetIndex].roleManuallyAssigned);
     }
 
     selections[targetIndex] = nextSelection;
@@ -1532,7 +1676,7 @@ async function handleFetchSuggestions() {
     const allies = [...state.allies];
     const enemies = [...state.enemies];
     const allySelections = buildAllyRequestSelections();
-    const enemyNames = getEnemyChampionNames();
+    const enemyRequestSelections = buildEnemyRequestSelections();
     const canShareOneResultAcrossWeights = enemies.length === 0;
     const requestedLaneWeights = canShareOneResultAcrossWeights
       ? [state.laneOpponentWeight]
@@ -1544,7 +1688,7 @@ async function handleFetchSuggestions() {
             rankFilter,
             laneOpponentWeight,
             allies: allySelections,
-            enemies: enemyNames,
+            enemies: enemyRequestSelections,
           });
           updateLolalyticsRequestStats(payload?.requestStats);
           if (!response.ok) {
@@ -1623,7 +1767,7 @@ async function handleFetchDraftProjection(cacheKey = getCurrentSuggestionCacheKe
     const { response, payload } = await postJson("/draft-outlook", {
       rankFilter: state.rankFilter,
       allies: buildAllyRequestSelections(),
-      enemies: getEnemyChampionNames(),
+      enemies: buildEnemyRequestSelections(),
     });
     updateLolalyticsRequestStats(payload?.requestStats);
     if (!response.ok) {
@@ -1689,6 +1833,7 @@ function handleRankFilterChange(event) {
   clearStatus();
   syncBanSuggestions();
   renderAll();
+  void ensureEnemyRoleAssignmentsLoaded();
 }
 
 function handleLaneOpponentWeightChange(event) {
@@ -1705,19 +1850,6 @@ function handleLaneOpponentWeightChange(event) {
   }
   clearStatus();
   renderAll();
-}
-
-function handleBuildSuggestionLaneWeightChange(event) {
-  const normalizedWeight =
-    normalizeLaneOpponentWeight(event.target.value) || DEFAULT_LANE_OPPONENT_WEIGHT;
-  if (normalizedWeight === state.buildSuggestionModal.laneOpponentWeight) {
-    return;
-  }
-
-  state.buildSuggestionModal.laneOpponentWeight = normalizedWeight;
-  syncBuildSuggestionModalActiveVariant();
-  clearStatus();
-  renderBuildSuggestionModal();
 }
 
 function handleResultsRoleChange(event) {
@@ -1783,6 +1915,7 @@ function renderBuildSuggestionModal() {
   const modalState = state.buildSuggestionModal;
   const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
   const payload = modalState.payload;
+  const preservedScrollTop = modalState.open ? buildSuggestionScroll.scrollTop : 0;
 
   buildSuggestionModal.classList.toggle("hidden", !modalState.open);
   buildSuggestionModal.setAttribute("aria-hidden", modalState.open ? "false" : "true");
@@ -1796,12 +1929,12 @@ function renderBuildSuggestionModal() {
     buildSuggestionTabs.innerHTML = "";
     buildSuggestionErrors.innerHTML = "";
     buildSuggestionBody.innerHTML = "";
-    buildSuggestionLaneWeightSelect.disabled = true;
+    buildSuggestionCounterFilter.innerHTML = "";
+    buildSuggestionBody.classList.remove("build-modal-body--refreshing");
+    buildSuggestionBody.removeAttribute("aria-busy");
+    buildSuggestionScroll.scrollTop = 0;
     return;
   }
-
-  buildSuggestionLaneWeightSelect.value = String(modalState.laneOpponentWeight);
-  buildSuggestionLaneWeightSelect.disabled = state.shuttingDown;
 
   if (ally?.icon) {
     buildSuggestionChampionIcon.classList.remove("hidden");
@@ -1818,7 +1951,12 @@ function renderBuildSuggestionModal() {
         .filter(Boolean)
         .join(" ")
     : "Build Recommendation";
-  buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(ally, payload);
+  renderBuildSuggestionCounterFilter(modalState);
+  buildSuggestionMeta.textContent = buildBuildSuggestionMetaText(
+    ally,
+    payload,
+    getBuildSuggestionFilteredEnemies(modalState).length,
+  );
   const shouldShowBuildSuggestionTabs = BUILD_SUGGESTION_TABS.length > 1;
   buildSuggestionTabs.classList.toggle("hidden", !shouldShowBuildSuggestionTabs);
   buildSuggestionTabs.innerHTML = shouldShowBuildSuggestionTabs
@@ -1847,17 +1985,143 @@ function renderBuildSuggestionModal() {
     });
   }
   buildSuggestionErrors.innerHTML = buildBuildSuggestionMessages(payload, modalState.error);
-  buildSuggestionBody.innerHTML = modalState.loading
-    ? '<div class="build-empty-state">Fetching build recommendations from Lolalytics...</div>'
-    : modalState.error
-      ? '<div class="build-empty-state">The build recommendation request failed.</div>'
-      : renderBuildSuggestionBody(payload, modalState.activeTab, {
-          consensus: getBuildSuggestionConsensusForModal(),
-          runeImportStatesByPageKey: modalState.runeImportStatesByPageKey,
-        });
-  if (!modalState.loading && !modalState.error) {
-    wireBuildSuggestionRuneImportButtons(payload);
+  const isRefreshingExistingPayload = modalState.loading && Boolean(payload);
+  buildSuggestionBody.classList.toggle(
+    "build-modal-body--refreshing",
+    isRefreshingExistingPayload,
+  );
+  buildSuggestionBody.setAttribute("aria-busy", modalState.loading ? "true" : "false");
+  if (!isRefreshingExistingPayload) {
+    buildSuggestionBody.innerHTML = modalState.loading && !payload
+      ? '<div class="build-empty-state">Fetching build recommendations from Lolalytics...</div>'
+      : modalState.error && !payload
+        ? '<div class="build-empty-state">The build recommendation request failed.</div>'
+        : renderBuildSuggestionBody(payload, modalState.activeTab, {
+            itemRecommendationScopes: modalState.itemRecommendationScopes,
+            runeRecommendationScopes: modalState.runeRecommendationScopes,
+            runeImportStatesByPageKey: modalState.runeImportStatesByPageKey,
+          });
+    if (payload && !modalState.loading) {
+      wireBuildSuggestionItemScopeButtons();
+      wireBuildSuggestionRuneScopeButtons();
+      wireBuildSuggestionRuneImportButtons(payload);
+    }
   }
+  buildSuggestionScroll.scrollTop = preservedScrollTop;
+}
+
+function renderBuildSuggestionCounterFilter(modalState) {
+  const enemies = Array.isArray(modalState.enemies) ? modalState.enemies : [];
+  const availableKeys = enemies.map((enemy) => String(enemy.key));
+  const availableKeySet = new Set(availableKeys);
+  const selectedKeys = new Set(
+    modalState.selectedCounterChampionKeys
+      .map((key) => String(key))
+      .filter((key) => availableKeySet.has(key)),
+  );
+  if (selectedKeys.size === 0) {
+    availableKeys.forEach((key) => selectedKeys.add(key));
+  }
+  const hasExcludedEnemies = selectedKeys.size < availableKeys.length;
+
+  buildSuggestionCounterFilter.innerHTML = `
+    <span class="build-counter-filter-label">Counter Filter</span>
+    <div class="build-counter-filter-controls">
+      ${enemies
+        .map((enemy) => {
+          const championKey = String(enemy.key);
+          const isSelected = selectedKeys.has(championKey);
+          const isExcluded = !isSelected;
+          return `
+            <button
+              type="button"
+              class="build-counter-filter-champion${
+                isSelected ? " build-counter-filter-champion--selected" : ""
+              }${isExcluded ? " build-counter-filter-champion--excluded" : ""}"
+              data-counter-champion-key="${escapeHtml(championKey)}"
+              aria-label="${
+                isSelected
+                  ? `Remove ${escapeHtml(enemy.name)} from the counter filter`
+                  : `Add ${escapeHtml(enemy.name)} to the counter filter`
+              }"
+              aria-pressed="${isSelected ? "true" : "false"}"
+              title="${escapeHtml(enemy.name)}"
+              ${state.shuttingDown ? "disabled" : ""}
+            >
+              <img src="${enemy.icon}" alt="" width="36" height="36" />
+            </button>
+          `;
+        })
+        .join("")}
+      <button
+        type="button"
+        class="build-counter-filter-clear"
+        aria-label="Clear counter filter"
+        title="${hasExcludedEnemies ? "Include all enemies" : "All enemies are already included"}"
+        ${state.shuttingDown || !hasExcludedEnemies ? "disabled" : ""}
+      >
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+  `;
+
+  buildSuggestionCounterFilter
+    .querySelectorAll("[data-counter-champion-key]")
+    .forEach((button) => {
+      button.addEventListener("click", () =>
+        handleBuildCounterFilterToggle(button.dataset.counterChampionKey),
+      );
+    });
+  const clearButton = buildSuggestionCounterFilter.querySelector(
+    ".build-counter-filter-clear",
+  );
+  if (clearButton) {
+    clearButton.addEventListener("click", handleClearBuildCounterFilter);
+  }
+}
+
+function wireBuildSuggestionItemScopeButtons() {
+  buildSuggestionBody.querySelectorAll("[data-item-scope-tone]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const recommendationKey =
+        button.dataset.itemScopeTone === "highest-win" ? "highestWin" : "mostPicked";
+      const currentScope = normalizeItemRecommendationScope(
+        state.buildSuggestionModal.itemRecommendationScopes?.[recommendationKey],
+      );
+      const nextScope =
+        currentScope === LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE
+          ? DEFAULT_ITEM_RECOMMENDATION_SCOPE
+          : LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE;
+
+      state.buildSuggestionModal.itemRecommendationScopes = {
+        ...state.buildSuggestionModal.itemRecommendationScopes,
+        [recommendationKey]: nextScope,
+      };
+      renderBuildSuggestionModal();
+    });
+  });
+}
+
+function wireBuildSuggestionRuneScopeButtons() {
+  buildSuggestionBody.querySelectorAll("[data-rune-scope-tone]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const recommendationKey =
+        button.dataset.runeScopeTone === "highest-win" ? "highestWin" : "mostPicked";
+      const currentScope = normalizeRuneRecommendationScope(
+        state.buildSuggestionModal.runeRecommendationScopes?.[recommendationKey],
+      );
+      const nextScope =
+        currentScope === LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE
+          ? DEFAULT_RUNE_RECOMMENDATION_SCOPE
+          : LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE;
+
+      state.buildSuggestionModal.runeRecommendationScopes = {
+        ...state.buildSuggestionModal.runeRecommendationScopes,
+        [recommendationKey]: nextScope,
+      };
+      renderBuildSuggestionModal();
+    });
+  });
 }
 
 function wireBuildSuggestionRuneImportButtons(payload) {
@@ -1926,10 +2190,16 @@ async function handleImportBuildSuggestionRunes(payload, pageKey) {
 }
 
 function getBuildSuggestionRuneRecommendationByKey(payload, pageKey) {
-  const recommendations = getRecommendedRunePages(
-    payload?.runes?.highestWinPage,
-    payload?.runes?.mostPickedPage,
-  );
+  const recommendations = [
+    ...getRecommendedRunePages(
+      payload?.runes?.highestWinPage,
+      payload?.runes?.mostPickedPage,
+    ),
+    ...getRecommendedRunePages(
+      payload?.runes?.laneOpponents?.highestWinPage,
+      payload?.runes?.laneOpponents?.mostPickedPage,
+    ),
+  ];
 
   return recommendations.find((page) => getRunePageRecommendationKey(page) === pageKey) || null;
 }
@@ -1954,8 +2224,12 @@ function setBuildSuggestionRuneImportState(pageKey, importState) {
   renderBuildSuggestionModal();
 }
 
-function buildBuildSuggestionMetaText(ally, payload) {
+function buildBuildSuggestionMetaText(ally, payload, filteredEnemyCount = 0) {
   const parts = [];
+  const payloadEnemyCount = Number(payload?.summary?.enemyCount) || 0;
+  const displayedEnemyCount = filteredEnemyCount || payloadEnemyCount;
+  const payloadMatchesDisplayedEnemies =
+    payloadEnemyCount > 0 && payloadEnemyCount === displayedEnemyCount;
 
   if (ally?.role) {
     parts.push(getRoleLabel(ally.role));
@@ -1963,15 +2237,13 @@ function buildBuildSuggestionMetaText(ally, payload) {
 
   parts.push(getRankFilterDisplayLabel());
 
-  if (payload?.summary?.enemyCount) {
+  if (displayedEnemyCount > 0) {
     parts.push(
-      `${payload.summary.enemyCount} ${payload.summary.enemyCount === 1 ? "enemy" : "enemies"}`,
+      `${displayedEnemyCount} ${displayedEnemyCount === 1 ? "enemy" : "enemies"}`,
     );
-  } else if (state.enemies.length > 0) {
-    parts.push(`${state.enemies.length} ${state.enemies.length === 1 ? "enemy" : "enemies"}`);
   }
 
-  if (payload?.summary?.sourceMatchups) {
+  if (payloadMatchesDisplayedEnemies && payload?.summary?.sourceMatchups) {
     parts.push(
       `${payload.summary.sourceMatchups} ${
         payload.summary.sourceMatchups === 1 ? "matchup" : "matchups"
@@ -1979,7 +2251,7 @@ function buildBuildSuggestionMetaText(ally, payload) {
     );
   }
 
-  if (payload?.summary?.lastUpdatedAt) {
+  if (payloadMatchesDisplayedEnemies && payload?.summary?.lastUpdatedAt) {
     parts.push(`Updated ${formatBuildSuggestionTimestamp(payload.summary.lastUpdatedAt)}`);
   }
 

@@ -55,7 +55,7 @@ function createMatchupBuild({
   };
 }
 
-test("buildBuildSuggestionResults triples likely lanes across runes, spells, boots, and items", () => {
+test("buildBuildSuggestionResults aggregates every matchup once across all build sections", () => {
   const matchupSpecs = [
     { enemyRole: "top", spellIds: [4, 12] },
     { enemyRole: "top", spellIds: [4, 6] },
@@ -63,7 +63,6 @@ test("buildBuildSuggestionResults triples likely lanes across runes, spells, boo
     { enemyRole: "support", spellIds: [3, 4] },
   ];
   const aggregated = buildBuildSuggestionResults({
-    laneOpponentWeight: 3,
     matchupBuilds: matchupSpecs.map(({ enemyRole, spellIds }) =>
       createMatchupBuild({
         totalGames: 10,
@@ -108,33 +107,34 @@ test("buildBuildSuggestionResults triples likely lanes across runes, spells, boo
     aggregated.spells.options.map((option) => [option.setKey, option.games]),
   );
 
-  assert.equal(aggregated.totalGames, 100);
-  assert.equal(spellGamesBySet.get("4-12"), 30);
-  assert.equal(spellGamesBySet.get("4-6"), 30);
-  assert.equal(spellGamesBySet.get("4-14"), 30);
+  assert.equal(aggregated.totalGames, 40);
+  assert.equal(spellGamesBySet.get("4-12"), 10);
+  assert.equal(spellGamesBySet.get("4-6"), 10);
+  assert.equal(spellGamesBySet.get("4-14"), 10);
   assert.equal(spellGamesBySet.get("3-4"), 10);
   assert.equal(
     aggregated.boots.options.find((option) => option.itemId === 3006)?.games,
-    90,
+    30,
   );
   assert.equal(
     aggregated.boots.options.find((option) => option.itemId === 3158)?.games,
     10,
   );
   assert.equal(aggregated.items.mostPickedBuild.selections[0].itemId, 3118);
-  assert.equal(aggregated.items.mostPickedBuild.selections[0].games, 90);
+  assert.equal(aggregated.items.mostPickedBuild.selections[0].games, 30);
   assert.equal(aggregated.items.highestWinBuild.selections[0].itemId, 3118);
-  assert.equal(aggregated.items.highestWinBuild.selections[0].games, 90);
+  assert.equal(aggregated.items.highestWinBuild.selections[0].games, 30);
+  assert.equal(aggregated.items.laneOpponents.mostPickedBuild.selections[0].itemId, 3118);
+  assert.equal(aggregated.items.laneOpponents.mostPickedBuild.selections[0].games, 30);
 });
 
-test("buildBuildSuggestionResults triples at least one most-likely lane opponent", () => {
+test("buildBuildSuggestionResults does not weight the most-likely fallback opponent", () => {
   const matchupSpecs = [
     { enemyChampionKey: "1", laneOpponentLikelihood: 12, spellIds: [4, 12] },
     { enemyChampionKey: "2", laneOpponentLikelihood: 37, spellIds: [4, 6] },
     { enemyChampionKey: "3", laneOpponentLikelihood: 8, spellIds: [4, 14] },
   ];
   const aggregated = buildBuildSuggestionResults({
-    laneOpponentWeight: 3,
     matchupBuilds: matchupSpecs.map((spec) => ({
       ...createMatchupBuild({
         totalGames: 10,
@@ -162,31 +162,40 @@ test("buildBuildSuggestionResults triples at least one most-likely lane opponent
     aggregated.spells.options.map((option) => [option.setKey, option.games]),
   );
 
-  assert.equal(aggregated.totalGames, 50);
-  assert.equal(spellGamesBySet.get("4-6"), 30);
+  assert.equal(aggregated.totalGames, 30);
+  assert.equal(spellGamesBySet.get("4-6"), 10);
   assert.equal(spellGamesBySet.get("4-12"), 10);
   assert.equal(spellGamesBySet.get("4-14"), 10);
 });
 
 test("buildBuildSuggestionResults treats Bottom and Support as the same lane", () => {
   const aggregated = buildBuildSuggestionResults({
-    laneOpponentWeight: 4,
     matchupBuilds: [
-      { enemyRole: "bottom", spellIds: [4, 7] },
-      { enemyRole: "jungle", spellIds: [4, 11] },
-    ].map(({ enemyRole, spellIds }) =>
+      { enemyRole: "bottom", spellIds: [4, 7], itemId: 3508 },
+      { enemyRole: "support", spellIds: [3, 4], itemId: 3508 },
+      { enemyRole: "jungle", spellIds: [4, 11], itemId: 3078 },
+    ].map(({ enemyRole, spellIds, itemId }) =>
       createMatchupBuild({
         totalGames: 10,
         fetchedAt: "2026-07-17T12:00:00.000Z",
         role: "support",
         enemyRole,
-        primaryStyleOptions: [],
-        secondaryStyleOptions: [],
-        primarySlotOptions: [[], [], [], []],
-        secondarySlotOptions: [[], [], [], []],
-        statOptions: [],
+        ...createCompleteRuneOptions({
+          primaryStyle: enemyRole === "jungle" ? "sorcery" : "precision",
+          games: 10,
+          wins: enemyRole === "jungle" ? 7 : 5,
+        }),
         pageCandidates: [],
         spellOptions: [createSpellSetOption({ spellIds, games: 10, wins: 5 })],
+        itemSlotOptions: [[
+          createItemOption({
+            itemId,
+            name: `Item ${itemId}`,
+            games: 10,
+            wins: 5,
+            purchaseMinute: 11,
+          }),
+        ], [], [], [], [], []],
         boots: [],
       }),
     ),
@@ -195,9 +204,35 @@ test("buildBuildSuggestionResults treats Bottom and Support as the same lane", (
     aggregated.spells.options.map((option) => [option.setKey, option.games]),
   );
 
-  assert.equal(aggregated.totalGames, 50);
-  assert.equal(spellGamesBySet.get("4-7"), 40);
+  assert.equal(aggregated.totalGames, 30);
+  assert.equal(spellGamesBySet.get("4-7"), 10);
+  assert.equal(spellGamesBySet.get("3-4"), 10);
   assert.equal(spellGamesBySet.get("4-11"), 10);
+  assert.deepEqual(
+    aggregated.items.laneOpponents.mostPickedBuild.selections.map(
+      (selection) => selection.itemId,
+    ),
+    [3508],
+  );
+  assert.equal(
+    aggregated.items.laneOpponents.mostPickedBuild.selections[0].games,
+    20,
+  );
+  assert.equal(
+    aggregated.runes.laneOpponents.mostPickedPage.selections.primary[0].id,
+    8008,
+  );
+  const laneOpponentKeystones = aggregated.runes.laneOpponents.overview.slotGroups
+    .find((group) => group.key === "primary-slot-0")
+    .options;
+  assert.equal(
+    laneOpponentKeystones.find((option) => option.id === 8008).games,
+    20,
+  );
+  assert.equal(
+    laneOpponentKeystones.some((option) => option.id === 8229),
+    false,
+  );
 });
 
 function createPageCandidate({
@@ -284,6 +319,66 @@ function createSkillOption({ abilityKey, games, wins }) {
     name: abilityKey,
     games,
     wins,
+  };
+}
+
+function createCompleteRuneOptions({
+  primaryStyle = "precision",
+  games,
+  wins,
+}) {
+  if (primaryStyle === "sorcery") {
+    return {
+      primaryStyleOptions: [
+        { id: 8200, icon: "sorcery.png", name: "Sorcery", games, wins },
+      ],
+      secondaryStyleOptions: [
+        { id: 8400, icon: "resolve.png", name: "Resolve", games, wins },
+      ],
+      primarySlotOptions: [
+        [{ id: 8229, icon: "8229.webp", name: "Arcane Comet", games, wins, styleId: 8200, styleName: "Sorcery" }],
+        [{ id: 8226, icon: "8226.webp", name: "Manaflow Band", games, wins, styleId: 8200, styleName: "Sorcery" }],
+        [{ id: 8233, icon: "8233.webp", name: "Absolute Focus", games, wins, styleId: 8200, styleName: "Sorcery" }],
+        [{ id: 8236, icon: "8236.webp", name: "Gathering Storm", games, wins, styleId: 8200, styleName: "Sorcery" }],
+      ],
+      secondarySlotOptions: [
+        [],
+        [{ id: 8446, icon: "8446.webp", name: "Demolish", games, wins, styleId: 8400, styleName: "Resolve" }],
+        [{ id: 8473, icon: "8473.webp", name: "Bone Plating", games, wins, styleId: 8400, styleName: "Resolve" }],
+        [],
+      ],
+      statOptions: [
+        { id: 5005, icon: "5005.webp", name: "Attack Speed", games, wins },
+        { id: 5008, icon: "5008.webp", name: "Adaptive Force", games, wins },
+        { id: 5011, icon: "5011.webp", name: "Health", games, wins },
+      ],
+    };
+  }
+
+  return {
+    primaryStyleOptions: [
+      { id: 8000, icon: "precision.png", name: "Precision", games, wins },
+    ],
+    secondaryStyleOptions: [
+      { id: 8300, icon: "inspiration.png", name: "Inspiration", games, wins },
+    ],
+    primarySlotOptions: [
+      [{ id: 8008, icon: "8008.webp", name: "Lethal Tempo", games, wins, styleId: 8000, styleName: "Precision" }],
+      [{ id: 9111, icon: "9111.webp", name: "Triumph", games, wins, styleId: 8000, styleName: "Precision" }],
+      [{ id: 9103, icon: "9103.webp", name: "Legend: Bloodline", games, wins, styleId: 8000, styleName: "Precision" }],
+      [{ id: 8014, icon: "8014.webp", name: "Coup de Grace", games, wins, styleId: 8000, styleName: "Precision" }],
+    ],
+    secondarySlotOptions: [
+      [],
+      [{ id: 8304, icon: "8304.webp", name: "Magical Footwear", games, wins, styleId: 8300, styleName: "Inspiration" }],
+      [],
+      [{ id: 8347, icon: "8347.webp", name: "Cosmic Insight", games, wins, styleId: 8300, styleName: "Inspiration" }],
+    ],
+    statOptions: [
+      { id: 5005, icon: "5005.webp", name: "Attack Speed", games, wins },
+      { id: 5008, icon: "5008.webp", name: "Adaptive Force", games, wins },
+      { id: 5011, icon: "5011.webp", name: "Health", games, wins },
+    ],
   };
 }
 
@@ -491,8 +586,8 @@ test("buildBuildSuggestionResults aggregates rune histograms, items, and boots",
   assert.deepEqual(aggregated.startingItems.highestWinSet.itemIds, [1082, 2031]);
   assert.equal(aggregated.skillPriority.mostPickedSkill.abilityKey, "Q");
   assert.equal(aggregated.skillPriority.highestWinSkill.abilityKey, "E");
-  assert.equal(aggregated.skillPriority.mostPickedSkill.games, 300);
-  assert.equal(aggregated.skillPriority.highestWinSkill.games, 180);
+  assert.equal(aggregated.skillPriority.mostPickedSkill.games, 100);
+  assert.equal(aggregated.skillPriority.highestWinSkill.games, 60);
 
   const primaryStyleGroup = aggregated.runes.overview.slotGroups.find(
     (group) => group.key === "primary-style",

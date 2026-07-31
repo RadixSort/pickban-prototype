@@ -1,20 +1,19 @@
 (function initializeBuildSuggestionView(globalScope, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory(
-      require("./summoner-spell-metadata.js"),
-      require("./build-suggestion-consensus.js"),
-    );
+    module.exports = factory(require("./summoner-spell-metadata.js"));
     return;
   }
 
-  globalScope.buildSuggestionView = factory(
-    globalScope.summonerSpellMetadata || {},
-    globalScope.buildSuggestionConsensus || {},
-  );
+  globalScope.buildSuggestionView = factory(globalScope.summonerSpellMetadata || {});
 })(
   typeof globalThis !== "undefined" ? globalThis : this,
-  (summonerSpellMetadata = {}, buildSuggestionConsensus = {}) => {
+  (summonerSpellMetadata = {}) => {
   const DEFAULT_BUILD_SUGGESTION_TAB = "summary";
+  const DEFAULT_ITEM_RECOMMENDATION_SCOPE = "allEnemies";
+  const LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE = "laneOpponents";
+  const DEFAULT_RUNE_RECOMMENDATION_SCOPE = DEFAULT_ITEM_RECOMMENDATION_SCOPE;
+  const LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE =
+    LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE;
   const BUILD_SUGGESTION_TABS = [{ value: "summary", label: "Summary" }];
   const validTabs = new Set(BUILD_SUGGESTION_TABS.map((tab) => tab.value));
   const buildSummonerSpellIconUrl =
@@ -25,15 +24,6 @@
     typeof summonerSpellMetadata.getSummonerSpellName === "function"
       ? summonerSpellMetadata.getSummonerSpellName
       : () => "";
-  const getBuildChoiceKey =
-    typeof buildSuggestionConsensus.getBuildChoiceKey === "function"
-      ? buildSuggestionConsensus.getBuildChoiceKey
-      : () => null;
-  const isBuildChoiceUnanimous =
-    typeof buildSuggestionConsensus.isBuildChoiceUnanimous === "function"
-      ? buildSuggestionConsensus.isBuildChoiceUnanimous
-      : () => false;
-
   function normalizeBuildSuggestionTab(value) {
     return validTabs.has(value) ? value : DEFAULT_BUILD_SUGGESTION_TAB;
   }
@@ -70,6 +60,15 @@
       : [];
     const highestWinPage = payload?.runes?.highestWinPage || null;
     const mostPickedPage = payload?.runes?.mostPickedPage || null;
+    const laneOpponentHighestWinPage =
+      payload?.runes?.laneOpponents?.highestWinPage || null;
+    const laneOpponentMostPickedPage =
+      payload?.runes?.laneOpponents?.mostPickedPage || null;
+    const laneOpponentSlotGroups = Array.isArray(
+      payload?.runes?.laneOpponents?.overview?.slotGroups,
+    )
+      ? payload.runes.laneOpponents.overview.slotGroups
+      : [];
     const highestWinSpellSet = payload?.spells?.highestWinSet || null;
     const mostPickedSpellSet = payload?.spells?.mostPickedSet || null;
     const highestWinStartingItemSet = payload?.startingItems?.highestWinSet || null;
@@ -78,11 +77,17 @@
     const mostPickedSkill = payload?.skillPriority?.mostPickedSkill || null;
     const highestWinItemBuild = payload?.items?.highestWinBuild || null;
     const mostPickedItemBuild = payload?.items?.mostPickedBuild || null;
+    const laneOpponentHighestWinItemBuild =
+      payload?.items?.laneOpponents?.highestWinBuild || null;
+    const laneOpponentMostPickedItemBuild =
+      payload?.items?.laneOpponents?.mostPickedBuild || null;
     const boots = Array.isArray(payload?.boots?.options) ? payload.boots.options : [];
 
     return renderSummaryPanel({
       highestWinPage,
       mostPickedPage,
+      laneOpponentHighestWinPage,
+      laneOpponentMostPickedPage,
       highestWinSpellSet,
       mostPickedSpellSet,
       highestWinStartingItemSet,
@@ -91,17 +96,27 @@
       mostPickedSkill,
       highestWinItemBuild,
       mostPickedItemBuild,
+      laneOpponentHighestWinBuild: laneOpponentHighestWinItemBuild,
+      laneOpponentMostPickedBuild: laneOpponentMostPickedItemBuild,
+      itemRecommendationScopes: normalizeItemRecommendationScopes(
+        options?.itemRecommendationScopes,
+      ),
+      runeRecommendationScopes: normalizeRuneRecommendationScopes(
+        options?.runeRecommendationScopes,
+      ),
       boots,
       notes: [...runeNotes, ...spellNotes, ...startingItemNotes, ...skillPriorityNotes],
-      consensus: options?.consensus || null,
       runeImportStatesByPageKey: normalizeRuneImportStates(options?.runeImportStatesByPageKey),
       slotGroupMap: buildSlotGroupMap(slotGroups),
+      laneOpponentSlotGroupMap: buildSlotGroupMap(laneOpponentSlotGroups),
     });
   }
 
   function renderSummaryPanel({
     highestWinPage,
     mostPickedPage,
+    laneOpponentHighestWinPage,
+    laneOpponentMostPickedPage,
     highestWinSpellSet,
     mostPickedSpellSet,
     highestWinStartingItemSet,
@@ -110,13 +125,25 @@
     mostPickedSkill,
     highestWinItemBuild,
     mostPickedItemBuild,
+    laneOpponentHighestWinBuild,
+    laneOpponentMostPickedBuild,
+    itemRecommendationScopes,
+    runeRecommendationScopes,
     boots,
     notes,
-    consensus,
     runeImportStatesByPageKey,
     slotGroupMap,
+    laneOpponentSlotGroupMap,
   }) {
-    const runeRecommendations = buildRecommendedRunePages(highestWinPage, mostPickedPage);
+    const runeRecommendations = buildRuneRecommendationColumns({
+      highestWinPage,
+      mostPickedPage,
+      laneOpponentHighestWinPage,
+      laneOpponentMostPickedPage,
+      runeRecommendationScopes,
+      slotGroupMap,
+      laneOpponentSlotGroupMap,
+    });
     const spellRecommendations = buildRecommendedSpellSets(
       highestWinSpellSet,
       mostPickedSpellSet,
@@ -131,7 +158,7 @@
     );
     const highlightedBoots = getHighlightedOptions(boots, "itemId");
     const hasAnyContent =
-      runeRecommendations.length > 0 ||
+      runeRecommendations.some((recommendation) => recommendation.page) ||
       spellRecommendations.length > 0 ||
       startingItemRecommendations.length > 0 ||
       skillPriorityRecommendations.length > 0 ||
@@ -151,27 +178,27 @@
     return `
       <div class="build-view build-view--summary">
         ${renderInlineNotes(notes)}
-        ${renderBuildSummaryGlobalNote(consensus)}
+        ${renderBuildSummaryGlobalNote()}
         <div class="build-summary-top-grid">
           <div class="build-summary-rune-stack">
             ${renderRuneRecommendationsSection(
               runeRecommendations,
-              slotGroupMap,
               runeImportStatesByPageKey,
-              consensus,
             )}
-            ${renderSpellRecommendationsSection(spellRecommendations, consensus)}
+            ${renderSpellRecommendationsSection(spellRecommendations)}
           </div>
           <div class="build-summary-side-stack">
-            ${renderStartingItemsSection(startingItemRecommendations, consensus)}
-            ${renderSkillPrioritySection(skillPriorityRecommendations, consensus)}
-            ${renderBootsSection(highlightedBoots, consensus)}
+            ${renderStartingItemsSection(startingItemRecommendations)}
+            ${renderSkillPrioritySection(skillPriorityRecommendations)}
+            ${renderBootsSection(highlightedBoots)}
           </div>
         </div>
         ${renderItemsSection({
           highestWinBuild: highestWinItemBuild,
           mostPickedBuild: mostPickedItemBuild,
-          consensus,
+          laneOpponentHighestWinBuild,
+          laneOpponentMostPickedBuild,
+          itemRecommendationScopes,
         })}
       </div>
     `;
@@ -183,16 +210,27 @@
     page,
     runeImportStatesByPageKey,
     slotGroupMap,
+    scope,
+    canToggleScope,
     emptyMessage,
-    consensus,
   }) {
     if (!page) {
       return `
         <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
           <header class="build-summary-column-header">
-            <div class="build-summary-column-heading">
-              <span class="build-summary-kicker">${escapeHtml(title)}</span>
-              <h3>${escapeHtml(title)}</h3>
+            <div class="build-summary-column-header-top">
+              <div class="build-summary-column-heading">
+                <span class="build-summary-kicker">${escapeHtml(title)}</span>
+                <h3>${escapeHtml(title)}</h3>
+              </div>
+              <div class="build-summary-column-actions">
+                ${renderRuneRecommendationScopeToggle({
+                  title,
+                  tone,
+                  scope,
+                  disabled: !canToggleScope,
+                })}
+              </div>
             </div>
           </header>
           <div class="build-summary-column-empty">${escapeHtml(emptyMessage)}</div>
@@ -211,14 +249,22 @@
     const runeImportState = pageKey ? runeImportStatesByPageKey[pageKey] || null : null;
 
     return `
-      <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}${getRecommendationUnanimousClassName(consensus, "runes", page)}">
+      <section class="build-summary-column build-summary-column--${escapeAttribute(tone)}">
         <header class="build-summary-column-header">
           <div class="build-summary-column-header-top">
             <div class="build-summary-column-heading">
               <span class="build-summary-kicker">${escapeHtml(title)}</span>
               <h3>${escapeHtml(getPageTitle(page))}</h3>
             </div>
-            ${renderRuneImportAction(pageKey, runeImportState)}
+            <div class="build-summary-column-actions">
+              ${renderRuneImportAction(pageKey, runeImportState)}
+              ${renderRuneRecommendationScopeToggle({
+                title,
+                tone,
+                scope,
+                disabled: !canToggleScope,
+              })}
+            </div>
           </div>
           <div class="build-summary-metric-grid">
             ${renderSummaryMetric(
@@ -251,9 +297,7 @@
 
   function renderRuneRecommendationsSection(
     recommendations,
-    slotGroupMap,
     runeImportStatesByPageKey = {},
-    consensus = null,
   ) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
@@ -279,15 +323,11 @@
         </header>
         <div class="build-summary-board${recommendations.length === 1 ? " build-summary-board--single" : ""}">
           ${recommendations
-            .map((page) =>
+            .map((recommendation) =>
               renderSummaryPageColumn({
-                title: getRecommendationTitle(page),
-                tone: getRecommendationTone(page),
-                page,
+                ...recommendation,
                 runeImportStatesByPageKey,
-                slotGroupMap,
                 emptyMessage: "",
-                consensus,
               }),
             )
             .join("")}
@@ -296,7 +336,7 @@
     `;
   }
 
-  function renderSpellRecommendationsSection(recommendations, consensus) {
+  function renderSpellRecommendationsSection(recommendations) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended summoner spells">
@@ -320,13 +360,13 @@
           </div>
         </header>
         <div class="build-spell-card-list build-spell-card-list--spells${recommendations.length === 1 ? " build-spell-card-list--single" : ""}">
-          ${recommendations.map((spellSet) => renderSpellSetCard(spellSet, consensus)).join("")}
+          ${recommendations.map((spellSet) => renderSpellSetCard(spellSet)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderStartingItemsSection(recommendations, consensus) {
+  function renderStartingItemsSection(recommendations) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended starting items">
@@ -350,13 +390,13 @@
           </div>
         </header>
         <div class="build-spell-card-list">
-          ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet, consensus)).join("")}
+          ${recommendations.map((itemSet) => renderStartingItemSetCard(itemSet)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderSkillPrioritySection(recommendations, consensus) {
+  function renderSkillPrioritySection(recommendations) {
     if (!Array.isArray(recommendations) || recommendations.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended skill max priority">
@@ -380,13 +420,13 @@
           </div>
         </header>
         <div class="build-skill-priority-list${recommendations.length === 1 ? " build-skill-priority-list--single" : ""}">
-          ${recommendations.map((skill) => renderSkillPriorityCard(skill, consensus)).join("")}
+          ${recommendations.map((skill) => renderSkillPriorityCard(skill)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderBootsSection(boots, consensus) {
+  function renderBootsSection(boots) {
     if (!Array.isArray(boots) || boots.length === 0) {
       return `
         <section class="build-items-panel" aria-label="Recommended boots">
@@ -408,13 +448,19 @@
           </div>
         </header>
         <div class="build-summary-boot-list">
-          ${boots.map((boot) => renderCompactBootCard(boot, consensus)).join("")}
+          ${boots.map((boot) => renderCompactBootCard(boot)).join("")}
         </div>
       </section>
     `;
   }
 
-  function renderItemsSection({ highestWinBuild, mostPickedBuild, consensus }) {
+  function renderItemsSection({
+    highestWinBuild,
+    mostPickedBuild,
+    laneOpponentHighestWinBuild,
+    laneOpponentMostPickedBuild,
+    itemRecommendationScopes,
+  }) {
     const hasItems =
       Array.isArray(highestWinBuild?.selections) || Array.isArray(mostPickedBuild?.selections);
 
@@ -444,15 +490,25 @@
           ${renderItemBuildColumn({
             title: "Highest Win",
             tone: "highest-win",
-            build: highestWinBuild,
-            consensus,
+            build: getScopedItemBuild(
+              itemRecommendationScopes.highestWin,
+              highestWinBuild,
+              laneOpponentHighestWinBuild,
+            ),
+            scope: itemRecommendationScopes.highestWin,
+            canToggleScope: Boolean(laneOpponentHighestWinBuild),
             emptyMessage: "No highest-win item path was available.",
           })}
           ${renderItemBuildColumn({
             title: "Most Picked",
             tone: "most-picked",
-            build: mostPickedBuild,
-            consensus,
+            build: getScopedItemBuild(
+              itemRecommendationScopes.mostPicked,
+              mostPickedBuild,
+              laneOpponentMostPickedBuild,
+            ),
+            scope: itemRecommendationScopes.mostPicked,
+            canToggleScope: Boolean(laneOpponentMostPickedBuild),
             emptyMessage: "No most-picked item path was available.",
           })}
         </div>
@@ -460,29 +516,189 @@
     `;
   }
 
-  function renderItemBuildColumn({ title, tone, build, emptyMessage, consensus }) {
+  function renderItemBuildColumn({
+    title,
+    tone,
+    build,
+    scope,
+    canToggleScope,
+    emptyMessage,
+  }) {
     const selections = getOrderedSelections(build?.selections);
+    const header = `
+      <header class="build-item-column-header">
+        <h4>${escapeHtml(title)}</h4>
+        ${renderItemRecommendationScopeToggle({
+          title,
+          tone,
+          scope,
+          disabled: !canToggleScope,
+        })}
+      </header>
+    `;
 
     if (selections.length === 0) {
       return `
         <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
-          <header class="build-item-column-header">
-            <h4>${escapeHtml(title)}</h4>
-          </header>
+          ${header}
           <div class="build-summary-column-empty">${escapeHtml(emptyMessage)}</div>
         </section>
       `;
     }
 
     return `
-      <section class="build-item-column build-item-column--${escapeAttribute(tone)}${getDirectUnanimousClassName(consensus, "items", tone, getBuildChoiceKey("items", build))}">
-        <header class="build-item-column-header">
-          <h4>${escapeHtml(title)}</h4>
-        </header>
+      <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
+        ${header}
         <div class="build-item-list">
           ${selections.map((selection, index) => renderItemCard(selection, index + 1)).join("")}
         </div>
       </section>
+    `;
+  }
+
+  function normalizeItemRecommendationScopes(scopes = {}) {
+    return {
+      highestWin: normalizeItemRecommendationScope(scopes?.highestWin),
+      mostPicked: normalizeItemRecommendationScope(scopes?.mostPicked),
+    };
+  }
+
+  function buildRuneRecommendationColumns({
+    highestWinPage,
+    mostPickedPage,
+    laneOpponentHighestWinPage,
+    laneOpponentMostPickedPage,
+    runeRecommendationScopes,
+    slotGroupMap,
+    laneOpponentSlotGroupMap,
+  }) {
+    return [
+      buildRuneRecommendationColumn({
+        title: "Highest Win",
+        tone: "highest-win",
+        scope: runeRecommendationScopes.highestWin,
+        allEnemiesPage: highestWinPage,
+        laneOpponentPage: laneOpponentHighestWinPage,
+        slotGroupMap,
+        laneOpponentSlotGroupMap,
+      }),
+      buildRuneRecommendationColumn({
+        title: "Most Picked",
+        tone: "most-picked",
+        scope: runeRecommendationScopes.mostPicked,
+        allEnemiesPage: mostPickedPage,
+        laneOpponentPage: laneOpponentMostPickedPage,
+        slotGroupMap,
+        laneOpponentSlotGroupMap,
+      }),
+    ];
+  }
+
+  function buildRuneRecommendationColumn({
+    title,
+    tone,
+    scope,
+    allEnemiesPage,
+    laneOpponentPage,
+    slotGroupMap,
+    laneOpponentSlotGroupMap,
+  }) {
+    const normalizedScope = normalizeRuneRecommendationScope(scope);
+    const isLaneOnly =
+      normalizedScope === LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE &&
+      Boolean(laneOpponentPage);
+
+    return {
+      title,
+      tone,
+      page: isLaneOnly ? laneOpponentPage : allEnemiesPage,
+      scope: isLaneOnly
+        ? LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE
+        : DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+      canToggleScope: Boolean(laneOpponentPage),
+      slotGroupMap: isLaneOnly ? laneOpponentSlotGroupMap : slotGroupMap,
+    };
+  }
+
+  function normalizeRuneRecommendationScopes(scopes = {}) {
+    return {
+      highestWin: normalizeRuneRecommendationScope(scopes?.highestWin),
+      mostPicked: normalizeRuneRecommendationScope(scopes?.mostPicked),
+    };
+  }
+
+  function normalizeRuneRecommendationScope(scope) {
+    return scope === LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE
+      ? LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE
+      : DEFAULT_RUNE_RECOMMENDATION_SCOPE;
+  }
+
+  function normalizeItemRecommendationScope(scope) {
+    return scope === LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE
+      ? LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE
+      : DEFAULT_ITEM_RECOMMENDATION_SCOPE;
+  }
+
+  function getScopedItemBuild(scope, allEnemiesBuild, laneOpponentBuild) {
+    return normalizeItemRecommendationScope(scope) ===
+      LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE && laneOpponentBuild
+      ? laneOpponentBuild
+      : allEnemiesBuild;
+  }
+
+  function renderItemRecommendationScopeToggle({
+    title,
+    tone,
+    scope,
+    disabled,
+  }) {
+    const normalizedScope = normalizeItemRecommendationScope(scope);
+    const isLaneOnly =
+      normalizedScope === LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE;
+    const currentLabel = isLaneOnly ? "Lane only" : "All enemies";
+    const nextLabel = isLaneOnly ? "all enemies" : "lane opponents only";
+
+    return `
+      <button
+        type="button"
+        class="build-item-scope-toggle"
+        data-item-scope-tone="${escapeAttribute(tone)}"
+        data-item-scope="${escapeAttribute(normalizedScope)}"
+        aria-label="${escapeAttribute(`${title}: showing ${currentLabel.toLowerCase()}. Switch to ${nextLabel}.`)}"
+        title="Switch to ${escapeAttribute(nextLabel)}"
+        ${disabled ? "disabled" : ""}
+      >
+        <span>${escapeHtml(currentLabel)}</span>
+        <span class="build-item-scope-toggle-icon" aria-hidden="true">&#8644;</span>
+      </button>
+    `;
+  }
+
+  function renderRuneRecommendationScopeToggle({
+    title,
+    tone,
+    scope,
+    disabled,
+  }) {
+    const normalizedScope = normalizeRuneRecommendationScope(scope);
+    const isLaneOnly =
+      normalizedScope === LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE;
+    const currentLabel = isLaneOnly ? "Lane only" : "All enemies";
+    const nextLabel = isLaneOnly ? "all enemies" : "lane opponents only";
+
+    return `
+      <button
+        type="button"
+        class="build-item-scope-toggle build-rune-scope-toggle"
+        data-rune-scope-tone="${escapeAttribute(tone)}"
+        data-rune-scope="${escapeAttribute(normalizedScope)}"
+        aria-label="${escapeAttribute(`${title} runes: showing ${currentLabel.toLowerCase()}. Switch to ${nextLabel}.`)}"
+        title="Switch to ${escapeAttribute(nextLabel)}"
+        ${disabled ? "disabled" : ""}
+      >
+        <span>${escapeHtml(currentLabel)}</span>
+        <span class="build-item-scope-toggle-icon" aria-hidden="true">&#8644;</span>
+      </button>
     `;
   }
 
@@ -666,9 +882,9 @@
     `;
   }
 
-  function renderCompactBootCard(boot, consensus) {
+  function renderCompactBootCard(boot) {
     return `
-      <article class="build-compact-boot-card ${getOptionHighlightClassName("build-compact-boot-card", boot)}${getRecommendationUnanimousClassName(consensus, "boots", boot)}">
+      <article class="build-compact-boot-card ${getOptionHighlightClassName("build-compact-boot-card", boot)}">
         <div class="build-compact-boot-card-top">
           <img
             src="${escapeAttribute(boot?.icon || "")}"
@@ -690,13 +906,13 @@
     `;
   }
 
-  function renderStartingItemSetCard(itemSet, consensus) {
+  function renderStartingItemSetCard(itemSet) {
     const selections = Array.isArray(itemSet?.selections)
       ? itemSet.selections.filter((selection) => selection && (selection.icon || selection.name))
       : [];
 
     return `
-      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", itemSet)}${getRecommendationUnanimousClassName(consensus, "startingItems", itemSet)}">
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", itemSet)}">
         <div class="build-spell-card-top">
           <div class="build-spell-card-icons">
             ${selections.map((selection) => renderStartingItemSelection(selection)).join("")}
@@ -715,11 +931,11 @@
     `;
   }
 
-  function renderSkillPriorityCard(skill, consensus) {
+  function renderSkillPriorityCard(skill) {
     const abilityKey = normalizeAbilityKey(skill?.abilityKey);
 
     return `
-      <article class="build-skill-priority-card ${getOptionHighlightClassName("build-skill-priority-card", skill)}${getRecommendationUnanimousClassName(consensus, "skillPriority", skill)}">
+      <article class="build-skill-priority-card ${getOptionHighlightClassName("build-skill-priority-card", skill)}">
         <div class="build-skill-priority-card-top">
           <span class="build-skill-priority-ability" aria-hidden="true">
             ${escapeHtml(abilityKey || "?")}
@@ -752,7 +968,7 @@
     `;
   }
 
-  function renderSpellSetCard(spellSet, consensus) {
+  function renderSpellSetCard(spellSet) {
     const selections = normalizeSpellSelections(spellSet).filter(
       (selection) => selection && (selection.icon || selection.name),
     );
@@ -762,7 +978,7 @@
     };
 
     return `
-      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", normalizedSpellSet)}${getRecommendationUnanimousClassName(consensus, "spells", normalizedSpellSet)}">
+      <article class="build-spell-card ${getOptionHighlightClassName("build-spell-card", normalizedSpellSet)}">
         <div class="build-spell-card-top">
           <div class="build-spell-card-icons">
             ${selections.map((selection) => renderSpellSelection(selection)).join("")}
@@ -930,31 +1146,6 @@
     }
 
     return "";
-  }
-
-  function getRecommendationUnanimousClassName(consensus, category, option) {
-    const choiceKey = getBuildChoiceKey(category, option);
-    const representedTones = [];
-    if (option?.isHighestWin) {
-      representedTones.push("highestWin");
-    }
-    if (option?.isMostPicked) {
-      representedTones.push("mostPicked");
-    }
-
-    return representedTones.length > 0 &&
-      representedTones.every((tone) =>
-        isBuildChoiceUnanimous(consensus, category, tone, choiceKey),
-      )
-      ? " build-choice--unanimous"
-      : "";
-  }
-
-  function getDirectUnanimousClassName(consensus, category, tone, choiceKey) {
-    const normalizedTone = tone === "highest-win" ? "highestWin" : "mostPicked";
-    return isBuildChoiceUnanimous(consensus, category, normalizedTone, choiceKey)
-      ? " build-choice--unanimous"
-      : "";
   }
 
   function buildRecommendedRunePages(highestWinPage, mostPickedPage) {
@@ -1195,38 +1386,6 @@
     return 3;
   }
 
-  function getRecommendationTitle(option) {
-    if (option?.isHighestWin && option?.isMostPicked) {
-      return "Highest Win + Most Picked";
-    }
-
-    if (option?.isHighestWin) {
-      return "Highest Win";
-    }
-
-    if (option?.isMostPicked) {
-      return "Most Picked";
-    }
-
-    return "Recommendation";
-  }
-
-  function getRecommendationTone(option) {
-    if (option?.isHighestWin && option?.isMostPicked) {
-      return "both";
-    }
-
-    if (option?.isHighestWin) {
-      return "highest-win";
-    }
-
-    if (option?.isMostPicked) {
-      return "most-picked";
-    }
-
-    return "boots";
-  }
-
   function renderInlineNotes(notes) {
     if (!Array.isArray(notes) || notes.length === 0) {
       return "";
@@ -1239,10 +1398,10 @@
     `;
   }
 
-  function renderBuildSummaryGlobalNote(consensus) {
+  function renderBuildSummaryGlobalNote() {
     return `
       <p class="build-summary-global-note">
-        Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available.${consensus?.complete ? " Gold borders mark choices shared by Lane Weight ×1–×4." : ""}
+        Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available.
       </p>
     `;
   }
@@ -1282,9 +1441,15 @@
   return {
     BUILD_SUGGESTION_TABS,
     DEFAULT_BUILD_SUGGESTION_TAB,
+    DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+    DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+    LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE,
+    LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE,
     getRecommendedRunePages: buildRecommendedRunePages,
     getRunePageRecommendationKey: getRecommendationPageKey,
     normalizeBuildSuggestionTab,
+    normalizeItemRecommendationScope,
+    normalizeRuneRecommendationScope,
     renderBuildSuggestionBody,
   };
 });

@@ -497,7 +497,7 @@ test("POST /suggest returns single-role results and legacy compatibility fields"
   );
 });
 
-test("POST /suggest applies the selected weight to Bottom-Support lane opponents", async (t) => {
+test("POST /suggest applies the selected weight to explicitly assigned Bottom-Support opponents", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (
       url.pathname === "/mega/" &&
@@ -542,14 +542,17 @@ test("POST /suggest applies the selected weight to Bottom-Support lane opponents
     rankFilter: "emerald_plus",
     laneOpponentWeight: 2,
     role: "support",
-    enemies: ["Vi", "Jhin"],
+    enemies: [
+      { champion: "Vi", role: "support" },
+      { champion: "Jhin", role: "jungle" },
+    ],
   });
 
   assert.equal(response.status, 200);
   assert.equal(response.body.resultsByRole.support[0].candidate, "Lulu");
-  assert.ok(Math.abs(response.body.resultsByRole.support[0].counterScore - 22 / 3) < 1e-12);
-  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedAgency - 22 / 3) < 1e-12);
-  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedWinRate - 160 / 3) < 1e-12);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].counterScore - 14 / 3) < 1e-12);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedAgency - 14 / 3) < 1e-12);
+  assert.ok(Math.abs(response.body.resultsByRole.support[0].projectedWinRate - 140 / 3) < 1e-12);
   assert.deepEqual(response.body.requestStats, {
     lolalyticsLiveAccessCount: 3,
     lolalyticsLifetimeAccessCount: 3,
@@ -1180,7 +1183,6 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
       role: "middle",
     },
     enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
-    laneOpponentWeight: 3,
     rankFilter: "emerald_plus",
   });
   assert.equal(firstResponse.body.summary.enemyCount, 5);
@@ -1317,12 +1319,12 @@ test("POST /build-suggestions composes rendered rune histograms without complete
   );
   assert.equal(response.body.runes.highestWinPage.isComposite, true);
   assert.equal(response.body.runes.mostPickedPage.isComposite, true);
-  assert.equal(response.body.runes.highestWinPage.games, 55);
+  assert.equal(response.body.runes.highestWinPage.games, 18);
   assert.equal(Math.round(response.body.runes.highestWinPage.pickRate), 18);
   assert.equal(Math.round(response.body.runes.mostPickedPage.pickRate), 61);
 });
 
-test("POST /build-suggestions applies the selected weight to all same-lane enemies", async (t) => {
+test("POST /build-suggestions aggregates every enemy once and retains lane-only items", async (t) => {
   const { baseUrl } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -1348,7 +1350,6 @@ test("POST /build-suggestions applies the selected weight to all same-lane enemi
 
   const response = await postJson(baseUrl, "/build-suggestions", {
     rankFilter: "emerald_plus",
-    laneOpponentWeight: 2,
     ally: {
       champion: "Yorick",
       role: "top",
@@ -1358,13 +1359,15 @@ test("POST /build-suggestions applies the selected weight to all same-lane enemi
 
   assert.equal(response.status, 200);
   assert.equal(response.body.summary.sourceMatchups, 4);
-  assert.equal(response.body.runes.mostPickedPage.games, 428);
-  assert.equal(response.body.runes.highestWinPage.games, 128);
-  assert.equal(response.body.spells.mostPickedSet.games, 560);
-  assert.equal(response.body.spells.highestWinSet.games, 140);
+  assert.equal(response.body.runes.mostPickedPage.games, 244);
+  assert.equal(response.body.runes.highestWinPage.games, 73);
+  assert.equal(response.body.spells.mostPickedSet.games, 320);
+  assert.equal(response.body.spells.highestWinSet.games, 80);
+  assert.equal(response.body.items.laneOpponents.mostPickedBuild.selections.length, 5);
+  assert.equal(response.body.items.laneOpponents.highestWinBuild.selections.length, 5);
 });
 
-test("POST /build-suggestions accepts partial enemy teams", async (t) => {
+test("POST /build-suggestions accepts partial teams and scopes builds to the assigned enemy lane", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
       return jsonResponse(
@@ -1389,10 +1392,22 @@ test("POST /build-suggestions accepts partial enemy teams", async (t) => {
       champion: "Ahri",
       role: "mid",
     },
-    enemies: ["Leona"],
+    enemies: [
+      {
+        champion: "Leona",
+        role: "support",
+      },
+    ],
   });
 
   assert.equal(response.status, 200);
+  assert.deepEqual(response.body.request.enemies, [
+    {
+      champion: "Leona",
+      championKey: "89",
+      role: "support",
+    },
+  ]);
   assert.equal(response.body.summary.enemyCount, 1);
   assert.equal(response.body.summary.sourceMatchups, 1);
   assertBuildSuggestionSectionsArePopulated(response.body);
@@ -1402,7 +1417,56 @@ test("POST /build-suggestions accepts partial enemy teams", async (t) => {
   });
   assert.equal(mockServer.countRequests("/mega/"), 1);
   assert.equal(
-    mockServer.countRequests((entry) => entry.pathname.startsWith("/lol/ahri/vs/")),
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "rune" &&
+        new URLSearchParams(entry.search).get("lane") === "middle" &&
+        new URLSearchParams(entry.search).get("vslane") === "support",
+    ),
+    1,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname.startsWith("/lol/ahri/vs/") &&
+        new URLSearchParams(entry.search).get("lane") === "middle" &&
+        new URLSearchParams(entry.search).get("vslane") === "support",
+    ),
+    1,
+  );
+
+  const reassignedResponse = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: [
+      {
+        champion: "Leona",
+        role: "mid",
+      },
+    ],
+  });
+
+  assert.equal(reassignedResponse.status, 200);
+  assert.equal(reassignedResponse.body.request.enemies[0].role, "middle");
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("ep") === "rune" &&
+        new URLSearchParams(entry.search).get("vslane") === "middle",
+    ),
+    1,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname.startsWith("/lol/ahri/vs/") &&
+        new URLSearchParams(entry.search).get("vslane") === "middle",
+    ),
     1,
   );
 });

@@ -31,6 +31,21 @@ test("buildSuggestionCacheKey changes when an ally role assignment changes", () 
   assert.notEqual(before, after);
 });
 
+test("buildSuggestionCacheKey changes when an enemy role assignment changes", () => {
+  const before = buildSuggestionCacheKey(
+    "emerald_plus",
+    [],
+    [{ key: 103, role: "middle" }],
+  );
+  const after = buildSuggestionCacheKey(
+    "emerald_plus",
+    [],
+    [{ key: 103, role: "support" }],
+  );
+
+  assert.notEqual(before, after);
+});
+
 test("buildSuggestionCacheKey changes when a champion is added or removed", () => {
   const before = buildSuggestionCacheKey("all", [{ key: 22, role: "" }], [{ key: 40 }]);
   const after = buildSuggestionCacheKey("all", [{ key: 22, role: "" }], [{ key: 40 }, { key: 89 }]);

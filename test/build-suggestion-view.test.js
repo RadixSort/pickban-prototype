@@ -4,13 +4,16 @@ const assert = require("node:assert/strict");
 const {
   BUILD_SUGGESTION_TABS,
   DEFAULT_BUILD_SUGGESTION_TAB,
+  DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+  DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+  LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE,
+  LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE,
   getRecommendedRunePages,
   getRunePageRecommendationKey,
+  normalizeItemRecommendationScope,
+  normalizeRuneRecommendationScope,
   renderBuildSuggestionBody,
 } = require("../public/build-suggestion-view.js");
-const {
-  buildBuildSuggestionConsensus,
-} = require("../public/build-suggestion-consensus.js");
 
 function createOption({
   id,
@@ -35,7 +38,7 @@ function createOption({
 }
 
 function createPayload() {
-  return {
+  const payload = {
     totalGames: 2000,
     runes: {
       overview: {
@@ -421,6 +424,75 @@ function createPayload() {
       ],
     },
   };
+
+  payload.items.laneOpponents = {
+    highestWinBuild: {
+      selections: [
+        {
+          itemId: 6657,
+          icon: "6657.webp",
+          name: "Rod of Ages",
+          slotIndex: 1,
+          winRate: 58.2,
+          pickRate: 21.4,
+          purchaseMinute: 12,
+        },
+      ],
+    },
+    mostPickedBuild: {
+      selections: [
+        {
+          itemId: 6653,
+          icon: "6653.webp",
+          name: "Liandry's Torment",
+          slotIndex: 1,
+          winRate: 54.1,
+          pickRate: 63.7,
+          purchaseMinute: 11,
+        },
+      ],
+    },
+  };
+
+  const laneOpponentSlotGroups = structuredClone(payload.runes.overview.slotGroups);
+  const laneOpponentKeystone = laneOpponentSlotGroups
+    .find((group) => group.key === "primary-slot-0")
+    .options.find((option) => option.id === 8008);
+  laneOpponentKeystone.winRate = 61.1;
+  laneOpponentKeystone.pickRate = 22.2;
+  laneOpponentKeystone.games = 222;
+  payload.runes.laneOpponents = {
+    overview: {
+      slotGroups: laneOpponentSlotGroups,
+    },
+    highestWinPage: {
+      ...structuredClone(payload.runes.highestWinPage),
+      winRate: 61.7,
+      pickRate: 24.8,
+      games: 248,
+      secondaryStyle: {
+        styleId: 8300,
+        name: "Inspiration",
+        icon: "inspiration.png",
+      },
+    },
+    mostPickedPage: {
+      ...structuredClone(payload.runes.mostPickedPage),
+      winRate: 58.4,
+      pickRate: 82.6,
+      games: 826,
+      primaryStyle: {
+        styleId: 8200,
+        name: "Sorcery",
+        icon: "sorcery.png",
+      },
+    },
+    highlighting: {
+      notes: [],
+    },
+  };
+
+  return payload;
 }
 
 function countMatches(value, pattern) {
@@ -433,6 +505,16 @@ test("build suggestion tabs expose only the summary layout", () => {
     ["summary"],
   );
   assert.equal(DEFAULT_BUILD_SUGGESTION_TAB, "summary");
+  assert.equal(DEFAULT_ITEM_RECOMMENDATION_SCOPE, "allEnemies");
+  assert.equal(DEFAULT_RUNE_RECOMMENDATION_SCOPE, "allEnemies");
+  assert.equal(
+    normalizeItemRecommendationScope("laneOpponents"),
+    LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE,
+  );
+  assert.equal(
+    normalizeRuneRecommendationScope("laneOpponents"),
+    LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE,
+  );
 });
 
 test("renderBuildSuggestionBody renders named, ordered runes and items with their stats", () => {
@@ -450,6 +532,9 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.match(html, /Skill Max Priority/);
   assert.match(html, /Boots/);
   assert.match(html, /Items/);
+  assert.equal(countMatches(html, /data-item-scope-tone=/g), 2);
+  assert.equal(countMatches(html, /data-rune-scope-tone=/g), 2);
+  assert.equal(countMatches(html, />All enemies</g), 4);
   assert.match(
     html,
     /Rune pages combine individual matchup stats; other highest-win and most-picked build options are shown when available\./,
@@ -527,17 +612,44 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Overview/);
 });
 
-test("renderBuildSuggestionBody gives unanimous choices a golden-border class", () => {
+test("item recommendation scopes switch Highest Win and Most Picked independently", () => {
   const payload = createPayload();
-  const consensus = buildBuildSuggestionConsensus(
-    Object.fromEntries([1, 2, 3, 4].map((weight) => [weight, createPayload()])),
-  );
   const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {
-    consensus,
+    itemRecommendationScopes: {
+      highestWin: LANE_OPPONENT_ITEM_RECOMMENDATION_SCOPE,
+      mostPicked: DEFAULT_ITEM_RECOMMENDATION_SCOPE,
+    },
   });
 
-  assert.match(html, /Gold borders mark choices shared by Lane Weight ×1–×4./);
-  assert.ok(countMatches(html, /build-choice--unanimous/g) >= 8);
+  assert.match(html, />Lane only</);
+  assert.match(html, />All enemies</);
+  assert.match(html, /Highest Win[\s\S]*Rod of Ages/);
+  assert.doesNotMatch(html, /Luden(?:&#39;|')?s Companion/);
+  assert.match(html, /Most Picked[\s\S]*Malignance/);
+  assert.doesNotMatch(html, /Liandry(?:&#39;|')s Torment/);
+});
+
+test("rune recommendation scopes switch Highest Win and Most Picked independently", () => {
+  const payload = createPayload();
+  const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {
+    runeRecommendationScopes: {
+      highestWin: LANE_OPPONENT_RUNE_RECOMMENDATION_SCOPE,
+      mostPicked: DEFAULT_RUNE_RECOMMENDATION_SCOPE,
+    },
+  });
+
+  assert.match(
+    html,
+    /Highest Win runes: showing lane only\. Switch to all enemies\./,
+  );
+  assert.match(
+    html,
+    /Most Picked runes: showing all enemies\. Switch to lane opponents only\./,
+  );
+  assert.match(html, /Highest Win[\s\S]*Precision \+ Inspiration[\s\S]*61\.7%/);
+  assert.match(html, /Highest Win[\s\S]*Lethal Tempo[\s\S]*61\.1% win/);
+  assert.match(html, /Most Picked[\s\S]*Precision \+ Resolve[\s\S]*50\.1%/);
+  assert.doesNotMatch(html, /Sorcery \+ Resolve/);
 });
 
 test("renderBuildSuggestionBody repairs cached spell placeholder names and icons", () => {
@@ -582,7 +694,7 @@ test("renderBuildSuggestionBody marks sub-50 item build win rates as low win", (
   assert.match(html, /Malignance[\s\S]*48\.3% win/);
 });
 
-test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and boot highlights", () => {
+test("renderBuildSuggestionBody keeps rune scope columns while collapsing other overlaps", () => {
   const payload = createPayload();
   payload.runes.mostPickedPage = payload.runes.highestWinPage;
   payload.spells.mostPickedSet = payload.spells.highestWinSet;
@@ -612,17 +724,17 @@ test("renderBuildSuggestionBody collapses overlapping rune, summoner spell, and 
 
   const html = renderBuildSuggestionBody(payload);
 
-  assert.match(html, /build-summary-board--single/);
+  assert.doesNotMatch(html, /build-summary-board--single/);
   assert.match(
     html,
     /build-spell-card-list build-spell-card-list--spells build-spell-card-list--single/,
   );
-  assert.equal(countMatches(html, /Precision \+ Sorcery/g), 1);
+  assert.equal(countMatches(html, /Precision \+ Sorcery/g), 2);
   assert.equal(countMatches(html, /Flash \+ Ignite/g), 1);
   assert.equal(countMatches(html, /Dark Seal \+ Refillable Potion/g), 1);
   assert.equal(countMatches(html, /Sorcerer(?:&#39;|')s Shoes/g), 2);
   assert.match(html, /Highest Win \+ Most Picked/);
-  assert.equal(countMatches(html, /Import Runes/g), 1);
+  assert.equal(countMatches(html, /Import Runes/g), 2);
   assert.doesNotMatch(html, /Mercury(?:&#39;|')s Treads/);
 });
 

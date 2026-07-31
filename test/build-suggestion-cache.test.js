@@ -33,10 +33,34 @@ test("buildBuildSuggestionCacheKey changes when the ally role changes", () => {
   assert.notEqual(before, after);
 });
 
-test("buildBuildSuggestionCacheKey changes with the lane opponent weight", () => {
+test("buildBuildSuggestionCacheKey changes when an enemy role changes", () => {
   const ally = { key: 103, role: "middle" };
-  const before = buildBuildSuggestionCacheKey("emerald_plus", ally, [{ key: 89 }], 1);
-  const after = buildBuildSuggestionCacheKey("emerald_plus", ally, [{ key: 89 }], 4);
+  const before = buildBuildSuggestionCacheKey(
+    "emerald_plus",
+    ally,
+    [{ key: 89, role: "support" }],
+  );
+  const after = buildBuildSuggestionCacheKey(
+    "emerald_plus",
+    ally,
+    [{ key: 89, role: "top" }],
+  );
+
+  assert.notEqual(before, after);
+});
+
+test("buildBuildSuggestionCacheKey changes with the filtered enemy subset", () => {
+  const ally = { key: 103, role: "middle" };
+  const before = buildBuildSuggestionCacheKey(
+    "emerald_plus",
+    ally,
+    [{ key: 89 }],
+  );
+  const after = buildBuildSuggestionCacheKey(
+    "emerald_plus",
+    ally,
+    [{ key: 89 }, { key: 222 }],
+  );
 
   assert.notEqual(before, after);
 });

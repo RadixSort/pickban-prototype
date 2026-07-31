@@ -402,7 +402,15 @@ app.post("/draft-outlook", withLolalyticsRequestStats(async (request, response) 
           championKey: String(champion.key),
           role,
         })),
-        enemies: normalizedRequest.enemies.map((champion) => champion.name),
+        enemies: normalizedRequest.enemies.map((champion) =>
+          champion.role
+            ? {
+                champion: champion.name,
+                championKey: String(champion.key),
+                role: champion.role,
+              }
+            : champion.name,
+        ),
         rankFilter: normalizedRequest.rankFilter,
       },
       summary: {
@@ -465,7 +473,6 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
       role: normalizedRequest.ally.role,
     },
     normalizedRequest.enemies,
-    normalizedRequest.laneOpponentWeight,
   );
   const cachedPayload = buildSuggestionQueryCache.get(aggregatedCacheKey);
   if (cachedPayload) {
@@ -510,7 +517,6 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
   );
   const aggregatedResults = buildBuildSuggestionResults({
     matchupBuilds: matchupBuildsWithLaneLikelihoods,
-    laneOpponentWeight: normalizedRequest.laneOpponentWeight,
   });
   const payload = buildBuildSuggestionsPayload({
     normalizedRequest,
@@ -542,18 +548,29 @@ function attachCachedLaneOpponentLikelihoods(matchupBuilds, normalizedRequest) {
 
   return matchupBuilds.map((matchup) => {
     const championKey = String(matchup?.enemyChampionKey || "");
+    const requestedEnemyRole = normalizeRole(
+      normalizedRequest?.enemies?.find(
+        (enemyChampion) => String(enemyChampion?.key || "") === championKey,
+      )?.role,
+    );
     const laneOpponentLikelihood = getCachedLaneOpponentLikelihood(
       championKey,
       role,
       rankFilter,
     );
+    const normalizedMatchup = requestedEnemyRole
+      ? {
+          ...matchup,
+          enemyRole: requestedEnemyRole,
+        }
+      : matchup;
 
     return laneOpponentLikelihood != null
       ? {
-          ...matchup,
+          ...normalizedMatchup,
           laneOpponentLikelihood,
         }
-      : matchup;
+      : normalizedMatchup;
   });
 }
 
@@ -816,6 +833,7 @@ function buildSuggestionOutcome({
       getTargetRoleRowResult(targetRoleRowResults, targetRole),
       {
         opponentChampionKey: String(enemyChampion?.key || ""),
+        opponentRole: normalizeRole(enemyChampion?.role),
         laneOpponentLikelihood: getCachedLaneOpponentLikelihood(
           enemyChampion?.key,
           targetRole,
@@ -959,6 +977,7 @@ function buildDraftCounterResult(ally, enemyChampion, targetRoleRowResult) {
     value: {
       row,
       targetRole: ally.role,
+      opponentRole: normalizeRole(enemyChampion?.role),
     },
   };
 }
@@ -1290,10 +1309,12 @@ async function fetchNormalizedMatchupBuildData({
   rankFilter,
   role,
 }) {
+  const enemyRole = normalizeRole(enemyChampion?.role);
   const cacheKey = buildMatchupBuildCacheKey(
     allyChampion.key,
     role,
     enemyChampion.key,
+    enemyRole,
     rankFilter,
   );
   const cached = normalizedMatchupBuildCache.get(cacheKey);
@@ -1308,6 +1329,7 @@ async function fetchNormalizedMatchupBuildData({
       label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rune build data`,
       rankFilter,
       role,
+      enemyRole,
     }),
     fetchLolalyticsRenderedBuildPage({
       allySlug: allyChampion.id,
@@ -1315,6 +1337,7 @@ async function fetchNormalizedMatchupBuildData({
       label: `${allyChampion.name} vs ${enemyChampion.name} ${role} rendered build page`,
       rankFilter,
       role,
+      enemyRole,
     }).then(
       (html) => ({
         status: "fulfilled",
@@ -1330,11 +1353,13 @@ async function fetchNormalizedMatchupBuildData({
     allyChampion,
     enemyChampion,
     role,
+    enemyRole,
   });
   const renderedBuildData = parseOptionalRenderedBuildPage(renderedPageResult, {
     allyChampion,
     enemyChampion,
     role,
+    enemyRole,
   });
   const mergedBuildData = mergeParsedBuildSources(parsedBuildData, renderedBuildData);
 
@@ -1348,6 +1373,7 @@ async function fetchLolalyticsRuneBuildData({
   label,
   rankFilter,
   role,
+  enemyRole = null,
 }) {
   const searchParams = buildLolalyticsSearchParams(
     {
@@ -1365,6 +1391,9 @@ async function fetchLolalyticsRuneBuildData({
   if (enemySlug) {
     searchParams.set("vs", enemySlug);
   }
+  if (enemyRole) {
+    searchParams.set("vslane", enemyRole);
+  }
 
   return fetchLolalyticsMegaJson(`?${searchParams.toString()}`, label);
 }
@@ -1375,6 +1404,7 @@ async function fetchLolalyticsRenderedBuildPage({
   label,
   rankFilter,
   role,
+  enemyRole = null,
 }) {
   const searchParams = buildLolalyticsSearchParams(
     {
@@ -1386,6 +1416,9 @@ async function fetchLolalyticsRenderedBuildPage({
   const path = enemySlug
     ? `/lol/${allySlug}/vs/${enemySlug}/build/`
     : `/lol/${allySlug}/build/`;
+  if (enemyRole) {
+    searchParams.set("vslane", enemyRole);
+  }
 
   return fetchLolalyticsText(
     `${LOLALYTICS_BASE_URL}${path}?${searchParams.toString()}`,
@@ -1397,6 +1430,7 @@ function parseOptionalRenderedBuildPage(result, {
   allyChampion,
   enemyChampion = null,
   role,
+  enemyRole = null,
 }) {
   if (result?.status !== "fulfilled") {
     return null;
@@ -1408,6 +1442,7 @@ function parseOptionalRenderedBuildPage(result, {
       enemyChampionKey: enemyChampion?.key,
       fetchedAt: new Date().toISOString(),
       role,
+      enemyRole,
     });
   } catch (_error) {
     return null;
@@ -1473,6 +1508,7 @@ function parseLolalyticsRuneBuildPayload(payload, {
   allyChampion,
   enemyChampion = null,
   role,
+  enemyRole = null,
 }) {
   try {
     return parseLolalyticsRuneBuildData(payload, {
@@ -1480,6 +1516,7 @@ function parseLolalyticsRuneBuildPayload(payload, {
       enemyChampionKey: enemyChampion?.key,
       fetchedAt: new Date().toISOString(),
       role,
+      enemyRole,
     });
   } catch (error) {
     const matchupLabel = enemyChampion
@@ -1621,11 +1658,18 @@ function buildLolalyticsRequestStats() {
   };
 }
 
-function buildMatchupBuildCacheKey(allyChampionKey, role, enemyChampionKey, rankFilter) {
+function buildMatchupBuildCacheKey(
+  allyChampionKey,
+  role,
+  enemyChampionKey,
+  enemyRole,
+  rankFilter,
+) {
   return [
     `ally=${String(allyChampionKey || "")}`,
     `role=${String(role || "")}`,
     `enemy=${String(enemyChampionKey || "")}`,
+    `enemyRole=${String(enemyRole || "")}`,
     `rank=${String(rankFilter || "")}`,
     `patch=${PATCH_WINDOW}`,
   ].join("|");

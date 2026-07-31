@@ -126,6 +126,27 @@ test("buildDraftProjection applies lane weighting only to counter agency", () =>
   assert.equal(projection.allyWinRate, 52);
 });
 
+test("buildDraftProjection prefers an explicit enemy role over the inferred row role", () => {
+  const projection = buildDraftProjection({
+    enemyCounterResults: [
+      {
+        status: "fulfilled",
+        value: {
+          targetRole: "support",
+          opponentRole: "support",
+          row: {
+            opponentRole: "jungle",
+            winRate: 48,
+            value: 10,
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(projection.counterScore, 10);
+});
+
 test("hasUsableDraftProjection rejects empty projections", () => {
   const projection = buildDraftProjection();
 

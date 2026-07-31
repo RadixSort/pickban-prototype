@@ -49,7 +49,7 @@ test("normalizeSuggestRequest composes shared /suggest normalization helpers", (
     {
       rankFilter: "Diamond+",
       allies: [{ champion: "Nami", role: "sup" }],
-      enemies: ["Blitzcrank"],
+      enemies: [{ champion: "Blitzcrank", role: "support" }],
       laneOpponentWeight: "2",
     },
     {
@@ -73,8 +73,11 @@ test("normalizeSuggestRequest composes shared /suggest normalization helpers", (
     [{ champion: "Nami", role: "support" }],
   );
   assert.deepEqual(
-    normalized.enemies.map((champion) => champion.name),
-    ["Blitzcrank"],
+    normalized.enemies.map((champion) => ({
+      champion: champion.name,
+      role: champion.role,
+    })),
+    [{ champion: "Blitzcrank", role: "support" }],
   );
   assert.deepEqual(normalized.targetRoles, ["top", "jungle", "middle", "bottom"]);
 
@@ -209,10 +212,12 @@ test("build suggestion helper payloads preserve request and summary fields", () 
         role: "support",
       },
       enemies: [
-        championByName.get(normalizeChampionName("Blitzcrank")),
+        {
+          ...championByName.get(normalizeChampionName("Blitzcrank")),
+          role: "support",
+        },
         championByName.get(normalizeChampionName("Leona")),
       ],
-      laneOpponentWeight: 2,
       rankFilter: "emerald_plus",
     },
     aggregatedResults: {
@@ -286,8 +291,16 @@ test("build suggestion helper payloads preserve request and summary fields", () 
       championKey: String(championByName.get(normalizeChampionName("Nami")).key),
       role: "support",
     },
-    enemies: ["Blitzcrank", "Leona"],
-    laneOpponentWeight: 2,
+    enemies: [
+      {
+        champion: "Blitzcrank",
+        championKey: String(
+          championByName.get(normalizeChampionName("Blitzcrank")).key,
+        ),
+        role: "support",
+      },
+      "Leona",
+    ],
     rankFilter: "emerald_plus",
   });
   assert.deepEqual(payload.summary, {

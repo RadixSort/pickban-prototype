@@ -5,6 +5,7 @@ const {
   DEFAULT_TARGET_ROLE,
   getAutoAssignableAllyRole,
   getAssignableAllyRoleOptions,
+  getMostLikelyRole,
   getRoleLabel,
   getSuggestedAllyRole,
   getUnassignedTargetRoleOptions,
@@ -112,6 +113,18 @@ test("getSuggestedAllyRole skips taken roles even when they are the most likely 
     ),
     "middle",
   );
+});
+
+test("getMostLikelyRole reports a champion's highest Lolalytics lane share", () => {
+  assert.equal(
+    getMostLikelyRole({
+      bottom: { lanePercent: 12.4, pickRate: 1.7, winRate: 50.1 },
+      middle: { lanePercent: 74.8, pickRate: 8.5, winRate: 51.2 },
+      support: { lanePercent: 12.8, pickRate: 1.9, winRate: 49.8 },
+    }),
+    "middle",
+  );
+  assert.equal(getMostLikelyRole(null), null);
 });
 
 test("resolveAllyRoleAssignment swaps roles when a taken lane is selected", () => {

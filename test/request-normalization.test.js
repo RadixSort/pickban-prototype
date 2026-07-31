@@ -71,6 +71,44 @@ test("normalizeChampionSelections rejects invalid enemy payloads and unknown cha
   );
 });
 
+test("normalizeChampionSelections accepts and normalizes enemy lane assignments", () => {
+  const enemies = normalizeChampionSelections(
+    [
+      { champion: "Ahri", role: "mid" },
+      { name: "Jarvan IV", lane: "jg" },
+      "Leona",
+    ],
+    {
+      championByName,
+      maxCount: 5,
+      label: "enemies",
+      normalizeRole,
+    },
+  );
+
+  assert.deepEqual(enemies, [
+    { ...championByName.get("ahri"), role: "middle" },
+    { ...championByName.get("jarvaniv"), role: "jungle" },
+    championByName.get("leona"),
+  ]);
+});
+
+test("normalizeChampionSelections rejects invalid enemy lane assignments", () => {
+  assert.throws(
+    () =>
+      normalizeChampionSelections(
+        [{ champion: "Ahri", role: "river" }],
+        {
+          championByName,
+          maxCount: 5,
+          label: "enemies",
+          normalizeRole,
+        },
+      ),
+    /invalid champion role/i,
+  );
+});
+
 test("normalizeRequestedRankFilter defaults and rejects unsupported rank filters", () => {
   assert.equal(
     normalizeRequestedRankFilter("", {
@@ -130,7 +168,6 @@ test("normalizeBuildSuggestionRequest validates ally role, partial enemies, and 
   const request = normalizeBuildSuggestionRequest(
     {
       rankFilter: "diamond+",
-      laneOpponentWeight: 2,
       ally: {
         champion: "Ahri",
         role: "mid",
@@ -152,7 +189,6 @@ test("normalizeBuildSuggestionRequest validates ally role, partial enemies, and 
       role: "middle",
     },
     enemies: [championByName.get("jarvaniv")],
-    laneOpponentWeight: 2,
   });
 });
 
