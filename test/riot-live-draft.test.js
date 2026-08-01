@@ -58,6 +58,7 @@ test("buildLiveDraftImport returns visible champ-select picks and the local assi
   });
 
   assert.equal(payload.status, "active");
+  assert.equal(payload.source, "champ_select");
   assert.equal(payload.assignedRole, "support");
   assert.deepEqual(payload.queue, {
     id: 420,

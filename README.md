@@ -2,7 +2,7 @@
 
 PickBan is a local League of Legends draft helper. It compares live Lolalytics data for first picks, open allied roles, full-draft outlooks, and matchup-aware builds.
 
-It can also import a displayed rune page into the League Client. On Windows, optional Auto Import reads supported live champion selects and shows five lane-specific ban recommendations during bans.
+It can also import a displayed rune page into the League Client. On Windows, optional Auto Import reads supported champion selects, shows five lane-specific ban recommendations during bans, and follows the draft into the live game.
 
 This project is independent and is not affiliated with or endorsed by Riot Games or Lolalytics.
 
@@ -35,7 +35,7 @@ Rune recommendations combine the pick frequency and win rate of each rune elemen
 
 Automatic enemy lanes are unique: when champions compete for a lane, the higher Lolalytics lane probability gets priority and the other champion moves to its next available lane. Use an enemy's lane selector to correct a speculative assignment; manual choices remain fixed and may intentionally duplicate another enemy lane. Bottom and Support count as the same lane for champion-suggestion weighting. If none of the selected enemies occupies the target lane, PickBan still assigns the most likely off-meta enemy as one lane opponent.
 
-Fetching champion recommendations preloads and caches every Lane Weight variant for the current draft. Build recommendations incorporate each included enemy matchup once and request the matchup for the lane assigned to that enemy. The **Counter Filter** stays pinned above the build content while the popup scrolls. Every enemy portrait starts selected; clicking a portrait removes or restores that enemy, while removing the final selected portrait or clicking the always-visible red **×** restores the complete selection. The current content and scroll position remain anchored while an uncached filter subset loads. The × is disabled while all enemies are already included. Filtered subsets are cached for the page session. Each of the **Highest Win** and **Most Picked** rune pages and item paths can independently switch between **All enemies** and **Lane only**; a Support or Bot lane-only recommendation combines both enemy Support and Bot matchups.
+Fetching champion recommendations preloads and caches every Lane Weight variant for the current draft. Build recommendations incorporate each included enemy matchup once and request the matchup for the lane assigned to that enemy. The **Counter Filter** stays pinned above the build content while the popup scrolls. Its team build-gold scoreboard remains visible as **0.0k : 0.0k** without live data and shows full allied and enemy team totals in one-decimal thousands (for example, **21.3k**) when a complete live snapshot is available; the sticky background fades immediately before the allied value. Clicking a portrait removes or restores that enemy, while removing the final selected portrait or clicking the always-visible red **×** restores the complete selection. The current content and scroll position remain anchored while an uncached filter subset loads. The × is disabled while all enemies are already included. Filtered subsets are cached for the page session. Each of the **Highest Win** and **Most Picked** rune pages and item paths can independently switch between **All enemies** and **Lane only**; a Support or Bot lane-only recommendation combines both enemy Support and Bot matchups.
 
 ### Scores
 
@@ -49,21 +49,31 @@ Draft-aware rows highlight the top ten projected win rates. Yellow marks picks t
 
 ## Auto Import (Windows)
 
-Click **Auto Import** after the League Client enters Practice Tool, Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select. PickBan imports visible picks, allied hovers, and known ally roles while leaving manual selections alone unless live data conflicts.
+Click **Auto Import** in the main toolbar or at the top of the build popup after the League Client enters Practice Tool, Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select, or while a game in one of those queues is already running. Both controls share the same import state. PickBan imports visible picks, allied hovers, and known ally roles during champion select.
 
 During bans, the app shows one recommendation for each role:
 
 1. Counter the allied hover in that role when valid counter data exists.
 2. Otherwise use the role's highest eligible PBI champion.
 
-Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end or champion select becomes unavailable. Unsupported queues and connection loss disable Auto Import without clearing manual picks.
+Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end.
+
+Once the game starts, Auto Import replaces speculative enemy champions and lanes with the live participants. It then refreshes every player's inventory once per minute, totals the shop value of the held items, and assigns deterministic global ranks from 1 (highest build value) downward. Build recommendation portraits show those rank numbers for the selected ally and every enemy.
+
+The build popup also applies a live Counter Filter on each minute refresh:
+
+- Before the selected ally owns a Legendary item, only enemies in that ally's lane are included. Bot and Support share one lane. Selling every Legendary item returns to this lane filter on the next minute refresh without hiding build-gold ranks.
+- After the selected ally owns a Legendary item, only enemies ranked 1 through 5 in global build gold are included.
+- If no enemy is in that global top five, all enemies are included.
+
+Changing portraits manually overrides the automatic subset until the next minute refresh, when the live filter is applied again. The best-ranked enemy keeps a yellow portrait border even when that enemy is filtered out. Unsupported queues and terminal gameflow phases disable Auto Import without clearing manual picks. A live-data handoff or transient in-game read failure keeps Auto Import active and retries.
 
 ## Requirements and limits
 
 - **Build**: one ally with a role and one to five enemies.
 - **Import Runes**: active League champion select and an editable saved rune page. PickBan overwrites the first editable page; it never creates or deletes pages.
 - **Who will win?**: five allies with five unique roles; enemies are optional.
-- **Auto Import**: Windows League Client in a supported champion-select queue.
+- **Auto Import**: Windows League Client in a supported champion-select or live-game queue.
 - Live suggestions require working Lolalytics responses.
 
 ## Stop the app
@@ -77,7 +87,7 @@ Use the red **X** in the app or press `Ctrl+C` in the terminal.
 - **Data fails to load**: check internet access and retry; Lolalytics may be unavailable or may have changed its response format.
 - **Build is disabled**: assign the ally a role and add an enemy. Hover the button for the missing requirement.
 - **Rune import fails**: confirm League is in champion select and the account has an editable saved rune page.
-- **Auto Import is disabled**: confirm the local Windows client is in Practice Tool or a supported draft or ranked queue.
+- **Auto Import is disabled**: confirm the local Windows client is in Practice Tool or a supported draft, ranked champion select, or live game. During the game-start handoff, leave Auto Import on while PickBan retries the local live-data endpoint.
 
 ## Development
 

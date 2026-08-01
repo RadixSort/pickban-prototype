@@ -6,6 +6,11 @@ const {
 } = globalThis.buildSuggestionCache;
 const {
   filterBuildCounterEnemies,
+  formatBuildGoldThousands,
+  resolveBuildGoldScoreboard,
+  resolveAutomaticBuildCounterFilter,
+  resolveHighestRankedEnemyChampionKey,
+  resolveVisibleBuildGoldRank,
   toggleBuildCounterFilter,
 } = globalThis.buildCounterFilter;
 const {
@@ -107,7 +112,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.7.2",
+  version: "0.8.0",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -116,6 +121,7 @@ const state = {
   rankFilter: DEFAULT_RANK_FILTER,
   laneOpponentWeight: getDefaultLaneOpponentWeightForRole(DEFAULT_TARGET_ROLE),
   autoImport: createInitialAutoImportState(),
+  liveGame: createInitialLiveGameState(),
   banSuggestions: createInitialBanSuggestionState(),
   banSuggestionRequestsByKey: {},
   buildSuggestionCache: {},
@@ -126,6 +132,7 @@ const state = {
 };
 
 const AUTO_IMPORT_POLL_INTERVAL_MS = 3000;
+const LIVE_GAME_POLL_INTERVAL_MS = 60 * 1000;
 
 const limits = {
   allies: 5,
@@ -178,8 +185,15 @@ const draftProjectionWrap = document.getElementById("draft-projection-wrap");
 const versionText = document.getElementById("app-version");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
+const buildSuggestionAutoImportButton = document.getElementById(
+  "build-suggestion-auto-import",
+);
 const buildSuggestionCloseButton = document.getElementById("build-suggestion-close");
+const buildSuggestionChampionPortrait = document.getElementById(
+  "build-suggestion-champion-portrait",
+);
 const buildSuggestionChampionIcon = document.getElementById("build-suggestion-champion-icon");
+const buildSuggestionChampionRank = document.getElementById("build-suggestion-champion-rank");
 const buildSuggestionTitle = document.getElementById("build-suggestion-title");
 const buildSuggestionMeta = document.getElementById("build-suggestion-meta");
 const buildSuggestionCounterFilter = document.getElementById(
@@ -221,6 +235,7 @@ async function initialize() {
   resultsRoleSelect.addEventListener("change", handleResultsRoleChange);
   fetchButton.addEventListener("click", handleFetchSuggestions);
   autoImportButton.addEventListener("click", handleStartAutoImport);
+  buildSuggestionAutoImportButton.addEventListener("click", handleStartAutoImport);
   resetButton.addEventListener("click", handleResetDraft);
   closeButton.addEventListener("click", handleCloseApp);
   sortSelect.addEventListener("change", handleSkillLevelChange);
@@ -655,12 +670,24 @@ function createInitialBuildSuggestionModalState() {
     requestKey: "",
     enemies: [],
     selectedCounterChampionKeys: [],
+    counterFilterMode: "automatic",
+    automaticFilterApplied: false,
+    automaticFilterReason: "",
     payload: null,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
     itemRecommendationScopes: createDefaultItemRecommendationScopes(),
     runeRecommendationScopes: createDefaultRuneRecommendationScopes(),
     runeImportStatesByPageKey: {},
+  };
+}
+
+function createInitialLiveGameState() {
+  return {
+    active: false,
+    complete: false,
+    playersByChampionKey: {},
+    sessionId: "",
   };
 }
 
@@ -685,13 +712,17 @@ function createInitialAutoImportState() {
     assignedRole: "",
     champSelectPhase: "unknown",
     lastAppliedSignature: "",
+    lastPollStartedAt: 0,
     lastUpdatedAt: "",
     message: "",
     polling: false,
     queueDescription: "",
     requested: false,
+    source: "",
     sessionId: "",
     status: "idle",
+    statusPolling: false,
+    statusTimerId: null,
     timerId: null,
     unavailableChampionKeys: [],
   };
@@ -699,6 +730,77 @@ function createInitialAutoImportState() {
 
 function canOpenBuildSuggestionsForAlly(ally) {
   return Boolean(ally?.role) && state.enemies.length > 0 && !isInteractionLocked();
+}
+
+function getLiveGameParticipant(selection) {
+  const championKey = selection?.key == null ? "" : String(selection.key);
+  return championKey ? state.liveGame.playersByChampionKey[championKey] || null : null;
+}
+
+function mergeLiveGameParticipant(selection) {
+  const liveParticipant = getLiveGameParticipant(selection);
+  if (!liveParticipant) {
+    return selection;
+  }
+
+  return {
+    ...selection,
+    ...liveParticipant,
+    role: normalizeRole(liveParticipant.role) || selection.role || "",
+  };
+}
+
+function mergeLiveGameParticipantForAutomaticFilter(selection) {
+  const liveParticipant = getLiveGameParticipant(selection);
+  if (!liveParticipant) {
+    return selection;
+  }
+
+  return {
+    ...selection,
+    ...liveParticipant,
+    role: normalizeRole(liveParticipant.role) || "",
+  };
+}
+
+function normalizeBuildGoldRank(value) {
+  const rank = Number(value);
+  return Number.isInteger(rank) && rank >= 1 && rank <= 10 ? rank : null;
+}
+
+function getVisibleBuildGoldRank(participant) {
+  return resolveVisibleBuildGoldRank(participant?.buildGoldRank, {
+    liveGameActive: state.liveGame.active,
+    liveGameComplete: state.liveGame.complete,
+  });
+}
+
+function formatLiveBuildGold(value) {
+  const gold = Number(value);
+  return Number.isFinite(gold) && gold >= 0
+    ? `${Math.round(gold).toLocaleString()} gold in items`
+    : "";
+}
+
+function getBuildGoldRankDescription(participant) {
+  const rank = getVisibleBuildGoldRank(participant);
+  if (!rank) {
+    return "";
+  }
+
+  const goldDescription = formatLiveBuildGold(participant?.buildGold);
+  return `Build gold rank ${rank}${goldDescription ? `, ${goldDescription}` : ""}`;
+}
+
+function resolveCurrentAutomaticBuildCounterFilter(ally, enemies) {
+  return resolveAutomaticBuildCounterFilter(
+    mergeLiveGameParticipantForAutomaticFilter(ally),
+    enemies.map(mergeLiveGameParticipantForAutomaticFilter),
+    {
+      liveGameActive: state.liveGame.active,
+      liveGameComplete: state.liveGame.complete,
+    },
+  );
 }
 
 function getBuildSuggestionAction(ally) {
@@ -722,17 +824,27 @@ async function handleOpenBuildSuggestions(allyId) {
 
   const rankFilter = state.rankFilter;
   const enemySelections = state.enemies.map((enemy) => ({ ...enemy }));
-  const cacheKey = buildBuildSuggestionCacheKey(rankFilter, ally, enemySelections);
-  const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
+  const automaticFilter = resolveCurrentAutomaticBuildCounterFilter(ally, enemySelections);
+  const initiallyFilteredEnemies = filterBuildCounterEnemies(
+    enemySelections.map(mergeLiveGameParticipant),
+    automaticFilter.selectedChampionKeys,
+  );
+  const cacheKey = initiallyFilteredEnemies.length > 0
+    ? buildBuildSuggestionCacheKey(rankFilter, ally, initiallyFilteredEnemies)
+    : "";
+  const cachedPayload = cacheKey ? state.buildSuggestionCache[cacheKey] || null : null;
 
   state.buildSuggestionModal = {
     open: true,
-    loading: !cachedPayload,
+    loading: Boolean(cacheKey && !cachedPayload),
     allyId,
     cacheKey,
-    requestKey: cacheKey,
+    requestKey: cacheKey || "live-filter-empty",
     enemies: enemySelections,
-    selectedCounterChampionKeys: enemySelections.map((enemy) => String(enemy.key)),
+    selectedCounterChampionKeys: automaticFilter.selectedChampionKeys,
+    counterFilterMode: "automatic",
+    automaticFilterApplied: automaticFilter.applied,
+    automaticFilterReason: automaticFilter.reason,
     payload: cachedPayload,
     error: "",
     activeTab: DEFAULT_BUILD_SUGGESTION_TAB,
@@ -745,8 +857,9 @@ async function handleOpenBuildSuggestions(allyId) {
 }
 
 function getBuildSuggestionFilteredEnemies(modalState = state.buildSuggestionModal) {
+  const enemies = modalState.enemies.map(mergeLiveGameParticipant);
   return filterBuildCounterEnemies(
-    modalState.enemies,
+    enemies,
     modalState.selectedCounterChampionKeys,
   );
 }
@@ -759,6 +872,16 @@ async function loadBuildSuggestionForCurrentCounterFilter() {
   }
 
   const enemySelections = getBuildSuggestionFilteredEnemies(modalState);
+  if (enemySelections.length === 0) {
+    modalState.cacheKey = "";
+    modalState.requestKey = "live-filter-empty";
+    modalState.payload = null;
+    modalState.loading = false;
+    modalState.error = "";
+    renderBuildSuggestionModal();
+    return;
+  }
+
   const cacheKey = buildBuildSuggestionCacheKey(
     state.rankFilter,
     ally,
@@ -852,6 +975,9 @@ function handleBuildCounterFilterToggle(championKey) {
     championKey,
     modalState.enemies.map((enemy) => enemy.key),
   );
+  modalState.counterFilterMode = "manual";
+  modalState.automaticFilterApplied = false;
+  modalState.automaticFilterReason = "";
   void loadBuildSuggestionForCurrentCounterFilter();
 }
 
@@ -862,6 +988,9 @@ function handleClearBuildCounterFilter() {
 
   state.buildSuggestionModal.selectedCounterChampionKeys =
     state.buildSuggestionModal.enemies.map((enemy) => String(enemy.key));
+  state.buildSuggestionModal.counterFilterMode = "manual";
+  state.buildSuggestionModal.automaticFilterApplied = false;
+  state.buildSuggestionModal.automaticFilterReason = "";
   void loadBuildSuggestionForCurrentCounterFilter();
 }
 
@@ -1263,7 +1392,7 @@ async function handleStartAutoImport() {
   state.autoImport.requested = true;
   state.autoImport.active = false;
   state.autoImport.status = "connecting";
-  state.autoImport.message = "Looking for an active League pick/ban phase...";
+  state.autoImport.message = "Looking for an active League draft or game...";
   state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
     active: false,
   });
@@ -1279,6 +1408,7 @@ async function pollLiveDraftImport() {
     return;
   }
 
+  state.autoImport.lastPollStartedAt = Date.now();
   state.autoImport.polling = true;
   renderActionState();
   renderAutoImportBanner();
@@ -1306,6 +1436,51 @@ async function pollLiveDraftImport() {
   }
 }
 
+async function pollLiveDraftStatus() {
+  if (
+    !state.autoImport.requested ||
+    state.autoImport.source !== "live_game" ||
+    state.autoImport.statusPolling ||
+    state.shuttingDown
+  ) {
+    return;
+  }
+
+  state.autoImport.statusPolling = true;
+  let requiresFullPoll = false;
+
+  try {
+    const response = await fetch("/live-draft?statusOnly=1", {
+      cache: "no-store",
+    });
+    const payload = await parseJsonSafely(response);
+    const nextSessionId = typeof payload?.sessionId === "string" ? payload.sessionId : "";
+    const sessionChanged = Boolean(
+      nextSessionId &&
+      state.autoImport.sessionId &&
+      nextSessionId !== state.autoImport.sessionId,
+    );
+
+    requiresFullPoll =
+      !response.ok ||
+      payload?.status !== "active" ||
+      payload?.source !== "live_game" ||
+      sessionChanged;
+  } catch (_error) {
+    requiresFullPoll = true;
+  } finally {
+    state.autoImport.statusPolling = false;
+  }
+
+  if (requiresFullPoll && !state.autoImport.polling) {
+    stopAutoImportPolling();
+    await pollLiveDraftImport();
+    return;
+  }
+
+  scheduleAutoImportStatusPoll();
+}
+
 async function handleLiveDraftImportPayload(payload) {
   if (!payload || payload.status !== "active") {
     disableAutoImport(
@@ -1318,6 +1493,11 @@ async function handleLiveDraftImportPayload(payload) {
   state.autoImport.requested = true;
   state.autoImport.active = true;
   state.autoImport.status = "active";
+  state.autoImport.source = ["champ_select", "transition", "live_game"].includes(
+    payload.source,
+  )
+    ? payload.source
+    : "champ_select";
   state.autoImport.message =
     payload.message || "Champion picks are automatically being imported from the League Client.";
   state.autoImport.champSelectPhase =
@@ -1334,12 +1514,30 @@ async function handleLiveDraftImportPayload(payload) {
     typeof payload.fetchedAt === "string" ? payload.fetchedAt : new Date().toISOString();
   syncBanSuggestions();
 
-  const nextSignature = buildLiveDraftSignature(payload);
   let shouldRefreshSuggestions = false;
-  if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
-    shouldRefreshSuggestions = applyLiveDraftImport(payload);
+  if (state.autoImport.source === "transition") {
+    return;
+  }
+
+  const nextSignature = buildLiveDraftSignature(payload);
+  if (state.autoImport.source === "live_game") {
+    applyLiveGameState(payload);
+    shouldRefreshSuggestions = applyLiveDraftImport(payload, {
+      preserveMissing: !state.liveGame.complete,
+      source: "live_game",
+    });
     state.autoImport.lastAppliedSignature = nextSignature;
     await ensureEnemyRoleAssignmentsLoaded();
+    await refreshBuildSuggestionAutomaticFilter();
+  } else {
+    state.liveGame = createInitialLiveGameState();
+    if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
+      shouldRefreshSuggestions = applyLiveDraftImport(payload, {
+        source: "champ_select",
+      });
+      state.autoImport.lastAppliedSignature = nextSignature;
+      await ensureEnemyRoleAssignmentsLoaded();
+    }
   }
 
   const assignedRole = getAutoImportSuggestedRole();
@@ -1354,6 +1552,70 @@ async function handleLiveDraftImportPayload(payload) {
   if (shouldRefreshSuggestions) {
     await refreshAutoImportSuggestions();
   }
+}
+
+function applyLiveGameState(payload) {
+  const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId : "";
+  const sameSession =
+    state.liveGame.active &&
+    (!sessionId || !state.liveGame.sessionId || sessionId === state.liveGame.sessionId);
+  const complete = payload?.liveGame?.complete === true;
+  const playersByChampionKey =
+    sameSession && !complete ? { ...state.liveGame.playersByChampionKey } : {};
+  const participants = [
+    ...(Array.isArray(payload?.allies) ? payload.allies : []),
+    ...(Array.isArray(payload?.enemies) ? payload.enemies : []),
+  ];
+
+  participants.forEach((participant) => {
+    const championKey = String(participant?.championKey || "");
+    if (!championKey || !state.championByKey.has(championKey)) {
+      return;
+    }
+
+    const buildGold = Number(participant?.buildGold);
+    const role = normalizeRole(participant?.role) || "";
+    playersByChampionKey[championKey] = {
+      role,
+      buildGold: Number.isFinite(buildGold) && buildGold >= 0 ? buildGold : 0,
+      buildGoldRank: normalizeBuildGoldRank(participant?.buildGoldRank),
+      hasCompletedFirstItem:
+        typeof participant?.hasCompletedFirstItem === "boolean"
+          ? participant.hasCompletedFirstItem
+          : null,
+    };
+  });
+
+  state.liveGame = {
+    active: true,
+    complete,
+    playersByChampionKey,
+    sessionId,
+  };
+}
+
+async function refreshBuildSuggestionAutomaticFilter() {
+  const modalState = state.buildSuggestionModal;
+  if (!modalState.open) {
+    return;
+  }
+
+  const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
+  if (!ally) {
+    closeBuildSuggestionModal();
+    return;
+  }
+
+  modalState.enemies = state.enemies.map((enemy) => ({ ...enemy }));
+  const automaticFilter = resolveCurrentAutomaticBuildCounterFilter(
+    ally,
+    modalState.enemies,
+  );
+  modalState.selectedCounterChampionKeys = automaticFilter.selectedChampionKeys;
+  modalState.counterFilterMode = "automatic";
+  modalState.automaticFilterApplied = automaticFilter.applied;
+  modalState.automaticFilterReason = automaticFilter.reason;
+  await loadBuildSuggestionForCurrentCounterFilter();
 }
 
 function syncBanSuggestions() {
@@ -1428,20 +1690,38 @@ async function refreshAutoImportSuggestions() {
   await handleFetchSuggestions();
 }
 
-function applyLiveDraftImport(payload) {
+function applyLiveDraftImport(
+  payload,
+  { preserveMissing = false, source = "champ_select" } = {},
+) {
   const previousSuggestionCacheKey = getCurrentSuggestionCacheKey();
-  const liveAllies = normalizeLiveDraftSelections(payload.allies, "allies");
-  const liveEnemies = normalizeLiveDraftSelections(payload.enemies, "enemies");
+  const liveAllies = normalizeLiveDraftSelections(payload.allies, "allies", { source });
+  const liveEnemies = normalizeLiveDraftSelections(payload.enemies, "enemies", { source });
   const liveAllyKeys = new Set(liveAllies.map((ally) => String(ally.key)));
   const liveEnemyKeys = new Set(liveEnemies.map((enemy) => String(enemy.key)));
 
-  state.allies = removeStaleAutoImportedSelections(state.allies, liveAllies);
-  state.enemies = removeStaleAutoImportedSelections(state.enemies, liveEnemies);
-  state.enemies = state.enemies.filter((enemy) => !liveAllyKeys.has(String(enemy.key)));
-  state.allies = state.allies.filter((ally) => !liveEnemyKeys.has(String(ally.key)));
+  if (source === "live_game" && !preserveMissing) {
+    state.allies = reconcileCompleteLiveGameSelections(
+      state.allies,
+      liveAllies,
+      "allies",
+    );
+    state.enemies = reconcileCompleteLiveGameSelections(
+      state.enemies,
+      liveEnemies,
+      "enemies",
+    );
+  } else {
+    if (!preserveMissing) {
+      state.allies = removeStaleAutoImportedSelections(state.allies, liveAllies);
+      state.enemies = removeStaleAutoImportedSelections(state.enemies, liveEnemies);
+    }
+    state.enemies = state.enemies.filter((enemy) => !liveAllyKeys.has(String(enemy.key)));
+    state.allies = state.allies.filter((ally) => !liveEnemyKeys.has(String(ally.key)));
 
-  liveAllies.forEach((liveAlly) => upsertLiveDraftSelection("allies", liveAlly, liveAllyKeys));
-  liveEnemies.forEach((liveEnemy) => upsertLiveDraftSelection("enemies", liveEnemy, liveEnemyKeys));
+    liveAllies.forEach((liveAlly) => upsertLiveDraftSelection("allies", liveAlly, liveAllyKeys));
+    liveEnemies.forEach((liveEnemy) => upsertLiveDraftSelection("enemies", liveEnemy, liveEnemyKeys));
+  }
 
   state.allies = trimLiveDraftSelectionsToLimit(state.allies, limits.allies);
   state.enemies = trimLiveDraftSelectionsToLimit(state.enemies, limits.enemies);
@@ -1455,7 +1735,7 @@ function applyLiveDraftImport(payload) {
   return didChangeSuggestionDraft;
 }
 
-function normalizeLiveDraftSelections(entries = [], side) {
+function normalizeLiveDraftSelections(entries = [], side, { source = "champ_select" } = {}) {
   if (!Array.isArray(entries)) {
     return [];
   }
@@ -1479,8 +1759,22 @@ function normalizeLiveDraftSelections(entries = [], side) {
       liveCellId: Number.isInteger(Number(entry.cellId)) ? Number(entry.cellId) : null,
       temporary: Boolean(entry.temporary),
     });
-    if (side === "allies") {
+    if (side === "allies" || source === "live_game") {
       selection.role = normalizeRole(entry.role) || "";
+    }
+    if (source === "live_game") {
+      const buildGold = Number(entry.buildGold);
+      selection.liveGameParticipant = true;
+      selection.buildGold = Number.isFinite(buildGold) && buildGold >= 0 ? buildGold : 0;
+      selection.buildGoldRank = normalizeBuildGoldRank(entry.buildGoldRank);
+      selection.hasCompletedFirstItem =
+        typeof entry.hasCompletedFirstItem === "boolean"
+          ? entry.hasCompletedFirstItem
+          : null;
+      if (side === "enemies") {
+        selection.roleAutoImported = Boolean(selection.role);
+        selection.roleManuallyAssigned = false;
+      }
     }
 
     seenChampionKeys.add(championKey);
@@ -1488,6 +1782,26 @@ function normalizeLiveDraftSelections(entries = [], side) {
   }
 
   return selections;
+}
+
+function reconcileCompleteLiveGameSelections(currentSelections, liveSelections, side) {
+  return liveSelections.map((liveSelection) => {
+    const currentSelection = currentSelections.find(
+      (selection) => String(selection.key) === String(liveSelection.key),
+    );
+    const nextSelection = {
+      ...(currentSelection || {}),
+      ...liveSelection,
+    };
+
+    nextSelection.role = liveSelection.role || currentSelection?.role || "";
+    if (side === "enemies") {
+      nextSelection.roleAutoImported = Boolean(liveSelection.role);
+      nextSelection.roleManuallyAssigned = false;
+    }
+
+    return nextSelection;
+  });
 }
 
 function removeStaleAutoImportedSelections(selections, liveSelections) {
@@ -1530,6 +1844,10 @@ function upsertLiveDraftSelection(side, liveSelection, liveChampionKeys) {
     };
     if (side === "allies") {
       nextSelection.role = liveSelection.role || selections[targetIndex].role || "";
+    } else if (liveSelection.liveGameParticipant) {
+      nextSelection.role = liveSelection.role || selections[targetIndex].role || "";
+      nextSelection.roleAutoImported = Boolean(liveSelection.role);
+      nextSelection.roleManuallyAssigned = false;
     } else {
       const isSameChampion =
         String(selections[targetIndex].key) === String(liveSelection.key);
@@ -1618,10 +1936,20 @@ function disableAutoImport(reason, message) {
   state.autoImport.assignedRole = "";
   state.autoImport.champSelectPhase = "unknown";
   state.autoImport.queueDescription = "";
+  state.autoImport.source = "";
   state.autoImport.lastUpdatedAt = new Date().toISOString();
   state.autoImport.reason = reason;
   state.autoImport.sessionId = "";
   state.autoImport.unavailableChampionKeys = [];
+  state.liveGame = createInitialLiveGameState();
+  if (state.buildSuggestionModal.open) {
+    state.buildSuggestionModal.selectedCounterChampionKeys =
+      state.buildSuggestionModal.enemies.map((enemy) => String(enemy.key));
+    state.buildSuggestionModal.counterFilterMode = "automatic";
+    state.buildSuggestionModal.automaticFilterApplied = false;
+    state.buildSuggestionModal.automaticFilterReason = "";
+    void loadBuildSuggestionForCurrentCounterFilter();
+  }
   state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
     active: false,
   });
@@ -1634,19 +1962,56 @@ function scheduleAutoImportPoll() {
     return;
   }
 
-  state.autoImport.timerId = window.setTimeout(
-    pollLiveDraftImport,
+  const useLiveGameCadence =
+    state.autoImport.source === "live_game" && state.liveGame.complete;
+  const intervalMs = useLiveGameCadence
+    ? LIVE_GAME_POLL_INTERVAL_MS
+    : AUTO_IMPORT_POLL_INTERVAL_MS;
+  const elapsedMs =
+    useLiveGameCadence && state.autoImport.lastPollStartedAt > 0
+      ? Date.now() - state.autoImport.lastPollStartedAt
+      : 0;
+  const delayMs = Math.max(250, intervalMs - elapsedMs);
+
+  state.autoImport.timerId = window.setTimeout(pollLiveDraftImport, delayMs);
+  if (useLiveGameCadence) {
+    scheduleAutoImportStatusPoll();
+  }
+}
+
+function scheduleAutoImportStatusPoll() {
+  stopAutoImportStatusPolling();
+  if (
+    !state.autoImport.requested ||
+    state.autoImport.source !== "live_game" ||
+    !state.liveGame.complete ||
+    state.shuttingDown
+  ) {
+    return;
+  }
+
+  state.autoImport.statusTimerId = window.setTimeout(
+    pollLiveDraftStatus,
     AUTO_IMPORT_POLL_INTERVAL_MS,
   );
 }
 
 function stopAutoImportPolling() {
-  if (!state.autoImport.timerId) {
+  if (state.autoImport.timerId) {
+    window.clearTimeout(state.autoImport.timerId);
+    state.autoImport.timerId = null;
+  }
+
+  stopAutoImportStatusPolling();
+}
+
+function stopAutoImportStatusPolling() {
+  if (!state.autoImport.statusTimerId) {
     return;
   }
 
-  window.clearTimeout(state.autoImport.timerId);
-  state.autoImport.timerId = null;
+  window.clearTimeout(state.autoImport.statusTimerId);
+  state.autoImport.statusTimerId = null;
 }
 
 async function handleFetchSuggestions() {
@@ -1914,6 +2279,7 @@ function handleGlobalKeydown(event) {
 function renderBuildSuggestionModal() {
   const modalState = state.buildSuggestionModal;
   const ally = state.allies.find((entry) => entry.id === modalState.allyId) || null;
+  const displayedAlly = ally ? mergeLiveGameParticipant(ally) : null;
   const payload = modalState.payload;
   const preservedScrollTop = modalState.open ? buildSuggestionScroll.scrollTop : 0;
 
@@ -1921,9 +2287,12 @@ function renderBuildSuggestionModal() {
   buildSuggestionModal.setAttribute("aria-hidden", modalState.open ? "false" : "true");
 
   if (!modalState.open) {
-    buildSuggestionChampionIcon.classList.add("hidden");
+    buildSuggestionChampionPortrait.classList.add("hidden");
     buildSuggestionChampionIcon.src = "";
     buildSuggestionChampionIcon.alt = "";
+    buildSuggestionChampionPortrait.removeAttribute("title");
+    buildSuggestionChampionRank.classList.add("hidden");
+    buildSuggestionChampionRank.textContent = "";
     buildSuggestionTitle.textContent = "Build Recommendation";
     buildSuggestionMeta.textContent = "";
     buildSuggestionTabs.innerHTML = "";
@@ -1936,14 +2305,30 @@ function renderBuildSuggestionModal() {
     return;
   }
 
-  if (ally?.icon) {
-    buildSuggestionChampionIcon.classList.remove("hidden");
-    buildSuggestionChampionIcon.src = ally.icon;
-    buildSuggestionChampionIcon.alt = ally.name;
+  if (displayedAlly?.icon) {
+    const rank = getVisibleBuildGoldRank(displayedAlly);
+    const rankDescription = getBuildGoldRankDescription(displayedAlly);
+    buildSuggestionChampionPortrait.classList.remove("hidden");
+    buildSuggestionChampionIcon.src = displayedAlly.icon;
+    buildSuggestionChampionIcon.alt = rankDescription
+      ? `${displayedAlly.name}, ${rankDescription}`
+      : displayedAlly.name;
+    if (rank) {
+      buildSuggestionChampionRank.classList.remove("hidden");
+      buildSuggestionChampionRank.textContent = String(rank);
+      buildSuggestionChampionPortrait.title = rankDescription;
+    } else {
+      buildSuggestionChampionRank.classList.add("hidden");
+      buildSuggestionChampionRank.textContent = "";
+      buildSuggestionChampionPortrait.removeAttribute("title");
+    }
   } else {
-    buildSuggestionChampionIcon.classList.add("hidden");
+    buildSuggestionChampionPortrait.classList.add("hidden");
     buildSuggestionChampionIcon.src = "";
     buildSuggestionChampionIcon.alt = "";
+    buildSuggestionChampionPortrait.removeAttribute("title");
+    buildSuggestionChampionRank.classList.add("hidden");
+    buildSuggestionChampionRank.textContent = "";
   }
 
   buildSuggestionTitle.textContent = ally
@@ -2011,7 +2396,27 @@ function renderBuildSuggestionModal() {
 }
 
 function renderBuildSuggestionCounterFilter(modalState) {
-  const enemies = Array.isArray(modalState.enemies) ? modalState.enemies : [];
+  const enemies = Array.isArray(modalState.enemies)
+    ? modalState.enemies.map(mergeLiveGameParticipant)
+    : [];
+  const liveGameVisibility = {
+    liveGameActive: state.liveGame.active,
+    liveGameComplete: state.liveGame.complete,
+  };
+  const highestRankedEnemyChampionKey = resolveHighestRankedEnemyChampionKey(
+    enemies,
+    liveGameVisibility,
+  );
+  const buildGoldScoreboard = resolveBuildGoldScoreboard(
+    state.allies.map(getLiveGameParticipant),
+    state.enemies.map(getLiveGameParticipant),
+    liveGameVisibility,
+  );
+  const allyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.allyBuildGold);
+  const enemyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.enemyBuildGold);
+  const buildGoldScoreboardLabel = buildGoldScoreboard.available
+    ? `Team build gold. Allies ${allyBuildGold}; enemies ${enemyBuildGold}.`
+    : `Team build gold unavailable. Allies ${allyBuildGold}; enemies ${enemyBuildGold}.`;
   const availableKeys = enemies.map((enemy) => String(enemy.key));
   const availableKeySet = new Set(availableKeys);
   const selectedKeys = new Set(
@@ -2024,44 +2429,95 @@ function renderBuildSuggestionCounterFilter(modalState) {
   }
   const hasExcludedEnemies = selectedKeys.size < availableKeys.length;
 
+  const automaticLabel =
+    modalState.counterFilterMode === "automatic" && modalState.automaticFilterApplied
+      ? modalState.automaticFilterReason === "lane"
+        ? " · Live Lane"
+        : modalState.automaticFilterReason === "top-half"
+          ? " · Live Top 5"
+          : ""
+      : "";
+
   buildSuggestionCounterFilter.innerHTML = `
-    <span class="build-counter-filter-label">Counter Filter</span>
+    <span class="build-counter-filter-label">Counter Filter${automaticLabel}</span>
     <div class="build-counter-filter-controls">
-      ${enemies
-        .map((enemy) => {
-          const championKey = String(enemy.key);
-          const isSelected = selectedKeys.has(championKey);
-          const isExcluded = !isSelected;
-          return `
-            <button
-              type="button"
-              class="build-counter-filter-champion${
-                isSelected ? " build-counter-filter-champion--selected" : ""
-              }${isExcluded ? " build-counter-filter-champion--excluded" : ""}"
-              data-counter-champion-key="${escapeHtml(championKey)}"
-              aria-label="${
-                isSelected
-                  ? `Remove ${escapeHtml(enemy.name)} from the counter filter`
-                  : `Add ${escapeHtml(enemy.name)} to the counter filter`
-              }"
-              aria-pressed="${isSelected ? "true" : "false"}"
-              title="${escapeHtml(enemy.name)}"
-              ${state.shuttingDown ? "disabled" : ""}
-            >
-              <img src="${enemy.icon}" alt="" width="36" height="36" />
-            </button>
-          `;
-        })
-        .join("")}
-      <button
-        type="button"
-        class="build-counter-filter-clear"
-        aria-label="Clear counter filter"
-        title="${hasExcludedEnemies ? "Include all enemies" : "All enemies are already included"}"
-        ${state.shuttingDown || !hasExcludedEnemies ? "disabled" : ""}
+      <div
+        class="build-team-gold-scoreboard${
+          buildGoldScoreboard.available ? "" : " build-team-gold-scoreboard--unavailable"
+        }"
+        role="group"
+        aria-label="${escapeHtml(buildGoldScoreboardLabel)}"
+        title="${escapeHtml(buildGoldScoreboardLabel)}"
       >
-        <span aria-hidden="true">&times;</span>
-      </button>
+        <span class="build-team-gold-coin" aria-hidden="true">G</span>
+        <span class="build-team-gold-value build-team-gold-value--ally" aria-hidden="true">${allyBuildGold}</span>
+        <span class="build-team-gold-divider" aria-hidden="true">:</span>
+        <span class="build-team-gold-value build-team-gold-value--enemy" aria-hidden="true">${enemyBuildGold}</span>
+      </div>
+      <div class="build-counter-filter-portraits">
+        ${enemies
+          .map((enemy) => {
+            const championKey = String(enemy.key);
+            const isSelected = selectedKeys.has(championKey);
+            const isExcluded = !isSelected;
+            const rank = getVisibleBuildGoldRank(enemy);
+            const rankDescription = getBuildGoldRankDescription(enemy);
+            const isHighestRankedEnemy =
+              championKey === highestRankedEnemyChampionKey;
+            const highestRankedEnemyDescription = isHighestRankedEnemy
+              ? "Highest enemy build gold"
+              : "";
+            const buildGoldDescription = [
+              rankDescription,
+              highestRankedEnemyDescription,
+            ].filter(Boolean).join(". ");
+            const toggleDescription = isSelected
+              ? `Remove ${enemy.name} from the counter filter`
+              : `Add ${enemy.name} to the counter filter`;
+            return `
+              <button
+                type="button"
+                class="build-counter-filter-champion${
+                  isSelected ? " build-counter-filter-champion--selected" : ""
+                }${isExcluded ? " build-counter-filter-champion--excluded" : ""}${
+                  isHighestRankedEnemy
+                    ? " build-counter-filter-champion--highest-build-gold"
+                    : ""
+                }"
+                data-counter-champion-key="${escapeHtml(championKey)}"
+                aria-label="${escapeHtml(
+                  buildGoldDescription
+                    ? `${toggleDescription}. ${buildGoldDescription}`
+                    : toggleDescription,
+                )}"
+                aria-pressed="${isSelected ? "true" : "false"}"
+                title="${escapeHtml(
+                  [enemy.name, rankDescription, highestRankedEnemyDescription]
+                    .filter(Boolean)
+                    .join(" · "),
+                )}"
+                ${state.shuttingDown ? "disabled" : ""}
+              >
+                <img src="${enemy.icon}" alt="" width="36" height="36" />
+                ${
+                  rank
+                    ? `<span class="build-gold-rank-badge" aria-hidden="true">${rank}</span>`
+                    : ""
+                }
+              </button>
+            `;
+          })
+          .join("")}
+        <button
+          type="button"
+          class="build-counter-filter-clear"
+          aria-label="Clear counter filter"
+          title="${hasExcludedEnemies ? "Include all enemies" : "All enemies are already included"}"
+          ${state.shuttingDown || !hasExcludedEnemies ? "disabled" : ""}
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
     </div>
   `;
 
@@ -3139,8 +3595,12 @@ function renderActionState() {
   fetchButton.textContent =
     state.loading ? "Fetching..." : isDraftProjectionMode ? "Who will win?" : "Fetch Suggestions";
 
-  autoImportButton.disabled = state.loading || state.shuttingDown || autoImportBusy;
-  autoImportButton.textContent = getAutoImportButtonText();
+  const autoImportDisabled = state.loading || state.shuttingDown || autoImportBusy;
+  const autoImportButtonText = getAutoImportButtonText();
+  [autoImportButton, buildSuggestionAutoImportButton].forEach((button) => {
+    button.disabled = autoImportDisabled;
+    button.textContent = autoImportButtonText;
+  });
   resetButton.disabled = state.loading || state.shuttingDown;
   closeButton.hidden = !state.canShutdown;
   closeButton.disabled = state.loading || state.shuttingDown || !state.shutdownToken;

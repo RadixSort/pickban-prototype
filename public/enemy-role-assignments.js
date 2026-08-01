@@ -47,7 +47,7 @@
 
     enemies.forEach((enemy, enemyIndex) => {
       const role = normalizeRole(enemy?.role ?? enemy?.lane ?? null);
-      if (enemy?.roleManuallyAssigned && role) {
+      if ((enemy?.roleManuallyAssigned || enemy?.roleAutoImported) && role) {
         reservedRoles.add(role);
         assignedRolesByEnemyIndex.set(enemyIndex, role);
         return;
@@ -136,6 +136,11 @@
         enemy?.roleManuallyAssigned &&
         normalizeRole(enemy?.role ?? enemy?.lane ?? null),
       ),
+      roleAutoImported: Boolean(
+        !enemy?.roleManuallyAssigned &&
+        enemy?.roleAutoImported &&
+        normalizeRole(enemy?.role ?? enemy?.lane ?? null),
+      ),
     }));
   }
 
@@ -161,6 +166,7 @@
 
     updatedEnemies[targetIndex].role = normalizedNextRole;
     updatedEnemies[targetIndex].roleManuallyAssigned = true;
+    updatedEnemies[targetIndex].roleAutoImported = false;
 
     return updatedEnemies;
   }

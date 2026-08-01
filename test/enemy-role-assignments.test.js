@@ -84,6 +84,32 @@ test("assignEnemyRoles preserves explicit user choices", () => {
   );
 });
 
+test("assignEnemyRoles preserves live-game roles while filling missing lanes", () => {
+  const assignments = assignEnemyRoles(
+    [
+      { id: "ahri", key: "103", role: "middle", roleAutoImported: true },
+      { id: "lux", key: "99", role: "", roleAutoImported: false },
+    ],
+    likelihoodsByChampionKey,
+  );
+
+  assert.equal(assignments[0].role, "middle");
+  assert.equal(assignments[0].roleAutoImported, true);
+  assert.equal(assignments[1].role, "support");
+});
+
+test("manual enemy role changes replace a live-game role reservation", () => {
+  const assignments = resolveEnemyRoleSelection(
+    [{ id: "ahri", key: "103", role: "middle", roleAutoImported: true }],
+    "ahri",
+    "support",
+  );
+
+  assert.equal(assignments[0].role, "support");
+  assert.equal(assignments[0].roleManuallyAssigned, true);
+  assert.equal(assignments[0].roleAutoImported, false);
+});
+
 test("resolveEnemyRoleSelection permits a manual duplicate without moving other enemies", () => {
   const assignments = resolveEnemyRoleSelection(
     [

@@ -192,14 +192,21 @@
         <header class="build-modal-header">
           <div class="build-modal-heading">
             <div class="build-modal-title-row">
-              <img
-                id="build-suggestion-champion-icon"
-                class="build-modal-icon hidden"
-                src=""
-                alt=""
-                width="48"
-                height="48"
-              />
+              <span id="build-suggestion-champion-portrait" class="build-modal-portrait hidden">
+                <img
+                  id="build-suggestion-champion-icon"
+                  class="build-modal-icon"
+                  src=""
+                  alt=""
+                  width="48"
+                  height="48"
+                />
+                <span
+                  id="build-suggestion-champion-rank"
+                  class="build-gold-rank-badge hidden"
+                  aria-hidden="true"
+                ></span>
+              </span>
               <div>
                 <p class="picker-kicker">Build Recommendation</p>
                 <h2 id="build-suggestion-title">Build Recommendation</h2>
@@ -208,6 +215,13 @@
             <p id="build-suggestion-meta" class="build-modal-meta"></p>
           </div>
           <div class="build-modal-actions">
+            <button
+              id="build-suggestion-auto-import"
+              class="secondary-button build-modal-auto-import"
+              type="button"
+            >
+              Auto Import
+            </button>
             <button
               id="build-suggestion-close"
               class="build-modal-close"
@@ -236,7 +250,7 @@
     </section>
 
     <div class="app-version-badge">
-      <span id="app-version">v0.7.2</span>
+      <span id="app-version">v0.8.0</span>
     </div>
 
     <script src="/roles.js" defer></script>

@@ -91,6 +91,18 @@ async function createMockLockfile(port) {
   return lockfilePath;
 }
 
+async function waitForMockRequestPaths(requests, expectedPaths, timeoutMs = 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (
+    !expectedPaths.every((expectedPath) =>
+      requests.some((request) => request.pathname === expectedPath),
+    ) &&
+    Date.now() < deadline
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 function createRuneImportPage() {
   return {
     primaryStyle: {
@@ -201,6 +213,7 @@ test("GET /live-draft returns normalized League champ-select picks", async (t) =
 
   assert.equal(response.status, 200);
   assert.equal(response.body.status, "active");
+  assert.equal(response.body.source, "champ_select");
   assert.equal(response.body.assignedRole, "middle");
   assert.deepEqual(response.body.queue, {
     id: 400,
@@ -232,6 +245,557 @@ test("GET /live-draft returns normalized League champ-select picks", async (t) =
   assert.equal(
     riotClient.requests.every((request) => request.authorization.startsWith("Basic ")),
     true,
+  );
+
+  await stopServer(child);
+});
+
+test("GET /live-draft statusOnly reports active phases without reading draft or live-game details", async (t) => {
+  let gameflowPhase = "InProgress";
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: gameflowPhase,
+          gameData: {
+            gameId: 987654,
+            queue: {
+              id: 420,
+            },
+          },
+        },
+      };
+    }
+
+    return {
+      status: 500,
+      body: { message: `Unexpected detail request: ${url.pathname}` },
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_LIVE_CLIENT_DATA_URL: `http://127.0.0.1:${riotClient.port}`,
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const liveResponse = await getJson(baseUrl, "/live-draft?statusOnly=1");
+
+  assert.equal(liveResponse.status, 200);
+  assert.equal(liveResponse.body.status, "active");
+  assert.equal(liveResponse.body.active, true);
+  assert.equal(liveResponse.body.source, "live_game");
+  assert.deepEqual(
+    riotClient.requests.map((request) => request.pathname),
+    ["/lol-gameflow/v1/session"],
+  );
+
+  riotClient.requests.length = 0;
+  gameflowPhase = "ChampSelect";
+  const champSelectResponse = await getJson(baseUrl, "/live-draft?statusOnly=1");
+
+  assert.equal(champSelectResponse.status, 200);
+  assert.equal(champSelectResponse.body.status, "active");
+  assert.equal(champSelectResponse.body.active, true);
+  assert.equal(champSelectResponse.body.source, "champ_select");
+  assert.deepEqual(
+    riotClient.requests.map((request) => request.pathname),
+    ["/lol-gameflow/v1/session"],
+  );
+
+  await stopServer(child);
+});
+
+test("GET /live-draft returns ranked inventory metrics without exposing raw items or forwarding LCU auth", async (t) => {
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "InProgress",
+          gameData: {
+            gameId: 987654,
+            queue: {
+              id: 420,
+            },
+          },
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-game-data/assets/v1/items.json") {
+      return {
+        body: [
+          {
+            id: 6655,
+            name: "Luden's Companion",
+            categories: ["SpellDamage"],
+            from: [3802, 1026],
+            to: [],
+            inStore: true,
+          },
+          {
+            id: 1001,
+            name: "Boots",
+            categories: ["Boots"],
+            from: [],
+            to: [3020],
+            inStore: true,
+          },
+        ],
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/playerlist") {
+      return {
+        body: [
+          {
+            championName: "Ahri",
+            riotId: "Local Player#NA1",
+            team: "ORDER",
+            position: "MIDDLE",
+            items: [
+              {
+                itemID: 6655,
+                count: 1,
+                price: 2800,
+                consumable: false,
+              },
+            ],
+          },
+          {
+            championName: "Leona",
+            riotId: "Enemy Player#NA1",
+            team: "CHAOS",
+            position: "UTILITY",
+            items: [
+              {
+                itemID: 1001,
+                count: 1,
+                price: 300,
+                consumable: false,
+              },
+            ],
+          },
+          ...[
+            ["Wukong", "Ally Top#NA1", "ORDER", "TOP"],
+            ["Nunu & Willump", "Ally Jungle#NA1", "ORDER", "JUNGLE"],
+            ["Ashe", "Ally Bottom#NA1", "ORDER", "BOTTOM"],
+            ["Lux", "Ally Support#NA1", "ORDER", "UTILITY"],
+            ["Darius", "Enemy Top#NA1", "CHAOS", "TOP"],
+            ["Anivia", "Enemy Middle#NA1", "CHAOS", "MIDDLE"],
+            ["Garen", "Enemy Jungle#NA1", "CHAOS", "JUNGLE"],
+            ["Annie", "Enemy Bottom#NA1", "CHAOS", "BOTTOM"],
+          ].map(([championName, riotId, team, position]) => ({
+            championName,
+            riotId,
+            team,
+            position,
+            items: [],
+          })),
+        ],
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/activeplayername") {
+      return {
+        body: "Local Player#NA1",
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_LIVE_CLIENT_DATA_URL: `http://127.0.0.1:${riotClient.port}`,
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const firstResponse = await getJson(baseUrl, "/live-draft");
+  const secondResponse = await getJson(baseUrl, "/live-draft");
+
+  assert.equal(firstResponse.status, 200);
+  assert.equal(firstResponse.body.status, "active");
+  assert.equal(firstResponse.body.source, "live_game");
+  assert.equal(firstResponse.body.gameflowPhase, "InProgress");
+  assert.equal(firstResponse.body.champSelectPhase, "in_game");
+  assert.equal(firstResponse.body.sessionId, "987654");
+  assert.equal(firstResponse.body.assignedRole, "middle");
+  assert.equal(firstResponse.body.localPlayerChampionKey, "103");
+  assert.deepEqual(firstResponse.body.liveGame, {
+    complete: true,
+    firstItemStatusKnown: true,
+    playerCount: 10,
+    totalPlayerCount: 10,
+    resolvedPlayerCount: 10,
+    omittedParticipantCount: 0,
+    fetchedAt: firstResponse.body.fetchedAt,
+  });
+  assert.deepEqual(
+    firstResponse.body.allies
+      .filter((player) => player.isLocalPlayer)
+      .map((player) => ({
+        champion: player.champion,
+        role: player.role,
+        buildGold: player.buildGold,
+        buildGoldRank: player.buildGoldRank,
+        hasCompletedFirstItem: player.hasCompletedFirstItem,
+      })),
+    [
+      {
+        champion: "Ahri",
+        role: "middle",
+        buildGold: 2800,
+        buildGoldRank: 1,
+        hasCompletedFirstItem: true,
+      },
+    ],
+  );
+  assert.deepEqual(
+    firstResponse.body.enemies
+      .filter((player) => player.champion === "Leona")
+      .map((player) => ({
+        champion: player.champion,
+        role: player.role,
+        buildGold: player.buildGold,
+        buildGoldRank: player.buildGoldRank,
+        hasCompletedFirstItem: player.hasCompletedFirstItem,
+      })),
+    [
+      {
+        champion: "Leona",
+        role: "support",
+        buildGold: 300,
+        buildGoldRank: 2,
+        hasCompletedFirstItem: false,
+      },
+    ],
+  );
+  for (const participant of [
+    ...firstResponse.body.allies,
+    ...firstResponse.body.enemies,
+  ]) {
+    assert.equal("items" in participant, false);
+  }
+  assert.equal(JSON.stringify(firstResponse.body).includes("Local Player#NA1"), false);
+  assert.equal(secondResponse.body.source, "live_game");
+
+  const itemCatalogRequests = riotClient.requests.filter(
+    (request) => request.pathname === "/lol-game-data/assets/v1/items.json",
+  );
+  const liveClientRequests = riotClient.requests.filter((request) =>
+    request.pathname.startsWith("/liveclientdata/"),
+  );
+  assert.equal(itemCatalogRequests.length, 1);
+  assert.equal(itemCatalogRequests[0].authorization.startsWith("Basic "), true);
+  assert.equal(liveClientRequests.length, 4);
+  assert.equal(liveClientRequests.every((request) => request.authorization === ""), true);
+
+  await stopServer(child);
+});
+
+test("GET /live-draft requires exact 5v5 snapshots for standard queues but permits variable Practice Tool teams", async (t) => {
+  let scenario = {
+    queueId: 400,
+    allyCount: 5,
+    enemyCount: 5,
+  };
+  const createPlayers = ({ allyCount, enemyCount }) => [
+    ...Array.from({ length: allyCount }, (_value, index) => ({
+      championName: "Ahri",
+      riotId: index === 0 ? "Local Player#NA1" : `Ally ${index}#NA1`,
+      team: "ORDER",
+      position: "MIDDLE",
+      items: [],
+    })),
+    ...Array.from({ length: enemyCount }, (_value, index) => ({
+      championName: "Leona",
+      riotId: `Enemy ${index}#NA1`,
+      team: "CHAOS",
+      position: "UTILITY",
+      items: [],
+    })),
+  ];
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "InProgress",
+          gameData: {
+            gameId: 24680,
+            queue: {
+              id: scenario.queueId,
+            },
+          },
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-game-data/assets/v1/items.json") {
+      return {
+        body: [{ id: 6655, rarity: "Legendary" }],
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/playerlist") {
+      return {
+        body: createPlayers(scenario),
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/activeplayername") {
+      return {
+        body: "Local Player#NA1",
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_LIVE_CLIENT_DATA_URL: `http://127.0.0.1:${riotClient.port}`,
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const standardQueueScenarios = [
+    ...[400, 420, 440].map((queueId) => ({
+      queueId,
+      allyCount: 5,
+      enemyCount: 4,
+      complete: false,
+    })),
+    ...[400, 420, 440].map((queueId) => ({
+      queueId,
+      allyCount: 6,
+      enemyCount: 4,
+      complete: false,
+    })),
+    ...[400, 420, 440].map((queueId) => ({
+      queueId,
+      allyCount: 5,
+      enemyCount: 5,
+      complete: true,
+    })),
+  ];
+
+  for (const nextScenario of standardQueueScenarios) {
+    scenario = nextScenario;
+    const response = await getJson(baseUrl, "/live-draft");
+    const description = `queue ${scenario.queueId}, ${scenario.allyCount}/${scenario.enemyCount}`;
+
+    assert.equal(response.status, 200, description);
+    assert.equal(response.body.liveGame.complete, scenario.complete, description);
+    assert.equal(
+      response.body.liveGame.totalPlayerCount,
+      scenario.allyCount + scenario.enemyCount,
+      description,
+    );
+  }
+
+  scenario = {
+    queueId: 0,
+    allyCount: 1,
+    enemyCount: 1,
+  };
+  const practiceResponse = await getJson(baseUrl, "/live-draft");
+
+  assert.equal(practiceResponse.status, 200);
+  assert.equal(practiceResponse.body.source, "live_game");
+  assert.equal(practiceResponse.body.liveGame.complete, true);
+  assert.equal(practiceResponse.body.liveGame.totalPlayerCount, 2);
+
+  await stopServer(child);
+});
+
+test("GET /live-draft preserves live champions and ranks when Legendary item status is unavailable", async (t) => {
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "InProgress",
+          gameData: {
+            gameId: 13579,
+            queue: {
+              id: 0,
+            },
+          },
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-game-data/assets/v1/items.json") {
+      return {
+        status: 503,
+        body: { message: "catalog unavailable" },
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/playerlist") {
+      return {
+        body: [
+          {
+            championName: "Ahri",
+            riotId: "Local Player#NA1",
+            team: "ORDER",
+            position: "MIDDLE",
+            items: [
+              {
+                itemID: 6655,
+                count: 1,
+                price: 2800,
+                consumable: false,
+              },
+            ],
+          },
+          {
+            championName: "Leona",
+            riotId: "Enemy Player#NA1",
+            team: "CHAOS",
+            position: "UTILITY",
+            items: [
+              {
+                itemID: 1001,
+                count: 1,
+                price: 300,
+                consumable: false,
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    if (url.pathname === "/liveclientdata/activeplayername") {
+      return {
+        body: "Local Player#NA1",
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_LIVE_CLIENT_DATA_URL: `http://127.0.0.1:${riotClient.port}`,
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const response = await getJson(baseUrl, "/live-draft");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, "active");
+  assert.equal(response.body.source, "live_game");
+  assert.equal(response.body.liveGame.complete, true);
+  assert.equal(response.body.liveGame.firstItemStatusKnown, false);
+  assert.deepEqual(
+    [...response.body.allies, ...response.body.enemies].map((participant) => ({
+      champion: participant.champion,
+      buildGold: participant.buildGold,
+      buildGoldRank: participant.buildGoldRank,
+      hasCompletedFirstItem: participant.hasCompletedFirstItem,
+      hasRawItems: "items" in participant,
+    })),
+    [
+      {
+        champion: "Ahri",
+        buildGold: 2800,
+        buildGoldRank: 1,
+        hasCompletedFirstItem: null,
+        hasRawItems: false,
+      },
+      {
+        champion: "Leona",
+        buildGold: 300,
+        buildGoldRank: 2,
+        hasCompletedFirstItem: null,
+        hasRawItems: false,
+      },
+    ],
+  );
+  assert.equal(
+    riotClient.requests.some((request) => request.pathname === "/liveclientdata/playerlist"),
+    true,
+  );
+
+  await stopServer(child);
+});
+
+test("GET /live-draft stays active during the game-start data transition", async (t) => {
+  const riotClient = await startMockRiotClient(({ url }) => {
+    if (url.pathname === "/lol-gameflow/v1/session") {
+      return {
+        body: {
+          phase: "GameStart",
+          gameData: {
+            gameId: 12345,
+            queue: {
+              id: 400,
+            },
+          },
+        },
+      };
+    }
+
+    if (url.pathname === "/lol-game-data/assets/v1/items.json") {
+      return {
+        status: 404,
+        body: {},
+      };
+    }
+
+    return {
+      status: 404,
+      body: {},
+    };
+  });
+  t.after(() => riotClient.close());
+  const lockfilePath = await createMockLockfile(riotClient.port);
+  const { child, baseUrl } = await startServer(t, {
+    env: {
+      PICKBAN_LIVE_CLIENT_DATA_URL: `http://127.0.0.1:${riotClient.port}`,
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+  });
+
+  const response = await getJson(baseUrl, "/live-draft");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.status, "active");
+  assert.equal(response.body.active, true);
+  assert.equal(response.body.source, "transition");
+  assert.equal(response.body.reason, "live_game_loading");
+  assert.equal(response.body.sessionId, "12345");
+  assert.deepEqual(response.body.allies, []);
+  assert.deepEqual(response.body.enemies, []);
+  assert.equal(response.body.liveGame.complete, false);
+  await waitForMockRequestPaths(riotClient.requests, [
+    "/liveclientdata/activeplayername",
+    "/liveclientdata/playerlist",
+  ]);
+  assert.deepEqual(
+    riotClient.requests
+      .filter((request) => request.pathname.startsWith("/liveclientdata/"))
+      .map((request) => request.pathname)
+      .sort(),
+    ["/liveclientdata/activeplayername", "/liveclientdata/playerlist"],
   );
 
   await stopServer(child);

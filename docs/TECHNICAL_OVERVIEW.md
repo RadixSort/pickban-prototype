@@ -17,6 +17,9 @@ Runtime overrides:
 - `PICKBAN_AUTO_UPDATE_REMOTE`, `PICKBAN_AUTO_UPDATE_BRANCH`, and `PICKBAN_AUTO_UPDATE_ZIP_URL` configure update sources.
 - `LOLALYTICS_BASE_URL` and `LOLALYTICS_MEGA_URL` override live-data origins.
 - `PICKBAN_RIOT_LOCKFILE_PATH`, `LEAGUE_CLIENT_LOCKFILE_PATH`, or `RIOT_LOCKFILE_PATH` overrides League lockfile discovery.
+- `PICKBAN_LIVE_CLIENT_DATA_URL` overrides the unauthenticated in-game API origin (default `https://127.0.0.1:2999`).
+
+The HTTP app binds to `127.0.0.1`; League-derived draft and live-game data is not served on LAN interfaces.
 
 ## Code map
 
@@ -25,6 +28,7 @@ Runtime overrides:
 - `public/app.js`: browser state, draft editing, live import, request flows, and rendering.
 - `public/*.js`: focused browser helpers; shared rules are also loaded by Node tests and server code.
 - `lib/*.js`: Node-only normalization, parsing, League Client access, scoring, caching, and response construction.
+- `lib/riot-live-game.js`: privacy-safe Live Client Data transport, champion resolution, inventory valuation, Legendary classification, and global build-gold ranks.
 - `test/*.test.js`: unit and local HTTP coverage; live origins are mocked.
 - `bench/efficiency.js`: synthetic hot-path comparisons.
 
@@ -47,7 +51,7 @@ Keep cross-runtime rules in their existing focused modules:
 
 - `GET /app-config`: version, data window, shutdown token, and request stats.
 - `GET /ally-role-likelihoods`: lane shares for role assignment.
-- `GET /live-draft`: opt-in local League Client champion-select state.
+- `GET /live-draft`: opt-in local League champion-select or live-game state.
 - `POST /rune-import`: update the first editable League rune page.
 - `POST /ban-suggestions`: one ban recommendation for each role.
 - `POST /suggest`: first-pick or draft-aware open-role suggestions.
@@ -87,15 +91,21 @@ Rune aggregation sums each element's games and wins across the included matchups
 
 Build aggregation incorporates every included enemy matchup once when merging runes, summoner spells, starting items, skill priorities, boots, and item paths. It has no lane-weight input or role-based contribution multiplier. Explicit enemy roles still override parsed matchup roles when building the lane-only item subset, and Bottom/Support share a lane. When no included enemy is assigned to the allied builder's lane, the server still assigns one lane-only matchup: the highest explicit lane-likelihood value when available, then the largest matchup sample and champion key as stable fallback signals.
 
-The popup opens with every enemy explicitly selected. Its scroll container keeps the Counter Filter sticky above the build content, with a right-anchored opaque background through the five-portrait control footprint followed by a short horizontal fade to full transparency. Portraits toggle individual matchups; removing the final selected portrait or using the red clear action restores the complete selection. During an uncached subset request, the previous recommendation DOM remains mounted and non-interactive, and each render restores the captured scroll offset; this prevents the short loading state from collapsing the scroll range. The red clear action remains rendered at all times and is disabled when every enemy is already selected. An empty selection is accepted only as a defensive all-enemies fallback. Each subset requests the same `/build-suggestions` endpoint and uses the normal build cache, so every recommendation section is derived from exactly the selected enemies. Each payload keeps all-included-enemy rune pages and item paths at their existing top-level fields, plus lane-only rune data under `runes.laneOpponents` and lane-only item paths under `items.laneOpponents`. The rune and item Highest Win and Most Picked columns keep independent **All enemies**/**Lane only** view state.
+The popup's scroll container keeps the Counter Filter sticky above the build content. Its content-width background is opaque from the allied team build-gold value through the portrait controls and fades to transparency immediately to that value's left. The scoreboard remains mounted as `0.0k : 0.0k` without complete live data and otherwise sums the full allied and enemy rosters independently of the selected matchup subset, formatting both totals in one-decimal thousands. Portraits toggle individual matchups; removing the final selected portrait or using the red clear action restores the complete selection. During an uncached subset request, the previous recommendation DOM remains mounted and non-interactive, and each render restores the captured scroll offset; this prevents the short loading state from collapsing the scroll range. The red clear action remains rendered at all times and is disabled when every enemy is already selected. An empty selection is accepted only as a defensive all-enemies fallback. Each subset requests the same `/build-suggestions` endpoint and uses the normal build cache, so every recommendation section is derived from exactly the selected enemies. Each payload keeps all-included-enemy rune pages and item paths at their existing top-level fields, plus lane-only rune data under `runes.laneOpponents` and lane-only item paths under `items.laneOpponents`. The rune and item Highest Win and Most Picked columns keep independent **All enemies**/**Lane only** view state.
+
+The popup header provides the same Auto Import action and state as the main toolbar. With complete live-game data, the popup shows global build-gold rank badges on the selected allied portrait and all enemy portraits; the enemy with the lowest global rank gets a yellow border. Before that ally currently holds a Legendary item, the automatic Counter Filter selects only the same lane; Bottom and Support share a lane. Afterwards it selects enemy global ranks 1 through 5. Selling every Legendary item returns the next complete minute snapshot to lane filtering while leaving all rank badges visible. A valid empty top-five intersection silently restores all enemies. A portrait change switches the popup to manual mode until the next successful minute snapshot, which always reapplies the automatic rule.
 
 `POST /rune-import` requires League `ChampSelect`, validates the complete recommendation, and updates the first editable saved page. It skips default pages and avoids a write when the page already matches.
 
 ### Live draft
 
-`GET /live-draft` reads local League endpoints only after Auto Import is enabled in the browser. Supported queue IDs are 0 (Practice Tool), 400, 420, and 440. The normalized payload includes visible picks, temporary allied hovers, roles, phase, session identity, hover intents, and champions unavailable for bans.
+`GET /live-draft` reads local League endpoints only after Auto Import is enabled in the browser. Supported queue IDs are 0 (Practice Tool), 400, 420, and 440. During `ChampSelect`, the normalized `champ_select` payload includes visible picks, temporary allied hovers, roles, phase, session identity, hover intents, and champions unavailable for bans.
 
-The browser polls independently of suggestion requests. Session changes, phase exit, or disconnection invalidate ban state so late responses cannot reopen the panel.
+During `GameStart`, `InProgress`, and `Reconnect`, the server reads `/liveclientdata/playerlist` and `/liveclientdata/activeplayername` from the local Game Client API. Those requests are unauthenticated and never reuse the League Client lockfile authorization header. The player identity is used only to split teams and is omitted from the response; held item rows are reduced to build-gold totals, rank, and Legendary completion before the browser response. Live champions and positions override speculative draft data. Missing or unresolved participants make a snapshot incomplete, preserving last-known selections and disabling automatic filtering for that refresh. Normal Draft and Ranked require ten resolved participants split 5–5 before replacement; Practice Tool accepts its variable participant count.
+
+Each live snapshot sums `item.price * item.count` for every held item, then assigns ordinal global ranks in descending gold order; ties retain player-list order. A completed first item means membership in the patch-current Legendary ID set, never a price threshold. The set prefers an explicit Legendary tier when available and otherwise derives eligible terminal recipe outputs from the authenticated League Client item catalog, excluding boots, consumables, trinkets, unavailable placeholders, and unfinished support-quest transformations. If that catalog is temporarily unavailable, champion, lane, gold, and rank updates continue while first-item filtering stays disabled until classification recovers.
+
+The browser polls independently of suggestion requests: every three seconds through champion select, incomplete live snapshots, and the game-start handoff, then starts each full live pull on a 60-second cadence after a complete snapshot. Recommendation refresh time is subtracted from the next delay instead of extending the inventory interval. Between full pulls, `statusOnly=1` checks gameflow every three seconds without reading the item catalog or Live Client Data, so game end and a subsequent champion select are detected promptly. Clicking Auto Import during a running game performs the first pull immediately. A `transition` response preserves Auto Import and last-known draft data while retrying; terminal phases and unsupported queues disable it. Session changes, phase exit, or disconnection invalidate ban state so late responses cannot reopen the panel.
 
 ## Scoring
 
@@ -125,7 +135,7 @@ All server caches use an eight-hour TTL and least-recently-used bounds:
 
 Remote cache keys are full URLs. Identical in-flight requests share one promise; pending entries use the 15-second request timeout rather than the normal TTL. Resolved Qwik objects use lifetime-bound `WeakMap` caches.
 
-Browser suggestion and build caches last for the page session and include both teams' role assignments in their keys. Suggestion keys also include the lane-opponent multiplier; a populated champion-suggestion fetch proactively fills the ×1 through ×4 entries, while enemy-free suggestions reuse one equivalent result across all four keys. Build keys instead include the current Counter Filter enemy subset and never include lane weight. Rank-filtered champion lane likelihoods allocate automatic assignments without duplicates, giving contested roles to the higher-probability champion before filling remaining roles. Manual assignments remain locked and may duplicate. Ban results last only for the current champion-select session. Live-draft and rune-import calls are never cached.
+Browser suggestion and build caches last for the page session and include both teams' role assignments in their keys. Suggestion keys also include the lane-opponent multiplier; a populated champion-suggestion fetch proactively fills the ×1 through ×4 entries, while enemy-free suggestions reuse one equivalent result across all four keys. Build keys instead include the current Counter Filter enemy subset and never include lane weight or live build ranks. Rank-filtered champion lane likelihoods allocate automatic assignments without duplicates, giving contested roles to the higher-probability champion before filling remaining roles; live-game roles are reserved ahead of speculative assignment. Manual assignments remain locked and may duplicate. Ban results last only for the current champion-select session. Live-draft, Live Client Data, and rune-import calls are never response-cached; the patch-current League item catalog is cached per League Client connection.
 
 Lolalytics requests time out after 15 seconds. Suggestion, draft, and build flows preserve partial failures when a useful result remains. Ban counter failures fall back per lane; the route fails only if five recommendations cannot be produced.
 
@@ -139,7 +149,8 @@ Release commits must update the version in both `package.json` and `package-lock
 
 - Lolalytics mega payloads retain the parsed tier, synergy, counter, and rune fields and honor `vslane`.
 - Rendered matchup pages retain usable Qwik data or recognizable build sections.
-- League Client lockfile and local gameflow, champion-select, and perks endpoints remain compatible.
+- League Client lockfile and local gameflow, champion-select, perks, and item-catalog endpoints remain compatible.
+- The local Game Client API keeps its player-list and active-player-name resources compatible.
 - Riot/League references keep a visible non-endorsement footnote.
 - Data window, queue, region, request timeout, cache limits, and eligibility thresholds remain hard-coded in `server.js`.
 
@@ -150,7 +161,7 @@ When live data fails without a local change, check these boundaries first.
 - `test/server-api.test.js`: mocked Lolalytics contracts, caching, partial failures, builds, and projections.
 - `test/server-http.test.js`: local config, shutdown, live draft, and rune import routes.
 - `test/ban-suggestions-api.test.js` and `test/ban-suggestion-state.test.js`: ban hierarchy and stale-response lifecycle.
-- `test/riot-live-draft.test.js` and `test/riot-rune-import.test.js`: League normalization and mutation.
+- `test/riot-live-draft.test.js`, `test/riot-live-game.test.js`, and `test/riot-rune-import.test.js`: League draft normalization, privacy-safe live inventory ranks, and mutation.
 - `test/lolalytics-build-parser.test.js` and `test/build-suggestion-results.test.js`: build-source regressions.
 - `test/build-counter-filter.test.js` and `test/enemy-role-assignments.test.js`: popup subset selection and probability-prioritized automatic roles.
 - `test/ttl-cache.test.js`: cache expiry, recency, and bounds.

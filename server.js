@@ -3,6 +3,7 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const { version: appVersion } = require("./package.json");
+const LOCAL_APP_HOST = "127.0.0.1";
 const { createTtlCache } = require("./lib/ttl-cache.js");
 const {
   buildEligibleTierStats,
@@ -160,10 +161,13 @@ app.get("/ally-role-likelihoods", withLolalyticsRequestStats(async (request, res
   });
 }));
 
-app.get("/live-draft", async (_request, response) => {
+app.get("/live-draft", async (request, response) => {
   const payload = await fetchLiveDraftImport({
     championByKey,
+    championByName,
+    championBySlug,
     normalizeRole,
+    statusOnly: request.query?.statusOnly === "1",
   });
 
   response.set("Cache-Control", "no-store");
@@ -594,7 +598,7 @@ function getCachedLaneOpponentLikelihood(championKey, role, rankFilter) {
   return Number.isFinite(numericLikelihood) ? numericLikelihood : null;
 }
 
-server = app.listen(PORT, () => {
+server = app.listen(PORT, LOCAL_APP_HOST, () => {
   console.log(
     `PickBan prototype running at http://localhost:${getListeningPort(server, PORT)}`,
   );
