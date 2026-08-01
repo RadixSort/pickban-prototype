@@ -330,6 +330,8 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
           {
             id: 6655,
             name: "Luden's Companion",
+            price: 800,
+            priceTotal: 2800,
             categories: ["SpellDamage"],
             from: [3802, 1026],
             to: [],
@@ -338,6 +340,8 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
           {
             id: 1001,
             name: "Boots",
+            price: 300,
+            priceTotal: 300,
             categories: ["Boots"],
             from: [],
             to: [3020],
@@ -359,7 +363,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
               {
                 itemID: 6655,
                 count: 1,
-                price: 2800,
+                price: 800,
                 consumable: false,
               },
             ],
@@ -431,6 +435,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
   assert.equal(firstResponse.body.localPlayerChampionKey, "103");
   assert.deepEqual(firstResponse.body.liveGame, {
     complete: true,
+    metricsComplete: true,
     firstItemStatusKnown: true,
     playerCount: 10,
     totalPlayerCount: 10,
@@ -447,6 +452,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         buildGold: player.buildGold,
         buildGoldRank: player.buildGoldRank,
         hasCompletedFirstItem: player.hasCompletedFirstItem,
+        inventoryKnown: player.inventoryKnown,
       })),
     [
       {
@@ -455,6 +461,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         buildGold: 2800,
         buildGoldRank: 1,
         hasCompletedFirstItem: true,
+        inventoryKnown: true,
       },
     ],
   );
@@ -467,6 +474,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         buildGold: player.buildGold,
         buildGoldRank: player.buildGoldRank,
         hasCompletedFirstItem: player.hasCompletedFirstItem,
+        inventoryKnown: player.inventoryKnown,
       })),
     [
       {
@@ -475,6 +483,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         buildGold: 300,
         buildGoldRank: 2,
         hasCompletedFirstItem: false,
+        inventoryKnown: true,
       },
     ],
   );
@@ -540,7 +549,7 @@ test("GET /live-draft requires exact 5v5 snapshots for standard queues but permi
 
     if (url.pathname === "/lol-game-data/assets/v1/items.json") {
       return {
-        body: [{ id: 6655, rarity: "Legendary" }],
+        body: [{ id: 6655, price: 800, priceTotal: 2800, rarity: "Legendary" }],
       };
     }
 
@@ -620,7 +629,7 @@ test("GET /live-draft requires exact 5v5 snapshots for standard queues but permi
   await stopServer(child);
 });
 
-test("GET /live-draft preserves live champions and ranks when Legendary item status is unavailable", async (t) => {
+test("GET /live-draft keeps live champions but withholds metrics when the item catalog is unavailable", async (t) => {
   const riotClient = await startMockRiotClient(({ url }) => {
     if (url.pathname === "/lol-gameflow/v1/session") {
       return {
@@ -704,6 +713,7 @@ test("GET /live-draft preserves live champions and ranks when Legendary item sta
   assert.equal(response.body.status, "active");
   assert.equal(response.body.source, "live_game");
   assert.equal(response.body.liveGame.complete, true);
+  assert.equal(response.body.liveGame.metricsComplete, false);
   assert.equal(response.body.liveGame.firstItemStatusKnown, false);
   assert.deepEqual(
     [...response.body.allies, ...response.body.enemies].map((participant) => ({
@@ -711,21 +721,24 @@ test("GET /live-draft preserves live champions and ranks when Legendary item sta
       buildGold: participant.buildGold,
       buildGoldRank: participant.buildGoldRank,
       hasCompletedFirstItem: participant.hasCompletedFirstItem,
+      inventoryKnown: participant.inventoryKnown,
       hasRawItems: "items" in participant,
     })),
     [
       {
         champion: "Ahri",
-        buildGold: 2800,
-        buildGoldRank: 1,
+        buildGold: null,
+        buildGoldRank: null,
         hasCompletedFirstItem: null,
+        inventoryKnown: false,
         hasRawItems: false,
       },
       {
         champion: "Leona",
-        buildGold: 300,
-        buildGoldRank: 2,
+        buildGold: null,
+        buildGoldRank: null,
         hasCompletedFirstItem: null,
+        inventoryKnown: false,
         hasRawItems: false,
       },
     ],

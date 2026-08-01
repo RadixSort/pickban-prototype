@@ -14,6 +14,10 @@ const {
   toggleBuildCounterFilter,
 } = globalThis.buildCounterFilter;
 const {
+  createInitialLiveGameState,
+  reconcileLiveGameState,
+} = globalThis.liveGameState;
+const {
   completeBanSuggestionRequest,
   createInitialBanSuggestionState,
   failBanSuggestionRequest,
@@ -112,7 +116,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.0",
+  version: "0.8.1",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -132,7 +136,7 @@ const state = {
 };
 
 const AUTO_IMPORT_POLL_INTERVAL_MS = 3000;
-const LIVE_GAME_POLL_INTERVAL_MS = 60 * 1000;
+const LIVE_GAME_POLL_INTERVAL_MS = 15 * 1000;
 
 const limits = {
   allies: 5,
@@ -679,15 +683,6 @@ function createInitialBuildSuggestionModalState() {
     itemRecommendationScopes: createDefaultItemRecommendationScopes(),
     runeRecommendationScopes: createDefaultRuneRecommendationScopes(),
     runeImportStatesByPageKey: {},
-  };
-}
-
-function createInitialLiveGameState() {
-  return {
-    active: false,
-    complete: false,
-    playersByChampionKey: {},
-    sessionId: "",
   };
 }
 
@@ -1522,8 +1517,9 @@ async function handleLiveDraftImportPayload(payload) {
   const nextSignature = buildLiveDraftSignature(payload);
   if (state.autoImport.source === "live_game") {
     applyLiveGameState(payload);
+    const snapshotComplete = state.liveGame.latestRosterComplete === true;
     shouldRefreshSuggestions = applyLiveDraftImport(payload, {
-      preserveMissing: !state.liveGame.complete,
+      preserveMissing: !snapshotComplete,
       source: "live_game",
     });
     state.autoImport.lastAppliedSignature = nextSignature;
@@ -1555,43 +1551,7 @@ async function handleLiveDraftImportPayload(payload) {
 }
 
 function applyLiveGameState(payload) {
-  const sessionId = typeof payload?.sessionId === "string" ? payload.sessionId : "";
-  const sameSession =
-    state.liveGame.active &&
-    (!sessionId || !state.liveGame.sessionId || sessionId === state.liveGame.sessionId);
-  const complete = payload?.liveGame?.complete === true;
-  const playersByChampionKey =
-    sameSession && !complete ? { ...state.liveGame.playersByChampionKey } : {};
-  const participants = [
-    ...(Array.isArray(payload?.allies) ? payload.allies : []),
-    ...(Array.isArray(payload?.enemies) ? payload.enemies : []),
-  ];
-
-  participants.forEach((participant) => {
-    const championKey = String(participant?.championKey || "");
-    if (!championKey || !state.championByKey.has(championKey)) {
-      return;
-    }
-
-    const buildGold = Number(participant?.buildGold);
-    const role = normalizeRole(participant?.role) || "";
-    playersByChampionKey[championKey] = {
-      role,
-      buildGold: Number.isFinite(buildGold) && buildGold >= 0 ? buildGold : 0,
-      buildGoldRank: normalizeBuildGoldRank(participant?.buildGoldRank),
-      hasCompletedFirstItem:
-        typeof participant?.hasCompletedFirstItem === "boolean"
-          ? participant.hasCompletedFirstItem
-          : null,
-    };
-  });
-
-  state.liveGame = {
-    active: true,
-    complete,
-    playersByChampionKey,
-    sessionId,
-  };
+  state.liveGame = reconcileLiveGameState(state.liveGame, payload, { normalizeRole });
 }
 
 async function refreshBuildSuggestionAutomaticFilter() {
@@ -1963,7 +1923,7 @@ function scheduleAutoImportPoll() {
   }
 
   const useLiveGameCadence =
-    state.autoImport.source === "live_game" && state.liveGame.complete;
+    state.autoImport.source === "live_game" && state.liveGame.rosterComplete;
   const intervalMs = useLiveGameCadence
     ? LIVE_GAME_POLL_INTERVAL_MS
     : AUTO_IMPORT_POLL_INTERVAL_MS;
@@ -1984,7 +1944,7 @@ function scheduleAutoImportStatusPoll() {
   if (
     !state.autoImport.requested ||
     state.autoImport.source !== "live_game" ||
-    !state.liveGame.complete ||
+    !state.liveGame.rosterComplete ||
     state.shuttingDown
   ) {
     return;
@@ -2415,8 +2375,8 @@ function renderBuildSuggestionCounterFilter(modalState) {
   const allyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.allyBuildGold);
   const enemyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.enemyBuildGold);
   const buildGoldScoreboardLabel = buildGoldScoreboard.available
-    ? `Team build gold. Allies ${allyBuildGold}; enemies ${enemyBuildGold}.`
-    : `Team build gold unavailable. Allies ${allyBuildGold}; enemies ${enemyBuildGold}.`;
+    ? `Team build gold. Enemies ${enemyBuildGold}; allies ${allyBuildGold}.`
+    : `Team build gold unavailable. Enemies ${enemyBuildGold}; allies ${allyBuildGold}.`;
   const availableKeys = enemies.map((enemy) => String(enemy.key));
   const availableKeySet = new Set(availableKeys);
   const selectedKeys = new Set(
@@ -2441,20 +2401,16 @@ function renderBuildSuggestionCounterFilter(modalState) {
   buildSuggestionCounterFilter.innerHTML = `
     <span class="build-counter-filter-label">Counter Filter${automaticLabel}</span>
     <div class="build-counter-filter-controls">
-      <div
-        class="build-team-gold-scoreboard${
-          buildGoldScoreboard.available ? "" : " build-team-gold-scoreboard--unavailable"
-        }"
-        role="group"
-        aria-label="${escapeHtml(buildGoldScoreboardLabel)}"
-        title="${escapeHtml(buildGoldScoreboardLabel)}"
-      >
-        <span class="build-team-gold-coin" aria-hidden="true">G</span>
-        <span class="build-team-gold-value build-team-gold-value--ally" aria-hidden="true">${allyBuildGold}</span>
-        <span class="build-team-gold-divider" aria-hidden="true">:</span>
-        <span class="build-team-gold-value build-team-gold-value--enemy" aria-hidden="true">${enemyBuildGold}</span>
-      </div>
       <div class="build-counter-filter-portraits">
+        <button
+          type="button"
+          class="build-counter-filter-clear"
+          aria-label="Clear counter filter"
+          title="${hasExcludedEnemies ? "Include all enemies" : "All enemies are already included"}"
+          ${state.shuttingDown || !hasExcludedEnemies ? "disabled" : ""}
+        >
+          <span aria-hidden="true">&times;</span>
+        </button>
         ${enemies
           .map((enemy) => {
             const championKey = String(enemy.key);
@@ -2508,15 +2464,19 @@ function renderBuildSuggestionCounterFilter(modalState) {
             `;
           })
           .join("")}
-        <button
-          type="button"
-          class="build-counter-filter-clear"
-          aria-label="Clear counter filter"
-          title="${hasExcludedEnemies ? "Include all enemies" : "All enemies are already included"}"
-          ${state.shuttingDown || !hasExcludedEnemies ? "disabled" : ""}
-        >
-          <span aria-hidden="true">&times;</span>
-        </button>
+      </div>
+      <div
+        class="build-team-gold-scoreboard${
+          buildGoldScoreboard.available ? "" : " build-team-gold-scoreboard--unavailable"
+        }"
+        role="group"
+        aria-label="${escapeHtml(buildGoldScoreboardLabel)}"
+        title="${escapeHtml(buildGoldScoreboardLabel)}"
+      >
+        <span class="build-team-gold-value build-team-gold-value--enemy" aria-hidden="true">${enemyBuildGold}</span>
+        <span class="build-team-gold-divider" aria-hidden="true">:</span>
+        <span class="build-team-gold-value build-team-gold-value--ally" aria-hidden="true">${allyBuildGold}</span>
+        <span class="build-team-gold-coin" aria-hidden="true">G</span>
       </div>
     </div>
   `;

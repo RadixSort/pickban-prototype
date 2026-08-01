@@ -1371,7 +1371,7 @@ select {
   background: linear-gradient(145deg, #f2d98f, #b88a36);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.42);
   color: #171106;
-  font-size: 0.7rem;
+  font-size: 0.82rem;
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -1412,7 +1412,7 @@ select {
   top: 0;
   z-index: 6;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 2px 2px 10px;
 }
 
@@ -1424,7 +1424,7 @@ select {
   width: max-content;
   max-width: 100%;
   display: grid;
-  justify-items: end;
+  justify-items: start;
   gap: 5px;
 }
 
@@ -1432,15 +1432,15 @@ select {
   content: "";
   position: absolute;
   top: -2px;
-  right: -2px;
-  bottom: -10px;
-  left: calc(
+  right: calc(
     var(--build-counter-filter-coin-span) - var(--build-counter-filter-fade-width)
   );
+  bottom: -10px;
+  left: -2px;
   z-index: -1;
   pointer-events: none;
   background: linear-gradient(
-    to right,
+    to left,
     rgba(13, 18, 26, 0) 0,
     rgba(13, 18, 26, 0.98) var(--build-counter-filter-fade-width),
     rgba(13, 18, 26, 0.98) 100%
@@ -1468,6 +1468,7 @@ select {
   min-width: 150px;
   min-height: 40px;
   flex: 0 0 auto;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1507,11 +1508,12 @@ select {
 
 .build-team-gold-value--ally {
   color: #91e8dc;
+  text-align: left;
 }
 
 .build-team-gold-value--enemy {
   color: #ffaaa8;
-  text-align: left;
+  text-align: right;
 }
 
 .build-team-gold-divider {
@@ -1524,7 +1526,6 @@ select {
 
 .build-counter-filter-portraits {
   flex: 0 0 auto;
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1558,7 +1559,7 @@ select {
   height: 19px;
   padding: 0 3px;
   border-width: 2px;
-  font-size: 0.62rem;
+  font-size: 0.75rem;
 }
 
 .build-counter-filter-champion img {

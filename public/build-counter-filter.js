@@ -70,8 +70,9 @@
   /**
    * Derive the automatic live-game counter subset without changing the legacy
    * portrait-toggle rules. Before the allied builder finishes a first item,
-   * only exact lane opponents are included. Afterwards, only opponents in the
-   * global top half by build-gold value are included.
+   * lane opponents are included, except Jungle includes every enemy equally.
+   * Afterwards, only opponents in the global top half by build-gold value are
+   * included.
    *
    * Automatic filtering is all-or-nothing: incomplete live data falls back to
    * every available enemy. A legitimate post-item result with no enemy in the
@@ -129,8 +130,15 @@
     }
 
     const allyRole = getParticipantRole(ally);
+    if (!isValidRole(allyRole)) {
+      return fallback();
+    }
+    if (rolesShareLane(allyRole, "jungle")) {
+      return fallback();
+    }
+
     const enemyRoles = normalizedEnemies.map(getParticipantRole);
-    if (!isValidRole(allyRole) || enemyRoles.some((role) => !isValidRole(role))) {
+    if (enemyRoles.some((role) => !isValidRole(role))) {
       return fallback();
     }
 

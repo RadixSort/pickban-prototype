@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildItemCostById,
   buildLegendaryItemIdSet,
   buildLiveClientRequestOptions,
   buildLiveGameSnapshot,
@@ -77,12 +78,97 @@ test("normalizeLiveItems keeps only privacy-safe item fields and calculateBuildG
 
   assert.deepEqual(normalizeLiveItems(items), [
     { itemId: 1001, count: 2, price: 350, consumable: false },
-    { itemId: 2003, count: 1, price: 50, consumable: true },
+    { itemId: 2003, count: 0, price: 50, consumable: true },
     { itemId: 3001, count: 3, price: 0, consumable: false },
     { itemId: 3002, count: 2, price: 0, consumable: false },
     { itemId: 3003, count: 2, price: Number.MAX_VALUE, consumable: false },
   ]);
-  assert.equal(calculateBuildGold(items), 750);
+  assert.equal(calculateBuildGold(items), 700);
+});
+
+test("build gold uses full catalog cost for components, completed items, and consumables", () => {
+  const itemCostById = buildItemCostById([
+    { id: 1036, price: 350, priceTotal: 350 },
+    { id: 3074, price: 150, priceTotal: 3300 },
+    { id: 2003, price: 50, priceTotal: 50 },
+    { id: 3340, price: 0, priceTotal: 0 },
+  ]);
+  const items = [
+    createItem(1036, 350),
+    createItem(3074, 150),
+    createItem(2003, 50, { consumable: true, count: 3 }),
+    createItem(3340, 0),
+  ];
+
+  assert.deepEqual([...itemCostById.entries()], [
+    [1036, 350],
+    [3074, 3300],
+    [2003, 50],
+    [3340, 0],
+  ]);
+  assert.deepEqual(
+    normalizeLiveItems(items, { itemCostById }).map(({ itemId, price, count }) => ({
+      itemId,
+      price,
+      count,
+    })),
+    [
+      { itemId: 1036, price: 350, count: 1 },
+      { itemId: 3074, price: 3300, count: 1 },
+      { itemId: 2003, price: 50, count: 3 },
+      { itemId: 3340, price: 0, count: 1 },
+    ],
+  );
+  assert.equal(calculateBuildGold(items, { itemCostById }), 3800);
+});
+
+test("inventory metrics are unknown when a held item lacks a catalog total cost", () => {
+  const known = rankLivePlayersByBuildGold(
+    [{ items: [createItem(1036, 350)] }],
+    { itemCostById: new Map([[1036, 350]]) },
+  );
+  const unknown = rankLivePlayersByBuildGold(
+    [{ items: [createItem(3074, 150)] }],
+    { itemCostById: new Map([[1036, 350]]) },
+  );
+
+  assert.equal(known[0].inventoryKnown, true);
+  assert.equal(known[0].buildGold, 350);
+  assert.equal(unknown[0].inventoryKnown, false);
+  assert.equal(unknown[0].buildGold, null);
+  assert.equal(unknown[0].buildGoldRank, 0);
+});
+
+test("inventory metrics are unknown without a catalog, never trusted from live recipe price", () => {
+  const [metrics] = rankLivePlayersByBuildGold([
+    { items: [createItem(3074, 150)] },
+  ]);
+
+  assert.equal(metrics.inventoryKnown, false);
+  assert.equal(metrics.buildGold, null);
+  assert.equal(metrics.buildGoldRank, 0);
+});
+
+test("inventory metrics are unknown when an item stack count is malformed", () => {
+  const [metrics] = rankLivePlayersByBuildGold(
+    [{ items: [createItem(2003, 50, { consumable: true, count: null })] }],
+    { itemCostById: new Map([[2003, 50]]) },
+  );
+
+  assert.equal(metrics.inventoryKnown, false);
+  assert.equal(metrics.buildGold, null);
+  assert.equal(metrics.buildGoldRank, 0);
+});
+
+test("overflow cannot turn an inventory into a trusted zero", () => {
+  const [metrics] = rankLivePlayersByBuildGold(
+    [{ items: [createItem(3074, 150, { count: 2 })] }],
+    { itemCostById: new Map([[3074, Number.MAX_VALUE]]) },
+  );
+
+  assert.equal(metrics.inventoryKnown, false);
+  assert.equal(metrics.buildGold, null);
+  assert.equal(metrics.buildGoldRank, 0);
 });
 
 test("Legendary completion uses catalog membership and never falls back to price", () => {
@@ -103,6 +189,10 @@ test("Legendary completion uses catalog membership and never falls back to price
     ),
     false,
   );
+  assert.equal(
+    hasCompletedFirstItem([createItem(6655, 3000, { count: 0 })], legendaryItemIds),
+    false,
+  );
   assert.equal(hasCompletedFirstItem([createItem(6655, 3000)]), false);
 });
 
@@ -110,7 +200,7 @@ test("Legendary ownership is recalculated after every inventory update", () => {
   const legendaryItemIds = new Set([6655]);
   const afterBuying = rankLivePlayersByBuildGold(
     [{ items: [createItem(6655, 3000)] }],
-    { legendaryItemIds },
+    { itemCostById: new Map([[6655, 3000]]), legendaryItemIds },
   );
   const afterSellingAll = rankLivePlayersByBuildGold(
     [{ items: [] }],
@@ -222,12 +312,15 @@ test("Legendary classification skips support quest intermediates but keeps final
 });
 
 test("rankLivePlayersByBuildGold assigns stable ordinal global ranks", () => {
-  const metrics = rankLivePlayersByBuildGold([
-    { items: [createItem(1, 3000)] },
-    { items: [createItem(2, 3000)] },
-    { items: [createItem(3, 5000)] },
-    { items: [createItem(4, -50)] },
-  ]);
+  const metrics = rankLivePlayersByBuildGold(
+    [
+      { items: [createItem(1, 3000)] },
+      { items: [createItem(2, 3000)] },
+      { items: [createItem(3, 5000)] },
+      { items: [createItem(4, -50)] },
+    ],
+    { itemCostById: new Map([[1, 3000], [2, 3000], [3, 5000], [4, 0]]) },
+  );
 
   assert.deepEqual(
     metrics.map(({ buildGold, buildGoldRank }) => [buildGold, buildGoldRank]),
@@ -277,6 +370,7 @@ test("buildLiveGameSnapshot ranks unknown champions before omitting them and spl
     activePlayerName: "Local Player#NA1",
     championByName,
     championBySlug,
+    itemCostById: new Map([[3109, 2400], [6655, 3000], [9999, 3000], [9998, 5000]]),
     legendaryItemIds: new Set([6655]),
     normalizeRole,
     players: [
@@ -327,6 +421,7 @@ test("buildLiveGameSnapshot ranks unknown champions before omitting them and spl
   assert.equal(snapshot.status, "active");
   assert.equal(snapshot.active, true);
   assert.equal(snapshot.complete, false);
+  assert.equal(snapshot.metricsComplete, true);
   assert.equal(snapshot.totalPlayerCount, 5);
   assert.equal(snapshot.resolvedPlayerCount, 4);
   assert.equal(snapshot.omittedParticipantCount, 1);
@@ -405,6 +500,7 @@ test("buildLiveGameSnapshot reports an unavailable privacy-safe snapshot when lo
     status: "unavailable",
     active: false,
     complete: false,
+    metricsComplete: false,
     reason: "local_player_not_found",
     allies: [],
     enemies: [],
@@ -449,6 +545,7 @@ test("fetchLiveGameSnapshot requests both resources with the configured URL and 
     env: {
       PICKBAN_LIVE_CLIENT_DATA_URL: "http://127.0.0.1:4567/ignored-path/",
     },
+    itemCostById: new Map([[6655, 3000]]),
     legendaryItemIds: new Set([6655]),
     normalizeRole,
     requestJson,

@@ -146,6 +146,46 @@ test("automatic live filtering keeps global build-gold ranks 1 through 5 after t
   );
 });
 
+test("automatic filtering uses all enemies for Jungle until the first Legendary", () => {
+  const enemies = [
+    { key: "84", role: "middle", buildGoldRank: 6 },
+    { key: "799", role: "top", buildGoldRank: 2 },
+    { key: "233", buildGoldRank: 4 },
+    { key: "523", role: "bottom", buildGoldRank: 8 },
+    { key: "201", role: "support", buildGoldRank: 1 },
+  ];
+  const options = { liveGameActive: true, liveGameComplete: true };
+  const allEnemyKeys = enemies.map((enemy) => enemy.key);
+
+  const beforeFirstLegendary = resolveAutomaticBuildCounterFilter(
+    { key: "103", role: "jg", hasCompletedFirstItem: false },
+    enemies,
+    options,
+  );
+  const afterBuyingLegendary = resolveAutomaticBuildCounterFilter(
+    { key: "103", role: "jg", hasCompletedFirstItem: true },
+    enemies,
+    options,
+  );
+  const afterSellingAllLegendaries = resolveAutomaticBuildCounterFilter(
+    { key: "103", role: "jg", hasCompletedFirstItem: false },
+    enemies,
+    options,
+  );
+
+  assert.deepEqual(beforeFirstLegendary, {
+    applied: false,
+    reason: null,
+    selectedChampionKeys: allEnemyKeys,
+  });
+  assert.deepEqual(afterBuyingLegendary, {
+    applied: true,
+    reason: "top-half",
+    selectedChampionKeys: ["799", "233", "201"],
+  });
+  assert.deepEqual(afterSellingAllLegendaries, beforeFirstLegendary);
+});
+
 test("automatic filtering follows current Legendary ownership through buy and sell", () => {
   const enemies = [
     { key: "84", role: "middle", buildGoldRank: 6 },
