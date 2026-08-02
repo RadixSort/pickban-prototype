@@ -1536,12 +1536,12 @@ select {
 }
 
 .build-team-gold-value--ally {
-  color: #91e8dc;
+  color: var(--success);
   text-align: left;
 }
 
 .build-team-gold-value--enemy {
-  color: #ffaaa8;
+  color: var(--error);
   text-align: right;
 }
 
