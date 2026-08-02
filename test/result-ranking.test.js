@@ -2,7 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  average,
   CHAMPION_SORT_MODE,
   DEFAULT_FIRST_PICK_SORT_MODE,
   DEFAULT_SORT_MODE,
@@ -24,17 +23,11 @@ const {
   getSkillAdjustedProjectedWinRate,
   getResultKey,
   getResultName,
-  getSynergyScore,
   getTopProjectedWinRateKeysAtEverySkillLevel,
   getTopResultKeys,
   getWinRate,
   sortResults,
 } = require("../public/result-ranking.js");
-
-test("average ignores non-numeric values and returns 0 for empty input", () => {
-  assert.equal(average([]), 0);
-  assert.equal(average([50, "51", Number.NaN, null]), 50.5);
-});
 
 test("projected agency falls back to legacy finalScore", () => {
   assert.equal(getProjectedAgency({ projectedAgency: 1.25, finalScore: 9.9 }), 1.25);
@@ -60,9 +53,7 @@ test("projected win rate defaults to 0 when missing", () => {
   assert.equal(getProjectedWinRateHighSkill({ projectedWinRate: 53.14 }), 53.14);
 });
 
-test("draft metric helpers default missing scores to zero", () => {
-  assert.equal(getSynergyScore({ synergyScore: 1.4 }), 1.4);
-  assert.equal(getSynergyScore({}), 0);
+test("counter scores default to zero", () => {
   assert.equal(getCounterScore({ counterScore: -0.8 }), -0.8);
   assert.equal(getCounterScore({}), 0);
 });

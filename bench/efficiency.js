@@ -7,13 +7,18 @@ const {
 } = require("../lib/role-suggestion-results.js");
 const { resolveQwikPayload } = require("../lib/qwik-payload.js");
 const {
-  average,
   compareByProjectedAgency,
   getTopResultKeys,
   sortResults,
 } = require("../public/result-ranking.js");
 
 const TARGET_ROLE = "support";
+
+function average(values) {
+  return values.length === 0
+    ? 0
+    : values.reduce((total, value) => total + value, 0) / values.length;
+}
 
 function main() {
   const dataset = buildSyntheticRoleDataset();

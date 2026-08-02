@@ -4,8 +4,6 @@ const assert = require("node:assert/strict");
 const {
   DEFAULT_TARGET_ROLE,
   getAutoAssignableAllyRole,
-  getAssignableAllyRoleOptions,
-  getMostLikelyRole,
   getRoleLabel,
   getSuggestedAllyRole,
   getUnassignedTargetRoleOptions,
@@ -20,18 +18,6 @@ test("normalizeRole supports frontend labels and backend aliases", () => {
   assert.equal(normalizeRole("mid"), "middle");
   assert.equal(normalizeRole("adc"), "bottom");
   assert.equal(normalizeRole("unknown"), null);
-});
-
-test("getAssignableAllyRoleOptions excludes the target role", () => {
-  assert.deepEqual(
-    getAssignableAllyRoleOptions("support").map((option) => option.value),
-    ["top", "jungle", "middle", "bottom"],
-  );
-
-  assert.deepEqual(
-    getAssignableAllyRoleOptions("middle").map((option) => option.value),
-    ["top", "jungle", "bottom", "support"],
-  );
 });
 
 test("getRoleLabel falls back to the default target role label", () => {
@@ -113,18 +99,6 @@ test("getSuggestedAllyRole skips taken roles even when they are the most likely 
     ),
     "middle",
   );
-});
-
-test("getMostLikelyRole reports a champion's highest Lolalytics lane share", () => {
-  assert.equal(
-    getMostLikelyRole({
-      bottom: { lanePercent: 12.4, pickRate: 1.7, winRate: 50.1 },
-      middle: { lanePercent: 74.8, pickRate: 8.5, winRate: 51.2 },
-      support: { lanePercent: 12.8, pickRate: 1.9, winRate: 49.8 },
-    }),
-    "middle",
-  );
-  assert.equal(getMostLikelyRole(null), null);
 });
 
 test("resolveAllyRoleAssignment swaps roles when a taken lane is selected", () => {

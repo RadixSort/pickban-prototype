@@ -18,35 +18,6 @@
   const DEFAULT_TOP_RESULT_LIMIT = 5;
   const DRAFT_TOP_RESULT_LIMIT = 10;
 
-  function average(values = []) {
-    let total = 0;
-    let count = 0;
-
-    for (const value of values) {
-      if (typeof value !== "number" && typeof value !== "string") {
-        continue;
-      }
-
-      if (typeof value === "string" && value.trim() === "") {
-        continue;
-      }
-
-      const numericValue = Number(value);
-      if (!Number.isFinite(numericValue)) {
-        continue;
-      }
-
-      total += numericValue;
-      count += 1;
-    }
-
-    if (count === 0) {
-      return 0;
-    }
-
-    return total / count;
-  }
-
   function getProjectedAgency(result) {
     const projectedAgency = toFiniteNumber(result?.projectedAgency);
     if (projectedAgency != null) {
@@ -86,10 +57,6 @@
 
   function getWinRate(result) {
     return toFiniteNumber(result?.winRate) ?? 0;
-  }
-
-  function getSynergyScore(result) {
-    return toFiniteNumber(result?.synergyScore) ?? 0;
   }
 
   function getCounterScore(result) {
@@ -393,7 +360,6 @@
     PROJECTED_WIN_RATE_LOW_SKILL_SORT_MODE,
     PROJECTED_WIN_RATE_SORT_MODE,
     WIN_RATE_SORT_MODE,
-    average,
     compareByChampion,
     compareByPbi,
     compareByProjectedAgency,
@@ -411,7 +377,6 @@
     getResultKey,
     getResultName,
     getSkillAdjustedProjectedWinRate,
-    getSynergyScore,
     getTopProjectedWinRateKeysAtEverySkillLevel,
     getTopResultKeys,
     getWinRate,

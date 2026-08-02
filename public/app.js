@@ -36,7 +36,6 @@ const {
 const {
   buildSelectedChampionKeys,
   getVisibleSuggestionResults,
-  MIN_PROJECTED_WIN_RATE,
 } = globalThis.suggestionFilters;
 const {
   DEFAULT_RANK_FILTER,
@@ -120,7 +119,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.2",
+  version: "0.8.3",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -141,6 +140,7 @@ const state = {
 
 const AUTO_IMPORT_POLL_INTERVAL_MS = 3000;
 const LIVE_GAME_POLL_INTERVAL_MS = 15 * 1000;
+const LOW_PROJECTED_WIN_RATE = 50;
 
 const limits = {
   allies: 5,
@@ -3422,7 +3422,7 @@ function formatPbi(value) {
 }
 
 function isLowWinRate(value) {
-  return Number.isFinite(Number(value)) && Number(value) <= MIN_PROJECTED_WIN_RATE;
+  return Number.isFinite(Number(value)) && Number(value) <= LOW_PROJECTED_WIN_RATE;
 }
 
 function isNegativeScore(value) {

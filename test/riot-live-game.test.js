@@ -8,7 +8,6 @@ const {
   buildLegendaryItemIdSet,
   buildLiveClientRequestOptions,
   buildLiveGameSnapshot,
-  calculateBuildGold,
   fetchLiveGameSnapshot,
   findLocalPlayerIndex,
   hasCompletedFirstItem,
@@ -62,7 +61,7 @@ function createItem(itemID, price, extra = {}) {
   };
 }
 
-test("normalizeLiveItems keeps only privacy-safe item fields and calculateBuildGold normalizes values", () => {
+test("normalizeLiveItems keeps only privacy-safe item fields and normalizes values", () => {
   const items = [
     createItem(1001, 350, {
       count: 2,
@@ -83,7 +82,6 @@ test("normalizeLiveItems keeps only privacy-safe item fields and calculateBuildG
     { itemId: 3002, count: 2, price: 0, consumable: false },
     { itemId: 3003, count: 2, price: Number.MAX_VALUE, consumable: false },
   ]);
-  assert.equal(calculateBuildGold(items), 700);
 });
 
 test("build gold uses full catalog cost for components, completed items, and consumables", () => {
@@ -119,7 +117,8 @@ test("build gold uses full catalog cost for components, completed items, and con
       { itemId: 3340, price: 0, count: 1 },
     ],
   );
-  assert.equal(calculateBuildGold(items, { itemCostById }), 3800);
+  const [metrics] = rankLivePlayersByBuildGold([{ items }], { itemCostById });
+  assert.equal(metrics.buildGold, 3800);
 });
 
 test("inventory metrics are unknown when a held item lacks a catalog total cost", () => {

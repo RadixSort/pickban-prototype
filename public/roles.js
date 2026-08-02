@@ -89,10 +89,6 @@
     return roleFromLikelihoods || availableRoleOptions[0]?.value || null;
   }
 
-  function getMostLikelyRole(roleLikelihoodsByRole = null) {
-    return getMostLikelyAvailableRole(ROLE_OPTIONS, roleLikelihoodsByRole);
-  }
-
   function resolveAllyRoleAssignment(
     allies = [],
     allyId = null,
@@ -236,13 +232,6 @@
     }));
   }
 
-  function getAssignableAllyRoleOptions(targetRole = DEFAULT_TARGET_ROLE) {
-    const normalizedTargetRole = normalizeRole(targetRole) || DEFAULT_TARGET_ROLE;
-    return ROLE_OPTIONS.filter((option) => option.value !== normalizedTargetRole).map((option) => ({
-      ...option,
-    }));
-  }
-
   function getAutoAssignableAllyRole(allies = [], { requireFullTeam = true } = {}) {
     if (!Array.isArray(allies) || allies.length === 0) {
       return null;
@@ -276,8 +265,6 @@
     DEFAULT_TARGET_ROLE,
     ROLE_OPTIONS,
     getAutoAssignableAllyRole,
-    getAssignableAllyRoleOptions,
-    getMostLikelyRole,
     getRoleLabel,
     getSuggestedAllyRole,
     getTargetRoleOptions,

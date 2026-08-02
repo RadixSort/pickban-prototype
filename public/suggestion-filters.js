@@ -6,8 +6,6 @@
 
   globalScope.suggestionFilters = factory(globalScope.resultRanking || {});
 })(typeof globalThis !== "undefined" ? globalThis : this, (resultRanking) => {
-  const MIN_PROJECTED_WIN_RATE = 50;
-
   function getChampionKeyFromSelection(selection) {
     if (!selection || typeof selection !== "object") {
       return null;
@@ -56,16 +54,6 @@
     });
   }
 
-  function filterLowProjectedWinRateResults(
-    results = [],
-    minimumProjectedWinRate = MIN_PROJECTED_WIN_RATE,
-  ) {
-    void minimumProjectedWinRate;
-
-    // Retained for compatibility now that low projected win-rate results stay visible.
-    return [...results];
-  }
-
   function filterNegativeProjectedAgencyResults(results = []) {
     return results.filter((result) => {
       if (!result || typeof result !== "object") {
@@ -96,9 +84,7 @@
   }
 
   return {
-    MIN_PROJECTED_WIN_RATE,
     buildSelectedChampionKeys,
-    filterLowProjectedWinRateResults,
     filterNegativeProjectedAgencyResults,
     filterUnavailableResults,
     getChampionKeyFromSelection,

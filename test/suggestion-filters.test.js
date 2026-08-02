@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 
 const {
   buildSelectedChampionKeys,
-  filterLowProjectedWinRateResults,
   filterNegativeProjectedAgencyResults,
   filterUnavailableResults,
   getVisibleSuggestionResults,
@@ -79,28 +78,6 @@ test("filterUnavailableResults still supports legacy supportKey rows", () => {
   );
 
   assert.deepEqual(filteredResults, [{ support: "Lulu", supportKey: 117, finalScore: 7.4 }]);
-});
-
-test("filterLowProjectedWinRateResults keeps sub-50 projected win rates visible", () => {
-  const filteredResults = filterLowProjectedWinRateResults([
-    createResult(1, 55.4),
-    createResult(2, 54.8),
-    createResult(3, 53.9),
-    createResult(4, 53.4),
-    createResult(5, 52.7),
-    createResult(6, 52.1),
-    createResult(7, 51.6),
-    createResult(8, 51.1),
-    createResult(9, 50.6),
-    createResult(10, 50.0),
-    createResult(11, 49.9),
-    createResult(12, 48.3),
-  ]);
-
-  assert.deepEqual(
-    filteredResults.map((result) => result.candidateKey),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-  );
 });
 
 test("filterNegativeProjectedAgencyResults removes only negative projected agency results", () => {

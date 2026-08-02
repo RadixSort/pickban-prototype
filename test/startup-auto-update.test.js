@@ -10,6 +10,7 @@ const {
 } = require("../lib/startup-auto-update.js");
 
 const CWD = "/repo";
+const OLDER_PACKAGE = JSON.stringify({ version: "0.6.3" });
 const LOCAL_PACKAGE = JSON.stringify({ version: "0.6.4" });
 const REMOTE_PACKAGE = JSON.stringify({ version: "0.6.8" });
 
@@ -90,6 +91,26 @@ test("startup auto-update does nothing when remote main has the same version", a
   assert.equal(result.remoteVersion, "0.6.4");
 });
 
+test("startup auto-update does not fast-forward to an older package version", async () => {
+  const commands = [];
+  const result = await runStartupAutoUpdate({
+    cwd: CWD,
+    env: {},
+    logger: createLogger(),
+    readFile: () => LOCAL_PACKAGE,
+    runCommand: createCommandRunner(commands, {
+      "git show FETCH_HEAD:package.json": success(OLDER_PACKAGE),
+    }),
+  });
+
+  assert.equal(result.status, "skipped");
+  assert.equal(result.reason, "remote v0.6.3 is older than local v0.6.4");
+  assert.equal(
+    commands.some((entry) => commandKey(entry.command, entry.args) === "git merge --ff-only FETCH_HEAD"),
+    false,
+  );
+});
+
 test("startup auto-update fast-forwards and installs when remote main has a new version", async () => {
   const commands = [];
   const result = await runStartupAutoUpdate({
@@ -129,6 +150,7 @@ test("startup auto-update installs a 0.6.8 release zip for no-git 0.6.4 installs
   const commands = [];
   const writtenFiles = new Map();
   const createdDirs = [];
+  let downloadSignal = null;
   const archiveBuffer = createZipBuffer({
     "pickban-prototype-main/package.json": REMOTE_PACKAGE,
     "pickban-prototype-main/server.js": "require('express');\n",
@@ -137,15 +159,10 @@ test("startup auto-update installs a 0.6.8 release zip for no-git 0.6.4 installs
     cwd: CWD,
     env: {},
     exists: () => false,
-    fetchImpl: async () => ({
-      ok: true,
-      status: 200,
-      arrayBuffer: async () =>
-        archiveBuffer.buffer.slice(
-          archiveBuffer.byteOffset,
-          archiveBuffer.byteOffset + archiveBuffer.byteLength,
-        ),
-    }),
+    fetchImpl: async (_url, options) => {
+      downloadSignal = options.signal;
+      return createZipResponse(archiveBuffer);
+    },
     logger: createLogger(),
     mkdir: (dirPath) => {
       createdDirs.push(dirPath);
@@ -169,6 +186,7 @@ test("startup auto-update installs a 0.6.8 release zip for no-git 0.6.4 installs
   assert.equal(result.source, "zip");
   assert.equal(result.localVersion, "0.6.4");
   assert.equal(result.remoteVersion, "0.6.8");
+  assert.ok(downloadSignal instanceof AbortSignal);
   assert.equal(writtenFiles.get(`${CWD}/package.json`), REMOTE_PACKAGE);
   assert.equal(writtenFiles.get(`${CWD}/server.js`), "require('express');\n");
   assert.deepEqual(createdDirs, [CWD, CWD]);
@@ -178,6 +196,34 @@ test("startup auto-update installs a 0.6.8 release zip for no-git 0.6.4 installs
       "git rev-parse --is-inside-work-tree",
       "npm install --no-audit --no-fund",
     ],
+  );
+});
+
+test("zip auto-update does not install an older package version", async () => {
+  const commands = [];
+  const writtenFiles = [];
+  const archiveBuffer = createZipBuffer({
+    "pickban-prototype-main/package.json": OLDER_PACKAGE,
+  });
+  const result = await runStartupAutoUpdate({
+    cwd: CWD,
+    env: {},
+    exists: () => false,
+    fetchImpl: async () => createZipResponse(archiveBuffer),
+    logger: createLogger(),
+    readFile: () => LOCAL_PACKAGE,
+    runCommand: createCommandRunner(commands, {
+      "git rev-parse --is-inside-work-tree": failure("git not found"),
+    }),
+    writeFile: (filePath) => writtenFiles.push(filePath),
+  });
+
+  assert.equal(result.status, "skipped");
+  assert.equal(result.reason, "release v0.6.3 is older than local v0.6.4");
+  assert.deepEqual(writtenFiles, []);
+  assert.equal(
+    commands.some((entry) => commandKey(entry.command, entry.args) === "npm install --no-audit --no-fund"),
+    false,
   );
 });
 
@@ -226,6 +272,18 @@ function createCommandRunner(commands, overrides = {}) {
     }
 
     return defaultCommandResult(key);
+  };
+}
+
+function createZipResponse(archiveBuffer) {
+  return {
+    ok: true,
+    status: 200,
+    arrayBuffer: async () =>
+      archiveBuffer.buffer.slice(
+        archiveBuffer.byteOffset,
+        archiveBuffer.byteOffset + archiveBuffer.byteLength,
+      ),
   };
 }
 

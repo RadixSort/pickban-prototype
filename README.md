@@ -19,7 +19,7 @@ Open `http://localhost:3000` and leave the terminal running. After the first set
 
 ## Use the app
 
-Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gold+, Platinum+, Emerald+, Diamond+, D2+, and Master+; Emerald+ is the default. The **Lane Weight ×1/×2/×3/×4** control sets how strongly likely lane opponents influence champion recommendations. Defaults follow the viewed role: Support and Jungle use ×1, Bot and Mid use ×2, and Top uses ×3. A manual weight remains selected while switching between roles with the same default; switching to a role with a different default selects that role's default.
+Lolalytics lookups use the last 30 days. Rank filters cover All Ranks through Master+, with Emerald+ as the default. **Lane Weight** controls how strongly likely lane opponents affect champion recommendations. Defaults are ×1 for Support/Jungle, ×2 for Bot/Mid, and ×3 for Top.
 
 1. Click **Fetch Suggestions** with an empty draft for first-pick lists.
 2. Add allies and enemies, adjust any ally roles or enemy lanes, then fetch again for draft-aware suggestions.
@@ -31,11 +31,9 @@ Lolalytics lookups use the last 30 days. The rank filter supports All Ranks, Gol
 
 The app supports at most five champions per team and never allows the same champion on both teams.
 
-Rune recommendations combine the pick frequency and win rate of each rune element across the selected enemy matchups. The app builds the highest-win and most-picked pages element by element instead of choosing one observed complete page.
+Rune pages are assembled element by element from the selected matchups. Automatic enemy lanes are unique and favor the champion with the higher lane probability; manual lane choices may duplicate. Bot and Support share a lane for weighting and lane-only builds.
 
-Automatic enemy lanes are unique: when champions compete for a lane, the higher Lolalytics lane probability gets priority and the other champion moves to its next available lane. Use an enemy's lane selector to correct a speculative assignment; manual choices remain fixed and may intentionally duplicate another enemy lane. Bottom and Support count as the same lane for champion-suggestion weighting. If none of the selected enemies occupies the target lane, PickBan still assigns the most likely off-meta enemy as one lane opponent.
-
-Fetching champion recommendations preloads and caches every Lane Weight variant for the current draft. Build recommendations incorporate each included enemy matchup once and request the matchup for the lane assigned to that enemy. The compact **Counter Filter** stays pinned and left-aligned over the build content while the popup scrolls, with its full layout visible without a filter-owned scrollbar. The layout button sits to the right of the horizontal controls and switches them to a top-left-aligned vertical stack; in vertical mode the button moves below the stack, and pressing it again restores the horizontal layout. This visual change does not move or resize the recommendation content. Text remains horizontal, and the horizontal layout preserves the control order from the red **×**, through the enemy portraits, to enemy build gold, the colon, allied build gold, and the coin. The filter itself has no background; only the single-row gold scoreboard uses a small opaque, portrait-bordered surface for legibility. In vertical mode the coin moves to the left of the enemy and allied totals. The scoreboard remains visible as **0.0k : 0.0k** without live data and shows full enemy and allied team totals in one-decimal thousands (for example, **21.3k**) when a complete live snapshot is available. Clicking a portrait removes or restores that enemy, while removing the final selected portrait or clicking the always-visible × restores the complete selection. The current content and scroll position remain anchored while an uncached filter subset loads. The × is disabled while all enemies are already included. Filtered subsets are cached for the page session. Each of the **Highest Win** and **Most Picked** rune pages and item paths can independently switch between **All enemies** and **Lane only**; a Support or Bot lane-only recommendation combines both enemy Support and Bot matchups.
+The **Counter Filter** selects which enemy matchups feed every build section. Removing the final portrait or clicking × restores all enemies. Highest-win and most-picked rune and item columns can switch independently between all enemies and lane opponents.
 
 ### Scores
 
@@ -49,24 +47,22 @@ Draft-aware rows highlight the top ten projected win rates. Yellow marks picks t
 
 ## Auto Import (Windows)
 
-Click **Auto Import** in the main toolbar or at the top of the build popup after the League Client enters Practice Tool, Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select, or while a game in one of those queues is already running. Both controls share the same import state. PickBan imports visible picks, allied hovers, and known ally roles during champion select.
+Click **Auto Import** during Practice Tool, Normal Draft, Ranked Solo/Duo, or Ranked Flex champion select or a running game. The toolbar and build-popup controls share one import state.
 
 During bans, the app shows one recommendation for each role:
 
 1. Counter the allied hover in that role when valid counter data exists.
 2. Otherwise use the role's highest eligible PBI champion.
 
-Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end.
-
-Once the game starts, Auto Import replaces speculative enemy champions and lanes with the live participants. It then refreshes every player's inventory every 15 seconds, totals the full shop cost of every held item (including components and consumable stacks), and assigns deterministic global ranks from 1 (highest build value) downward. If an enemy becomes hidden and the live feed omits or clears that inventory, PickBan keeps the last observed value instead of replacing it with zero. Build recommendation portraits show those rank numbers for the selected ally and every enemy.
+Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end. During a game, Auto Import replaces speculative picks with live participants and refreshes build-gold ranks every 15 seconds. Hidden enemies retain their last observed inventory value.
 
 The build popup also applies a live Counter Filter on each 15-second refresh:
 
-- Before the selected ally owns a Legendary item, non-Junglers include only enemies in that ally's lane; Bot and Support share one lane. Junglers instead include all five enemies equally. Selling every Legendary item restores the applicable pre-item rule on the next live refresh without hiding build-gold ranks.
+- Before the selected ally owns a Legendary item, non-Junglers include only same-lane enemies; Junglers include all enemies.
 - After the selected ally owns a Legendary item, only enemies ranked 1 through 5 in global build gold are included.
 - If no enemy is in that global top five, all enemies are included.
 
-Changing portraits manually overrides the automatic subset until the next 15-second refresh, when the live filter is applied again. The best-ranked enemy keeps a yellow portrait border even when that enemy is filtered out. Unsupported queues and terminal gameflow phases disable Auto Import without clearing manual picks. A live-data handoff or transient in-game read failure keeps Auto Import active and retries.
+Manual portrait changes last until the next live refresh. Unsupported queues and terminal game phases disable Auto Import without clearing manual picks; transitions and transient read failures retry.
 
 ## Requirements and limits
 

@@ -8,13 +8,13 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const DEFAULT_RANK_FILTER = "emerald_plus";
   const RANK_FILTER_OPTIONS = [
-    { value: "all", label: "All Ranks", tierQueryValue: "all" },
-    { value: "gold_plus", label: "Gold+", tierQueryValue: "gold_plus" },
-    { value: "platinum_plus", label: "Platinum+", tierQueryValue: "platinum_plus" },
-    { value: "emerald_plus", label: "Emerald+", tierQueryValue: null },
-    { value: "diamond_plus", label: "Diamond+", tierQueryValue: "diamond_plus" },
-    { value: "d2_plus", label: "D2+", tierQueryValue: "d2_plus" },
-    { value: "master_plus", label: "Master+", tierQueryValue: "master_plus" },
+    { value: "all", label: "All Ranks" },
+    { value: "gold_plus", label: "Gold+" },
+    { value: "platinum_plus", label: "Platinum+" },
+    { value: "emerald_plus", label: "Emerald+" },
+    { value: "diamond_plus", label: "Diamond+" },
+    { value: "d2_plus", label: "D2+" },
+    { value: "master_plus", label: "Master+" },
   ];
 
   const rankFilterByValue = new Map(RANK_FILTER_OPTIONS.map((option) => [option.value, option]));
@@ -77,11 +77,6 @@
     }));
   }
 
-  function getLolalyticsTierQueryValue(value) {
-    const normalized = normalizeRankFilter(value) || DEFAULT_RANK_FILTER;
-    return rankFilterByValue.get(normalized)?.tierQueryValue ?? null;
-  }
-
   function getLolalyticsDataTierQueryValue(value) {
     return normalizeRankFilter(value) || DEFAULT_RANK_FILTER;
   }
@@ -90,7 +85,6 @@
     DEFAULT_RANK_FILTER,
     RANK_FILTER_OPTIONS,
     getLolalyticsDataTierQueryValue,
-    getLolalyticsTierQueryValue,
     getRankFilterLabel,
     getRankFilterOptions,
     normalizeRankFilter,
