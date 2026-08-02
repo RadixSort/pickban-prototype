@@ -237,11 +237,26 @@
         <div id="build-suggestion-tabs" class="build-modal-tabs" role="tablist" aria-label="Build suggestion views"></div>
         <div class="build-modal-scroll">
           <div class="build-counter-filter-sticky">
-            <div
-              id="build-suggestion-counter-filter"
-              class="build-counter-filter"
-              aria-label="Counter Filter"
-            ></div>
+            <div class="build-counter-filter-hover">
+              <div
+                id="build-suggestion-counter-filter"
+                class="build-counter-filter"
+                aria-label="Counter Filter"
+              ></div>
+              <button
+                id="build-suggestion-counter-filter-orientation"
+                class="build-counter-filter-orientation-toggle"
+                type="button"
+                aria-label="Switch counter filter to vertical orientation"
+                title="Switch counter filter to vertical orientation"
+              >
+                <span class="build-counter-filter-orientation-icon" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+              </button>
+            </div>
           </div>
           <div id="build-suggestion-errors" class="partial-failures build-modal-messages"></div>
           <div id="build-suggestion-body" class="build-modal-body"></div>

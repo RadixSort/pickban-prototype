@@ -1,6 +1,6 @@
 {
   "name": "pickban-prototype",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "license": "MIT",
   "description": "Local PickBan prototype for live role recommendations",

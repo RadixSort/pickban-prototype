@@ -5,13 +5,17 @@ const {
   buildBuildSuggestionCacheKey,
 } = globalThis.buildSuggestionCache;
 const {
+  DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+  VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION,
   filterBuildCounterEnemies,
   formatBuildGoldThousands,
+  normalizeBuildCounterFilterOrientation,
   resolveBuildGoldScoreboard,
   resolveAutomaticBuildCounterFilter,
   resolveHighestRankedEnemyChampionKey,
   resolveVisibleBuildGoldRank,
   toggleBuildCounterFilter,
+  toggleBuildCounterFilterOrientation,
 } = globalThis.buildCounterFilter;
 const {
   createInitialLiveGameState,
@@ -116,7 +120,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.1",
+  version: "0.8.2",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -188,6 +192,7 @@ const sortControl = document.getElementById("results-sort-control");
 const draftProjectionWrap = document.getElementById("draft-projection-wrap");
 const versionText = document.getElementById("app-version");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
+const buildSuggestionDialog = document.getElementById("build-suggestion-dialog");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
 const buildSuggestionAutoImportButton = document.getElementById(
   "build-suggestion-auto-import",
@@ -202,6 +207,12 @@ const buildSuggestionTitle = document.getElementById("build-suggestion-title");
 const buildSuggestionMeta = document.getElementById("build-suggestion-meta");
 const buildSuggestionCounterFilter = document.getElementById(
   "build-suggestion-counter-filter",
+);
+const buildSuggestionCounterFilterSticky = buildSuggestionCounterFilter.closest(
+  ".build-counter-filter-sticky",
+);
+const buildSuggestionCounterFilterOrientationButton = document.getElementById(
+  "build-suggestion-counter-filter-orientation",
 );
 const buildSuggestionTabs = document.getElementById("build-suggestion-tabs");
 const buildSuggestionErrors = document.getElementById("build-suggestion-errors");
@@ -245,6 +256,10 @@ async function initialize() {
   sortSelect.addEventListener("change", handleSkillLevelChange);
   buildSuggestionBackdrop.addEventListener("click", closeBuildSuggestionModal);
   buildSuggestionCloseButton.addEventListener("click", closeBuildSuggestionModal);
+  buildSuggestionCounterFilterOrientationButton.addEventListener(
+    "click",
+    handleBuildCounterFilterOrientationToggle,
+  );
   document.addEventListener("click", handleOutsideClick);
   document.addEventListener("keydown", handleGlobalKeydown);
 
@@ -675,6 +690,7 @@ function createInitialBuildSuggestionModalState() {
     enemies: [],
     selectedCounterChampionKeys: [],
     counterFilterMode: "automatic",
+    counterFilterOrientation: DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
     automaticFilterApplied: false,
     automaticFilterReason: "",
     payload: null,
@@ -838,6 +854,7 @@ async function handleOpenBuildSuggestions(allyId) {
     enemies: enemySelections,
     selectedCounterChampionKeys: automaticFilter.selectedChampionKeys,
     counterFilterMode: "automatic",
+    counterFilterOrientation: DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
     automaticFilterApplied: automaticFilter.applied,
     automaticFilterReason: automaticFilter.reason,
     payload: cachedPayload,
@@ -987,6 +1004,18 @@ function handleClearBuildCounterFilter() {
   state.buildSuggestionModal.automaticFilterApplied = false;
   state.buildSuggestionModal.automaticFilterReason = "";
   void loadBuildSuggestionForCurrentCounterFilter();
+}
+
+function handleBuildCounterFilterOrientationToggle() {
+  const modalState = state.buildSuggestionModal;
+  if (!modalState.open || state.shuttingDown) {
+    return;
+  }
+
+  modalState.counterFilterOrientation = toggleBuildCounterFilterOrientation(
+    modalState.counterFilterOrientation,
+  );
+  renderBuildSuggestionModal();
 }
 
 function closeBuildSuggestionModal() {
@@ -2245,6 +2274,34 @@ function renderBuildSuggestionModal() {
 
   buildSuggestionModal.classList.toggle("hidden", !modalState.open);
   buildSuggestionModal.setAttribute("aria-hidden", modalState.open ? "false" : "true");
+  const counterFilterOrientation = normalizeBuildCounterFilterOrientation(
+    modalState.counterFilterOrientation,
+  );
+  const counterFilterIsVertical =
+    counterFilterOrientation === VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION;
+  const counterFilterOrientationTarget = counterFilterIsVertical
+    ? DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION
+    : VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION;
+  const counterFilterOrientationLabel =
+    `Switch counter filter to ${counterFilterOrientationTarget} orientation`;
+  buildSuggestionCounterFilter.classList.toggle(
+    "build-counter-filter--vertical",
+    counterFilterIsVertical,
+  );
+  buildSuggestionCounterFilterSticky.classList.toggle(
+    "build-counter-filter-sticky--vertical",
+    counterFilterIsVertical,
+  );
+  buildSuggestionCounterFilterOrientationButton.classList.toggle(
+    "build-counter-filter-orientation-toggle--vertical",
+    counterFilterIsVertical,
+  );
+  buildSuggestionCounterFilterOrientationButton.setAttribute(
+    "aria-label",
+    counterFilterOrientationLabel,
+  );
+  buildSuggestionCounterFilterOrientationButton.title = counterFilterOrientationLabel;
+  buildSuggestionCounterFilterOrientationButton.disabled = state.shuttingDown;
 
   if (!modalState.open) {
     buildSuggestionChampionPortrait.classList.add("hidden");
@@ -2353,6 +2410,7 @@ function renderBuildSuggestionModal() {
     }
   }
   buildSuggestionScroll.scrollTop = preservedScrollTop;
+  buildSuggestionDialog.scrollTop = 0;
 }
 
 function renderBuildSuggestionCounterFilter(modalState) {

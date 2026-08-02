@@ -6,10 +6,26 @@
 
   globalScope.buildCounterFilter = factory(globalScope.laneOpponentWeight || {});
 })(typeof globalThis !== "undefined" ? globalThis : this, (laneOpponentWeight = {}) => {
+  const DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION = "horizontal";
+  const VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION = "vertical";
+
   const rolesShareLane =
     typeof laneOpponentWeight.rolesShareLane === "function"
       ? laneOpponentWeight.rolesShareLane
       : () => false;
+
+  function normalizeBuildCounterFilterOrientation(value) {
+    return value === VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION
+      ? VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION
+      : DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION;
+  }
+
+  function toggleBuildCounterFilterOrientation(value) {
+    return normalizeBuildCounterFilterOrientation(value) ===
+      DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION
+      ? VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION
+      : DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION;
+  }
 
   function formatBuildGoldThousands(value) {
     const gold = Number(value);
@@ -301,12 +317,16 @@
   }
 
   return {
+    DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+    VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION,
     filterBuildCounterEnemies,
     formatBuildGoldThousands,
+    normalizeBuildCounterFilterOrientation,
     resolveBuildGoldScoreboard,
     resolveAutomaticBuildCounterFilter,
     resolveHighestRankedEnemyChampionKey,
     resolveVisibleBuildGoldRank,
     toggleBuildCounterFilter,
+    toggleBuildCounterFilterOrientation,
   };
 });

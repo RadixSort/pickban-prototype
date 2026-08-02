@@ -2,16 +2,51 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+  VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION,
   filterBuildCounterEnemies,
   formatBuildGoldThousands,
+  normalizeBuildCounterFilterOrientation,
   resolveBuildGoldScoreboard,
   resolveAutomaticBuildCounterFilter,
   resolveHighestRankedEnemyChampionKey,
   resolveVisibleBuildGoldRank,
   toggleBuildCounterFilter,
+  toggleBuildCounterFilterOrientation,
 } = require("../public/build-counter-filter.js");
 
 const availableKeys = ["103", "99", "64"];
+
+test("counter-filter orientation defaults to horizontal", () => {
+  assert.equal(DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION, "horizontal");
+  assert.equal(normalizeBuildCounterFilterOrientation(), "horizontal");
+});
+
+test("counter-filter orientation normalization accepts only vertical", () => {
+  assert.equal(
+    normalizeBuildCounterFilterOrientation(VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION),
+    "vertical",
+  );
+  assert.equal(normalizeBuildCounterFilterOrientation("horizontal"), "horizontal");
+  assert.equal(normalizeBuildCounterFilterOrientation("diagonal"), "horizontal");
+  assert.equal(normalizeBuildCounterFilterOrientation(null), "horizontal");
+});
+
+test("counter-filter orientation toggle round-trips and treats invalid state as horizontal", () => {
+  const vertical = toggleBuildCounterFilterOrientation(
+    DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+  );
+
+  assert.equal(vertical, VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION);
+  assert.equal(
+    toggleBuildCounterFilterOrientation(vertical),
+    DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+  );
+  assert.equal(
+    toggleBuildCounterFilterOrientation("diagonal"),
+    VERTICAL_BUILD_COUNTER_FILTER_ORIENTATION,
+  );
+});
 
 test("team build-gold totals use one-decimal thousands", () => {
   assert.equal(formatBuildGoldThousands(21303), "21.3k");
