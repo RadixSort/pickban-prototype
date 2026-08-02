@@ -7,7 +7,7 @@
   globalScope.rankFilters = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const DEFAULT_RANK_FILTER = "emerald_plus";
-  const AUTO_IMPORT_BUILD_RANK_FILTER = "master_plus";
+  const BUILD_SUGGESTION_STARTING_RANK_FILTER = "master_plus";
   const RANK_FILTER_OPTIONS = [
     { value: "all", label: "All Ranks" },
     { value: "gold_plus", label: "Gold+" },
@@ -99,7 +99,7 @@
   }
 
   return {
-    AUTO_IMPORT_BUILD_RANK_FILTER,
+    BUILD_SUGGESTION_STARTING_RANK_FILTER,
     DEFAULT_RANK_FILTER,
     RANK_FILTER_OPTIONS,
     getLolalyticsDataTierQueryValue,

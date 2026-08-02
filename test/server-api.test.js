@@ -1271,7 +1271,7 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   );
 });
 
-test("POST /build-suggestions starts complete auto-import builds at Master+ and lowers rank", async (t) => {
+test("POST /build-suggestions starts complete popup builds at Master+ and lowers rank", async (t) => {
   const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
     const tier = url.searchParams.get("tier");
     const enemy = url.searchParams.get("vs");

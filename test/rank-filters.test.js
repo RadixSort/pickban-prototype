@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  AUTO_IMPORT_BUILD_RANK_FILTER,
+  BUILD_SUGGESTION_STARTING_RANK_FILTER,
   DEFAULT_RANK_FILTER,
   getLolalyticsDataTierQueryValue,
   getRankFilterFallbacks,
@@ -23,7 +23,7 @@ test("normalizeRankFilter accepts supported dropdown values and aliases", () => 
 });
 
 test("getRankFilterFallbacks descends one supported tier at a time", () => {
-  assert.equal(AUTO_IMPORT_BUILD_RANK_FILTER, "master_plus");
+  assert.equal(BUILD_SUGGESTION_STARTING_RANK_FILTER, "master_plus");
   assert.deepEqual(getRankFilterFallbacks("master_plus"), [
     "master_plus",
     "d2_plus",

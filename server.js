@@ -66,7 +66,7 @@ const {
   normalizeRole,
 } = require(path.join(publicDir, "roles.js"));
 const {
-  AUTO_IMPORT_BUILD_RANK_FILTER,
+  BUILD_SUGGESTION_STARTING_RANK_FILTER,
   DEFAULT_RANK_FILTER,
   getLolalyticsDataTierQueryValue,
   getRankFilterFallbacks,
@@ -475,7 +475,7 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
   const buildRequest = normalizedRequest.requireCompleteMatchups === true
     ? {
         ...normalizedRequest,
-        rankFilter: AUTO_IMPORT_BUILD_RANK_FILTER,
+        rankFilter: BUILD_SUGGESTION_STARTING_RANK_FILTER,
       }
     : normalizedRequest;
   const aggregatedCacheKey = buildBuildSuggestionCacheKey(

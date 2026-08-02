@@ -64,7 +64,7 @@ The build popup also applies a live Counter Filter on each 15-second refresh:
 
 Manual portrait changes last until the next live refresh. Unsupported queues and terminal game phases disable Auto Import without clearing manual picks; transitions and transient read failures retry.
 
-While Auto Import is active, build requests start at Master+ and require data for every enemy included by the Counter Filter. If any included matchup is blank, PickBan retries the complete set at each lower rank tier until all included enemies succeed or All Ranks is reached. The popup shows the effective fallback tier when one is used. Manual build requests keep the selected tier and may show partial matchup failures.
+Every build-popup request starts at Master+ and requires data for every enemy included by the Counter Filter, regardless of Auto Import status. If any included matchup is blank, PickBan retries the complete set at each lower rank tier until all included enemies succeed or All Ranks is reached. The popup shows the effective fallback tier when one is used.
 
 ## Requirements and limits
 

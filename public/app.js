@@ -38,7 +38,7 @@ const {
   getVisibleSuggestionResults,
 } = globalThis.suggestionFilters;
 const {
-  AUTO_IMPORT_BUILD_RANK_FILTER,
+  BUILD_SUGGESTION_STARTING_RANK_FILTER,
   DEFAULT_RANK_FILTER,
   getRankFilterLabel,
   getRankFilterOptions,
@@ -456,12 +456,6 @@ function getRankFilterDisplayLabel() {
   return getRankFilterLabel(state.rankFilter);
 }
 
-function getBuildSuggestionStartingRankFilter(requireCompleteMatchups = false) {
-  return requireCompleteMatchups
-    ? AUTO_IMPORT_BUILD_RANK_FILTER
-    : state.rankFilter;
-}
-
 function initializeRankFilterOptions() {
   rankFilterSelect.innerHTML = getRankFilterOptions()
     .map((option) => `<option value="${option.value}">${option.label}</option>`)
@@ -840,8 +834,7 @@ async function handleOpenBuildSuggestions(allyId) {
     return;
   }
 
-  const requireCompleteMatchups = state.autoImport.active === true;
-  const rankFilter = getBuildSuggestionStartingRankFilter(requireCompleteMatchups);
+  const rankFilter = BUILD_SUGGESTION_STARTING_RANK_FILTER;
   const enemySelections = state.enemies.map((enemy) => ({ ...enemy }));
   const automaticFilter = resolveCurrentAutomaticBuildCounterFilter(ally, enemySelections);
   const initiallyFilteredEnemies = filterBuildCounterEnemies(
@@ -850,7 +843,7 @@ async function handleOpenBuildSuggestions(allyId) {
   );
   const cacheKey = initiallyFilteredEnemies.length > 0
     ? buildBuildSuggestionCacheKey(rankFilter, ally, initiallyFilteredEnemies, {
-        requireCompleteMatchups,
+        requireCompleteMatchups: true,
       })
     : "";
   const cachedPayload = cacheKey ? state.buildSuggestionCache[cacheKey] || null : null;
@@ -904,14 +897,13 @@ async function loadBuildSuggestionForCurrentCounterFilter() {
     return;
   }
 
-  const requireCompleteMatchups = state.autoImport.active === true;
-  const rankFilter = getBuildSuggestionStartingRankFilter(requireCompleteMatchups);
+  const rankFilter = BUILD_SUGGESTION_STARTING_RANK_FILTER;
   const cacheKey = buildBuildSuggestionCacheKey(
     rankFilter,
     ally,
     enemySelections,
     {
-      requireCompleteMatchups,
+      requireCompleteMatchups: true,
     },
   );
   const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
@@ -934,7 +926,6 @@ async function loadBuildSuggestionForCurrentCounterFilter() {
       cacheKey,
       enemySelections,
       rankFilter,
-      requireCompleteMatchups,
     });
     state.buildSuggestionRequestsByKey[cacheKey] = requestPromise;
   }
@@ -964,12 +955,11 @@ async function fetchBuildSuggestionPayload({
   cacheKey,
   enemySelections,
   rankFilter,
-  requireCompleteMatchups,
 }) {
   try {
     const { response, payload } = await postJson("/build-suggestions", {
       rankFilter,
-      requireCompleteMatchups,
+      requireCompleteMatchups: true,
       ally: {
         champion: ally.name,
         role: ally.role,
