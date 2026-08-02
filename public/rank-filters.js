@@ -7,6 +7,7 @@
   globalScope.rankFilters = factory();
 })(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const DEFAULT_RANK_FILTER = "emerald_plus";
+  const AUTO_IMPORT_BUILD_RANK_FILTER = "master_plus";
   const RANK_FILTER_OPTIONS = [
     { value: "all", label: "All Ranks" },
     { value: "gold_plus", label: "Gold+" },
@@ -77,14 +78,32 @@
     }));
   }
 
+  /**
+   * Return the requested rank followed by each supported lower-rank,
+   * broader-population filter. Build recommendations use this order when a
+   * complete imported enemy set is unavailable at the selected rank.
+   */
+  function getRankFilterFallbacks(value) {
+    const normalized = normalizeRankFilter(value) || DEFAULT_RANK_FILTER;
+    const requestedIndex = RANK_FILTER_OPTIONS.findIndex(
+      (option) => option.value === normalized,
+    );
+
+    return RANK_FILTER_OPTIONS.slice(0, requestedIndex + 1)
+      .map((option) => option.value)
+      .reverse();
+  }
+
   function getLolalyticsDataTierQueryValue(value) {
     return normalizeRankFilter(value) || DEFAULT_RANK_FILTER;
   }
 
   return {
+    AUTO_IMPORT_BUILD_RANK_FILTER,
     DEFAULT_RANK_FILTER,
     RANK_FILTER_OPTIONS,
     getLolalyticsDataTierQueryValue,
+    getRankFilterFallbacks,
     getRankFilterLabel,
     getRankFilterOptions,
     normalizeRankFilter,

@@ -214,6 +214,47 @@ test("normalizeBuildSuggestionRequest requires at least one enemy champion", () 
   );
 });
 
+test("normalizeBuildSuggestionRequest accepts only a boolean complete-matchup flag", () => {
+  const request = normalizeBuildSuggestionRequest(
+    {
+      requireCompleteMatchups: true,
+      ally: {
+        champion: "Ahri",
+        role: "mid",
+      },
+      enemies: ["Jarvan IV"],
+    },
+    {
+      championByName,
+      defaultRankFilter: DEFAULT_RANK_FILTER,
+      normalizeRankFilter,
+      normalizeRole,
+    },
+  );
+
+  assert.equal(request.requireCompleteMatchups, true);
+  assert.throws(
+    () =>
+      normalizeBuildSuggestionRequest(
+        {
+          requireCompleteMatchups: "true",
+          ally: {
+            champion: "Ahri",
+            role: "mid",
+          },
+          enemies: ["Jarvan IV"],
+        },
+        {
+          championByName,
+          defaultRankFilter: DEFAULT_RANK_FILTER,
+          normalizeRankFilter,
+          normalizeRole,
+        },
+      ),
+    /must be a boolean/i,
+  );
+});
+
 test("normalizeBuildSuggestionRequest rejects missing ally role and opposing picks", () => {
   assert.throws(
     () =>

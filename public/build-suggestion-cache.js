@@ -18,6 +18,7 @@
     rankFilter = "",
     ally = null,
     enemies = [],
+    { requireCompleteMatchups = false } = {},
   ) {
     const normalizedRankFilter =
       typeof rankFilter === "string" && rankFilter.trim() ? rankFilter.trim().toLowerCase() : "";
@@ -35,7 +36,8 @@
       })
       .filter(Boolean)
       .sort();
-    return `rank=${normalizedRankFilter}|ally=${allyChampionKey || ""}:${allyRole}|enemies=${enemyEntries.join(",")}`;
+    const baseKey = `rank=${normalizedRankFilter}|ally=${allyChampionKey || ""}:${allyRole}|enemies=${enemyEntries.join(",")}`;
+    return requireCompleteMatchups ? `${baseKey}|complete=1` : baseKey;
   }
 
   function getChampionKey(selection) {

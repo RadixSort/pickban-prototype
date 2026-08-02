@@ -38,6 +38,7 @@ const {
   getVisibleSuggestionResults,
 } = globalThis.suggestionFilters;
 const {
+  AUTO_IMPORT_BUILD_RANK_FILTER,
   DEFAULT_RANK_FILTER,
   getRankFilterLabel,
   getRankFilterOptions,
@@ -119,7 +120,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.3",
+  version: "0.8.4",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -453,6 +454,12 @@ function selectResultRole(nextRole) {
 
 function getRankFilterDisplayLabel() {
   return getRankFilterLabel(state.rankFilter);
+}
+
+function getBuildSuggestionStartingRankFilter(requireCompleteMatchups = false) {
+  return requireCompleteMatchups
+    ? AUTO_IMPORT_BUILD_RANK_FILTER
+    : state.rankFilter;
 }
 
 function initializeRankFilterOptions() {
@@ -833,7 +840,8 @@ async function handleOpenBuildSuggestions(allyId) {
     return;
   }
 
-  const rankFilter = state.rankFilter;
+  const requireCompleteMatchups = state.autoImport.active === true;
+  const rankFilter = getBuildSuggestionStartingRankFilter(requireCompleteMatchups);
   const enemySelections = state.enemies.map((enemy) => ({ ...enemy }));
   const automaticFilter = resolveCurrentAutomaticBuildCounterFilter(ally, enemySelections);
   const initiallyFilteredEnemies = filterBuildCounterEnemies(
@@ -841,7 +849,9 @@ async function handleOpenBuildSuggestions(allyId) {
     automaticFilter.selectedChampionKeys,
   );
   const cacheKey = initiallyFilteredEnemies.length > 0
-    ? buildBuildSuggestionCacheKey(rankFilter, ally, initiallyFilteredEnemies)
+    ? buildBuildSuggestionCacheKey(rankFilter, ally, initiallyFilteredEnemies, {
+        requireCompleteMatchups,
+      })
     : "";
   const cachedPayload = cacheKey ? state.buildSuggestionCache[cacheKey] || null : null;
 
@@ -894,10 +904,15 @@ async function loadBuildSuggestionForCurrentCounterFilter() {
     return;
   }
 
+  const requireCompleteMatchups = state.autoImport.active === true;
+  const rankFilter = getBuildSuggestionStartingRankFilter(requireCompleteMatchups);
   const cacheKey = buildBuildSuggestionCacheKey(
-    state.rankFilter,
+    rankFilter,
     ally,
     enemySelections,
+    {
+      requireCompleteMatchups,
+    },
   );
   const cachedPayload = state.buildSuggestionCache[cacheKey] || null;
 
@@ -918,7 +933,8 @@ async function loadBuildSuggestionForCurrentCounterFilter() {
       ally,
       cacheKey,
       enemySelections,
-      rankFilter: state.rankFilter,
+      rankFilter,
+      requireCompleteMatchups,
     });
     state.buildSuggestionRequestsByKey[cacheKey] = requestPromise;
   }
@@ -948,10 +964,12 @@ async function fetchBuildSuggestionPayload({
   cacheKey,
   enemySelections,
   rankFilter,
+  requireCompleteMatchups,
 }) {
   try {
     const { response, payload } = await postJson("/build-suggestions", {
       rankFilter,
+      requireCompleteMatchups,
       ally: {
         champion: ally.name,
         role: ally.role,
@@ -1514,6 +1532,7 @@ async function handleLiveDraftImportPayload(payload) {
     return;
   }
 
+  const wasAutoImportActive = state.autoImport.active;
   state.autoImport.requested = true;
   state.autoImport.active = true;
   state.autoImport.status = "active";
@@ -1556,12 +1575,18 @@ async function handleLiveDraftImportPayload(payload) {
     await refreshBuildSuggestionAutomaticFilter();
   } else {
     state.liveGame = createInitialLiveGameState();
-    if (nextSignature && nextSignature !== state.autoImport.lastAppliedSignature) {
+    const draftChanged = Boolean(
+      nextSignature && nextSignature !== state.autoImport.lastAppliedSignature,
+    );
+    if (draftChanged) {
       shouldRefreshSuggestions = applyLiveDraftImport(payload, {
         source: "champ_select",
       });
       state.autoImport.lastAppliedSignature = nextSignature;
       await ensureEnemyRoleAssignmentsLoaded();
+    }
+    if (draftChanged || !wasAutoImportActive) {
+      await refreshBuildSuggestionAutomaticFilter();
     }
   }
 
@@ -2709,7 +2734,18 @@ function buildBuildSuggestionMetaText(ally, payload, filteredEnemyCount = 0) {
     parts.push(getRoleLabel(ally.role));
   }
 
-  parts.push(getRankFilterDisplayLabel());
+  const effectiveRankFilter = normalizeRankFilter(payload?.request?.rankFilter);
+  const fallbackRequestedRankFilter = normalizeRankFilter(
+    payload?.summary?.rankFilterFallback?.requestedRankFilter,
+  );
+  const effectiveRankFilterLabel = getRankFilterLabel(
+    effectiveRankFilter || state.rankFilter,
+  );
+  parts.push(
+    fallbackRequestedRankFilter && fallbackRequestedRankFilter !== effectiveRankFilter
+      ? `${effectiveRankFilterLabel} fallback from ${getRankFilterLabel(fallbackRequestedRankFilter)}`
+      : effectiveRankFilterLabel,
+  );
 
   if (displayedEnemyCount > 0) {
     parts.push(

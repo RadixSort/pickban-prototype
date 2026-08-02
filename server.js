@@ -66,8 +66,10 @@ const {
   normalizeRole,
 } = require(path.join(publicDir, "roles.js"));
 const {
+  AUTO_IMPORT_BUILD_RANK_FILTER,
   DEFAULT_RANK_FILTER,
   getLolalyticsDataTierQueryValue,
+  getRankFilterFallbacks,
   normalizeRankFilter,
 } = require(path.join(publicDir, "rank-filters.js"));
 const {
@@ -470,13 +472,22 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     normalizeRole,
     createError: createHttpError,
   });
+  const buildRequest = normalizedRequest.requireCompleteMatchups === true
+    ? {
+        ...normalizedRequest,
+        rankFilter: AUTO_IMPORT_BUILD_RANK_FILTER,
+      }
+    : normalizedRequest;
   const aggregatedCacheKey = buildBuildSuggestionCacheKey(
-    normalizedRequest.rankFilter,
+    buildRequest.rankFilter,
     {
-      key: normalizedRequest.ally.champion.key,
-      role: normalizedRequest.ally.role,
+      key: buildRequest.ally.champion.key,
+      role: buildRequest.ally.role,
     },
-    normalizedRequest.enemies,
+    buildRequest.enemies,
+    {
+      requireCompleteMatchups: buildRequest.requireCompleteMatchups === true,
+    },
   );
   const cachedPayload = buildSuggestionQueryCache.get(aggregatedCacheKey);
   if (cachedPayload) {
@@ -486,47 +497,53 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     });
   }
 
-  const matchupResults = await Promise.allSettled(
-    normalizedRequest.enemies.map((enemyChampion) =>
-      fetchNormalizedMatchupBuildData({
-        allyChampion: normalizedRequest.ally.champion,
-        enemyChampion,
-        rankFilter: normalizedRequest.rankFilter,
-        role: normalizedRequest.ally.role,
-      }),
-    ),
-  );
-  const { matchupBuilds, partialFailures } = collectSuccessfulMatchupBuilds(
-    matchupResults,
-    normalizedRequest.enemies,
-  );
+  const matchupAttempt = await fetchBuildSuggestionMatchups(buildRequest);
+  const {
+    matchupBuilds,
+    partialFailures,
+    rankFilter: effectiveRankFilter,
+    rankFiltersTried,
+  } = matchupAttempt;
+  const rankFilterFallback = buildRequest.requireCompleteMatchups === true
+    ? {
+        requestedRankFilter: buildRequest.rankFilter,
+        effectiveRankFilter,
+        rankFiltersTried,
+      }
+    : null;
 
   if (matchupBuilds.length === 0) {
     return response.status(502).json({
       error:
         "No build recommendation data was returned from Lolalytics for the selected ally, role, and enemies.",
       summary: {
-        enemyCount: normalizedRequest.enemies.length,
+        enemyCount: buildRequest.enemies.length,
         sourceMatchups: 0,
         lastUpdatedAt: new Date().toISOString(),
         partialFailures,
+        ...(rankFilterFallback ? { rankFilterFallback } : {}),
       },
       requestStats: buildLolalyticsRequestStats(),
     });
   }
 
+  const effectiveRequest = {
+    ...buildRequest,
+    rankFilter: effectiveRankFilter,
+  };
   const matchupBuildsWithLaneLikelihoods = attachCachedLaneOpponentLikelihoods(
     matchupBuilds,
-    normalizedRequest,
+    effectiveRequest,
   );
   const aggregatedResults = buildBuildSuggestionResults({
     matchupBuilds: matchupBuildsWithLaneLikelihoods,
   });
   const payload = buildBuildSuggestionsPayload({
-    normalizedRequest,
+    normalizedRequest: effectiveRequest,
     aggregatedResults,
     sourceMatchups: matchupBuilds.length,
     partialFailures,
+    rankFilterFallback,
   });
 
   if (!hasUsableBuildSuggestions(payload)) {
@@ -545,6 +562,84 @@ app.post("/build-suggestions", withLolalyticsRequestStats(async (request, respon
     requestStats: buildLolalyticsRequestStats(),
   });
 }));
+
+async function fetchBuildSuggestionMatchups(normalizedRequest) {
+  const rankFilters = normalizedRequest.requireCompleteMatchups === true
+    ? getRankFilterFallbacks(normalizedRequest.rankFilter)
+    : [normalizedRequest.rankFilter];
+  const rankFiltersTried = [];
+  let bestAttempt = null;
+
+  for (const rankFilter of rankFilters) {
+    const matchupResults = await Promise.allSettled(
+      normalizedRequest.enemies.map((enemyChampion) =>
+        fetchNormalizedMatchupBuildData({
+          allyChampion: normalizedRequest.ally.champion,
+          enemyChampion,
+          rankFilter,
+          role: normalizedRequest.ally.role,
+        }),
+      ),
+    );
+    const attempt = {
+      ...collectSuccessfulMatchupBuilds(matchupResults, normalizedRequest.enemies),
+      rankFilter,
+    };
+    rankFiltersTried.push(rankFilter);
+
+    if (isBetterBuildMatchupAttempt(attempt, bestAttempt)) {
+      bestAttempt = attempt;
+    }
+
+    if (
+      attempt.matchupBuilds.length === normalizedRequest.enemies.length &&
+      hasUsableBuildMatchupAttempt(attempt, normalizedRequest)
+    ) {
+      bestAttempt = attempt;
+      break;
+    }
+  }
+
+  return {
+    ...(bestAttempt || {
+      matchupBuilds: [],
+      partialFailures: [],
+      rankFilter: normalizedRequest.rankFilter,
+    }),
+    rankFiltersTried,
+  };
+}
+
+function hasUsableBuildMatchupAttempt(attempt, normalizedRequest) {
+  if (!attempt || attempt.matchupBuilds.length === 0) {
+    return false;
+  }
+
+  const aggregatedResults = buildBuildSuggestionResults({
+    matchupBuilds: attempt.matchupBuilds,
+  });
+  const payload = buildBuildSuggestionsPayload({
+    normalizedRequest: {
+      ...normalizedRequest,
+      rankFilter: attempt.rankFilter,
+    },
+    aggregatedResults,
+    sourceMatchups: attempt.matchupBuilds.length,
+    partialFailures: attempt.partialFailures,
+  });
+
+  return hasUsableBuildSuggestions(payload);
+}
+
+function isBetterBuildMatchupAttempt(candidate, current) {
+  if (!current) {
+    return true;
+  }
+
+  const candidateMatchupCount = candidate?.matchupBuilds?.length || 0;
+  const currentMatchupCount = current?.matchupBuilds?.length || 0;
+  return candidateMatchupCount >= currentMatchupCount;
+}
 
 function attachCachedLaneOpponentLikelihoods(matchupBuilds, normalizedRequest) {
   const role = normalizeRole(normalizedRequest?.ally?.role);

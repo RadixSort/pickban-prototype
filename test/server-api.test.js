@@ -1271,6 +1271,102 @@ test("POST /build-suggestions aggregates a full enemy team and caches identical 
   );
 });
 
+test("POST /build-suggestions starts complete auto-import builds at Master+ and lowers rank", async (t) => {
+  const { baseUrl, mockServer } = await startServerWithMock(t, ({ url }) => {
+    const tier = url.searchParams.get("tier");
+    const enemy = url.searchParams.get("vs");
+    if (
+      url.pathname === "/mega/" &&
+      url.searchParams.get("ep") === "rune" &&
+      ["master_plus", "d2_plus", "diamond_plus"].includes(tier) &&
+      enemy === "jinx"
+    ) {
+      return jsonResponse({
+        header: { n: 0, lane: "middle" },
+        summary: { runes: {} },
+      });
+    }
+
+    if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {
+      return jsonResponse(
+        createRuneBuildMegaData({
+          role: "middle",
+          totalGames: tier === "emerald_plus" ? 120 : 60,
+          pickWinRate: 55,
+        }),
+      );
+    }
+
+    if (url.pathname.startsWith("/lol/ahri/vs/") && url.pathname.endsWith("/build/")) {
+      return textResponse(createRenderedBuildPageHtml({ splitStats: true }));
+    }
+
+    return textResponse("Not found.", 404);
+  });
+
+  const response = await postJson(baseUrl, "/build-suggestions", {
+    rankFilter: "emerald_plus",
+    requireCompleteMatchups: true,
+    ally: {
+      champion: "Ahri",
+      role: "mid",
+    },
+    enemies: ["Leona", "Jinx", "Sion", "Vi", "Neeko"],
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.request.rankFilter, "emerald_plus");
+  assert.equal(response.body.summary.enemyCount, 5);
+  assert.equal(response.body.summary.sourceMatchups, 5);
+  assert.deepEqual(response.body.summary.partialFailures, []);
+  assert.deepEqual(response.body.summary.rankFilterFallback, {
+    requestedRankFilter: "master_plus",
+    effectiveRankFilter: "emerald_plus",
+    rankFiltersTried: ["master_plus", "d2_plus", "diamond_plus", "emerald_plus"],
+  });
+  assertBuildSuggestionSectionsArePopulated(response.body);
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("tier") === "master_plus",
+    ),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("tier") === "d2_plus",
+    ),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("tier") === "diamond_plus",
+    ),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("tier") === "emerald_plus",
+    ),
+    5,
+  );
+  assert.equal(
+    mockServer.countRequests(
+      (entry) =>
+        entry.pathname === "/mega/" &&
+        new URLSearchParams(entry.search).get("tier") === "platinum_plus",
+    ),
+    0,
+  );
+});
+
 test("POST /build-suggestions composes rendered rune histograms without complete pages", async (t) => {
   const { baseUrl } = await startServerWithMock(t, ({ url }) => {
     if (url.pathname === "/mega/" && url.searchParams.get("ep") === "rune") {

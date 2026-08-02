@@ -64,3 +64,18 @@ test("buildBuildSuggestionCacheKey changes with the filtered enemy subset", () =
 
   assert.notEqual(before, after);
 });
+
+test("buildBuildSuggestionCacheKey separates complete auto-import requests", () => {
+  const ally = { key: 103, role: "middle" };
+  const enemies = [{ key: 89 }, { key: 222 }];
+  const partialKey = buildBuildSuggestionCacheKey("emerald_plus", ally, enemies);
+  const completeKey = buildBuildSuggestionCacheKey(
+    "emerald_plus",
+    ally,
+    enemies,
+    { requireCompleteMatchups: true },
+  );
+
+  assert.notEqual(partialKey, completeKey);
+  assert.match(completeKey, /\|complete=1$/);
+});
