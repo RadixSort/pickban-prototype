@@ -612,6 +612,42 @@ test("renderBuildSuggestionBody renders named, ordered runes and items with thei
   assert.doesNotMatch(html, /Overview/);
 });
 
+test("item recommendations render five A-or-B rows and gray completed rows", () => {
+  const payload = createPayload();
+  const builds = [payload.items.highestWinBuild, payload.items.mostPickedBuild];
+
+  builds.forEach((build, buildIndex) => {
+    build.selections.forEach((selection, rowIndex) => {
+      selection.alternative = {
+        itemId: 7000 + buildIndex * 10 + rowIndex,
+        icon: `alternative-${buildIndex}-${rowIndex}.webp`,
+        name: `${buildIndex === 0 ? "Highest" : "Picked"} alternative ${rowIndex + 1}`,
+        slotIndex: selection.slotIndex,
+        winRate: 51 + rowIndex,
+        pickRate: 20 + rowIndex,
+        purchaseMinute: 12 + rowIndex * 5,
+      };
+    });
+  });
+
+  const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {
+    completedLegendaryItemCount: 4,
+  });
+
+  assert.equal(
+    countMatches(html, /class="build-item-card(?: build-item-card--completed)?"/g),
+    10,
+  );
+  assert.equal(countMatches(html, /class="build-item-card-option"/g), 20);
+  assert.equal(countMatches(html, /class="build-item-card-or"/g), 10);
+  assert.equal(countMatches(html, /build-item-card--completed/g), 8);
+  assert.match(html, /Luden(?:&#39;|')s Companion or Highest alternative 1/);
+  assert.match(html, /Malignance or Picked alternative 1/);
+  assert.match(html, /Highest alternative 1[\s\S]*51\.0% win[\s\S]*20\.0% pick[\s\S]*12 min/);
+  assert.equal(countMatches(html, /Completed build row\. Build row 4:/g), 2);
+  assert.equal(countMatches(html, /Completed build row\. Build row 5:/g), 0);
+});
+
 test("item recommendation scopes switch Highest Win and Most Picked independently", () => {
   const payload = createPayload();
   const html = renderBuildSuggestionBody(payload, DEFAULT_BUILD_SUGGESTION_TAB, {

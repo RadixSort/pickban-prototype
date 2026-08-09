@@ -724,6 +724,250 @@ test("buildBuildSuggestionResults prefers tab-specific item slots when available
   assert.equal(aggregated.items.highestWinBuild.selections[0].name, "Sundered Sky");
 });
 
+test("buildBuildSuggestionResults attaches one unique runner-up to each item row", () => {
+  const primaryItemIds = [3101, 3102, 3103, 3104, 3105];
+  const alternativeItemIds = [3201, 3202, 3203, 3204, 3205];
+  const genericSlots = primaryItemIds.map((itemId, index) => {
+    const options = [
+      createItemOption({
+        itemId,
+        name: `Primary ${index + 1}`,
+        games: 200 - index,
+        wins: 110 - index,
+        purchaseMinute: 10 + index * 5,
+      }),
+      createItemOption({
+        itemId: alternativeItemIds[index],
+        name: `Alternative ${index + 1}`,
+        games: 180 - index,
+        wins: 120 - index,
+        purchaseMinute: 11 + index * 5,
+      }),
+    ];
+
+    if (index === 0) {
+      options.splice(1, 0, createItemOption({
+        itemId: primaryItemIds[1],
+        name: "Reserved future primary",
+        games: 190,
+        wins: 150,
+        purchaseMinute: 11,
+      }));
+    }
+    if (index === 2) {
+      options.unshift(createItemOption({
+        itemId: 3006,
+        name: "Berserker's Greaves",
+        games: 500,
+        wins: 450,
+        purchaseMinute: 18,
+      }));
+    }
+
+    return options;
+  });
+  const preferredSlots = primaryItemIds.map((itemId, index) => [
+    createItemOption({
+      itemId,
+      name: `Primary ${index + 1}`,
+      games: 100 - index,
+      wins: 60 - index,
+      purchaseMinute: 10 + index * 5,
+    }),
+  ]);
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 1000,
+        fetchedAt: "2026-08-08T12:00:00.000Z",
+        itemSlotOptions: [...genericSlots, []],
+        mostPickedItemSlotOptions: [...preferredSlots, []],
+        highestWinItemSlotOptions: [...preferredSlots, []],
+        boots: [],
+      }),
+    ],
+  });
+
+  for (const build of [
+    aggregated.items.highestWinBuild,
+    aggregated.items.mostPickedBuild,
+  ]) {
+    assert.deepEqual(
+      build.selections.map((selection) => selection.itemId),
+      primaryItemIds,
+    );
+    assert.deepEqual(
+      build.selections.map((selection) => selection.alternative?.itemId),
+      alternativeItemIds,
+    );
+    assert.equal(
+      new Set(
+        build.selections.flatMap((selection) => [
+          selection.itemId,
+          selection.alternative?.itemId,
+        ]),
+      ).size,
+      10,
+    );
+    assert.equal(
+      build.selections.some(
+        (selection) =>
+          selection.itemId === 3006 || selection.alternative?.itemId === 3006,
+      ),
+      false,
+    );
+  }
+});
+
+test("buildBuildSuggestionResults reallocates overlapping runner-ups to fill every row", () => {
+  const primaryItemIds = [3101, 3102, 3103, 3104, 3105];
+  const sharedAlternativeItemId = 3201;
+  const alternativeItemIds = [3202, sharedAlternativeItemId, 3203, 3204, 3205];
+  const itemSlotOptions = primaryItemIds.map((itemId, index) => {
+    const options = [
+      createItemOption({
+        itemId,
+        name: `Primary ${index + 1}`,
+        games: 200,
+        wins: 100,
+        purchaseMinute: 10 + index * 5,
+      }),
+    ];
+
+    if (index === 0) {
+      options.push(
+        createItemOption({
+          itemId: sharedAlternativeItemId,
+          name: "Shared first choice",
+          games: 180,
+          wins: 90,
+          purchaseMinute: 11,
+        }),
+        createItemOption({
+          itemId: alternativeItemIds[index],
+          name: "First row fallback",
+          games: 170,
+          wins: 85,
+          purchaseMinute: 12,
+        }),
+      );
+    } else {
+      options.push(createItemOption({
+        itemId: alternativeItemIds[index],
+        name: `Alternative ${index + 1}`,
+        games: 180,
+        wins: 90,
+        purchaseMinute: 11 + index * 5,
+      }));
+    }
+
+    return options;
+  });
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 1000,
+        fetchedAt: "2026-08-08T12:00:00.000Z",
+        itemSlotOptions: [...itemSlotOptions, []],
+        boots: [],
+      }),
+    ],
+  });
+
+  for (const build of [
+    aggregated.items.highestWinBuild,
+    aggregated.items.mostPickedBuild,
+  ]) {
+    assert.deepEqual(
+      build.selections.map((selection) => selection.itemId),
+      primaryItemIds,
+    );
+    assert.deepEqual(
+      build.selections.map((selection) => selection.alternative?.itemId),
+      alternativeItemIds,
+    );
+    assert.equal(
+      new Set(
+        build.selections.flatMap((selection) => [
+          selection.itemId,
+          selection.alternative?.itemId,
+        ]),
+      ).size,
+      10,
+    );
+  }
+});
+
+test("buildBuildSuggestionResults reallocates a primary when it unlocks two complete pairs", () => {
+  const aggregated = buildBuildSuggestionResults({
+    matchupBuilds: [
+      createMatchupBuild({
+        totalGames: 1000,
+        fetchedAt: "2026-08-08T12:00:00.000Z",
+        itemSlotOptions: [
+          [
+            createItemOption({
+              itemId: 3101,
+              name: "First row primary",
+              games: 200,
+              wins: 100,
+              purchaseMinute: 10,
+            }),
+            createItemOption({
+              itemId: 3102,
+              name: "Shared option",
+              games: 190,
+              wins: 95,
+              purchaseMinute: 11,
+            }),
+          ],
+          [
+            createItemOption({
+              itemId: 3102,
+              name: "Shared option",
+              games: 200,
+              wins: 100,
+              purchaseMinute: 15,
+            }),
+            createItemOption({
+              itemId: 3103,
+              name: "Second row fallback",
+              games: 190,
+              wins: 95,
+              purchaseMinute: 16,
+            }),
+            createItemOption({
+              itemId: 3104,
+              name: "Second row runner-up",
+              games: 180,
+              wins: 90,
+              purchaseMinute: 17,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+        ],
+        boots: [],
+      }),
+    ],
+  });
+
+  for (const build of [
+    aggregated.items.highestWinBuild,
+    aggregated.items.mostPickedBuild,
+  ]) {
+    assert.deepEqual(
+      build.selections.map((selection) => [
+        selection.itemId,
+        selection.alternative?.itemId,
+      ]),
+      [[3101, 3102], [3103, 3104]],
+    );
+  }
+});
+
 test("buildBuildSuggestionResults reports when no rune element crosses the highest-win threshold", () => {
   const aggregated = buildBuildSuggestionResults({
     highestWinPageThresholdPct: 60,

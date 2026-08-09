@@ -8,6 +8,7 @@ const {
   buildLegendaryItemIdSet,
   buildLiveClientRequestOptions,
   buildLiveGameSnapshot,
+  countCompletedLegendaryItems,
   fetchLiveGameSnapshot,
   findLocalPlayerIndex,
   hasCompletedFirstItem,
@@ -193,6 +194,17 @@ test("Legendary completion uses catalog membership and never falls back to price
     false,
   );
   assert.equal(hasCompletedFirstItem([createItem(6655, 3000)]), false);
+  assert.equal(
+    countCompletedLegendaryItems(
+      [
+        createItem(6655, 3000),
+        createItem(3001, 2900, { count: 2 }),
+        createItem(9999, 9999),
+      ],
+      legendaryItemIds,
+    ),
+    3,
+  );
 });
 
 test("Legendary ownership is recalculated after every inventory update", () => {
@@ -207,7 +219,9 @@ test("Legendary ownership is recalculated after every inventory update", () => {
   );
 
   assert.equal(afterBuying[0].hasCompletedFirstItem, true);
+  assert.equal(afterBuying[0].completedLegendaryItemCount, 1);
   assert.equal(afterSellingAll[0].hasCompletedFirstItem, false);
+  assert.equal(afterSellingAll[0].completedLegendaryItemCount, 0);
   assert.equal(afterSellingAll[0].buildGoldRank, 1);
 });
 
@@ -506,11 +520,12 @@ test("buildLiveGameSnapshot reports an unavailable privacy-safe snapshot when lo
     totalPlayerCount: 1,
     resolvedPlayerCount: 0,
     omittedParticipantCount: 1,
+    gameTimeSeconds: null,
   });
   assert.doesNotMatch(JSON.stringify(snapshot), /Someone Else/);
 });
 
-test("fetchLiveGameSnapshot requests both resources with the configured URL and timeout", async () => {
+test("fetchLiveGameSnapshot requests inventory, identity, and optional game-clock resources", async () => {
   const requests = [];
   const requestJson = async (resourcePath, options) => {
     requests.push({ resourcePath, options });
@@ -535,6 +550,9 @@ test("fetchLiveGameSnapshot requests both resources with the configured URL and 
     if (resourcePath === "/liveclientdata/activeplayername") {
       return "Local#NA1";
     }
+    if (resourcePath === "/liveclientdata/gamestats") {
+      return { gameTime: 123.4 };
+    }
     throw new Error(`Unexpected resource: ${resourcePath}`);
   };
 
@@ -553,10 +571,16 @@ test("fetchLiveGameSnapshot requests both resources with the configured URL and 
 
   assert.equal(snapshot.status, "active");
   assert.equal(snapshot.allies[0].hasCompletedFirstItem, true);
+  assert.equal(snapshot.allies[0].completedLegendaryItemCount, 1);
+  assert.equal(snapshot.gameTimeSeconds, 123.4);
   assert.match(snapshot.fetchedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.deepEqual(
     requests.map((request) => request.resourcePath).sort(),
-    ["/liveclientdata/activeplayername", "/liveclientdata/playerlist"],
+    [
+      "/liveclientdata/activeplayername",
+      "/liveclientdata/gamestats",
+      "/liveclientdata/playerlist",
+    ],
   );
   assert.equal(
     requests.every(
@@ -567,6 +591,35 @@ test("fetchLiveGameSnapshot requests both resources with the configured URL and 
     ),
     true,
   );
+});
+
+test("fetchLiveGameSnapshot keeps inventory usable when the game clock is unavailable", async () => {
+  const snapshot = await fetchLiveGameSnapshot({
+    championByName,
+    championBySlug,
+    itemCostById: new Map(),
+    normalizeRole,
+    requestJson: async (resourcePath) => {
+      if (resourcePath === "/liveclientdata/playerlist") {
+        return [
+          {
+            championName: "Ahri",
+            riotId: "Local#NA1",
+            team: "ORDER",
+            position: "MIDDLE",
+            items: [],
+          },
+        ];
+      }
+      if (resourcePath === "/liveclientdata/activeplayername") {
+        return "Local#NA1";
+      }
+      throw new Error("Game stats unavailable");
+    },
+  });
+
+  assert.equal(snapshot.status, "active");
+  assert.equal(snapshot.gameTimeSeconds, null);
 });
 
 test("Live Client Data URL validation permits only credential-free HTTP(S) origins", () => {

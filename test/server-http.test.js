@@ -408,6 +408,12 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
       };
     }
 
+    if (url.pathname === "/liveclientdata/gamestats") {
+      return {
+        body: { gameTime: 126.5 },
+      };
+    }
+
     return {
       status: 404,
       body: {},
@@ -441,6 +447,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
     totalPlayerCount: 10,
     resolvedPlayerCount: 10,
     omittedParticipantCount: 0,
+    gameTimeSeconds: 126.5,
     fetchedAt: firstResponse.body.fetchedAt,
   });
   assert.deepEqual(
@@ -451,6 +458,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         role: player.role,
         buildGold: player.buildGold,
         buildGoldRank: player.buildGoldRank,
+        completedLegendaryItemCount: player.completedLegendaryItemCount,
         hasCompletedFirstItem: player.hasCompletedFirstItem,
         inventoryKnown: player.inventoryKnown,
       })),
@@ -460,6 +468,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         role: "middle",
         buildGold: 2800,
         buildGoldRank: 1,
+        completedLegendaryItemCount: 1,
         hasCompletedFirstItem: true,
         inventoryKnown: true,
       },
@@ -473,6 +482,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         role: player.role,
         buildGold: player.buildGold,
         buildGoldRank: player.buildGoldRank,
+        completedLegendaryItemCount: player.completedLegendaryItemCount,
         hasCompletedFirstItem: player.hasCompletedFirstItem,
         inventoryKnown: player.inventoryKnown,
       })),
@@ -482,6 +492,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
         role: "support",
         buildGold: 300,
         buildGoldRank: 2,
+        completedLegendaryItemCount: 0,
         hasCompletedFirstItem: false,
         inventoryKnown: true,
       },
@@ -504,7 +515,7 @@ test("GET /live-draft returns ranked inventory metrics without exposing raw item
   );
   assert.equal(itemCatalogRequests.length, 1);
   assert.equal(itemCatalogRequests[0].authorization.startsWith("Basic "), true);
-  assert.equal(liveClientRequests.length, 4);
+  assert.equal(liveClientRequests.length, 6);
   assert.equal(liveClientRequests.every((request) => request.authorization === ""), true);
 
   await stopServer(child);
@@ -801,6 +812,7 @@ test("GET /live-draft stays active during the game-start data transition", async
   assert.equal(response.body.liveGame.complete, false);
   await waitForMockRequestPaths(riotClient.requests, [
     "/liveclientdata/activeplayername",
+    "/liveclientdata/gamestats",
     "/liveclientdata/playerlist",
   ]);
   assert.deepEqual(
@@ -808,7 +820,11 @@ test("GET /live-draft stays active during the game-start data transition", async
       .filter((request) => request.pathname.startsWith("/liveclientdata/"))
       .map((request) => request.pathname)
       .sort(),
-    ["/liveclientdata/activeplayername", "/liveclientdata/playerlist"],
+    [
+      "/liveclientdata/activeplayername",
+      "/liveclientdata/gamestats",
+      "/liveclientdata/playerlist",
+    ],
   );
 
   await stopServer(child);

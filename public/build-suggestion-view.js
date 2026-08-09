@@ -101,6 +101,9 @@
       itemRecommendationScopes: normalizeItemRecommendationScopes(
         options?.itemRecommendationScopes,
       ),
+      completedLegendaryItemCount: normalizeCompletedLegendaryItemCount(
+        options?.completedLegendaryItemCount,
+      ),
       runeRecommendationScopes: normalizeRuneRecommendationScopes(
         options?.runeRecommendationScopes,
       ),
@@ -128,6 +131,7 @@
     laneOpponentHighestWinBuild,
     laneOpponentMostPickedBuild,
     itemRecommendationScopes,
+    completedLegendaryItemCount,
     runeRecommendationScopes,
     boots,
     notes,
@@ -199,6 +203,7 @@
           laneOpponentHighestWinBuild,
           laneOpponentMostPickedBuild,
           itemRecommendationScopes,
+          completedLegendaryItemCount,
         })}
       </div>
     `;
@@ -460,6 +465,7 @@
     laneOpponentHighestWinBuild,
     laneOpponentMostPickedBuild,
     itemRecommendationScopes,
+    completedLegendaryItemCount,
   }) {
     const hasItems =
       Array.isArray(highestWinBuild?.selections) || Array.isArray(mostPickedBuild?.selections);
@@ -497,6 +503,7 @@
             ),
             scope: itemRecommendationScopes.highestWin,
             canToggleScope: Boolean(laneOpponentHighestWinBuild),
+            completedLegendaryItemCount,
             emptyMessage: "No highest-win item path was available.",
           })}
           ${renderItemBuildColumn({
@@ -509,6 +516,7 @@
             ),
             scope: itemRecommendationScopes.mostPicked,
             canToggleScope: Boolean(laneOpponentMostPickedBuild),
+            completedLegendaryItemCount,
             emptyMessage: "No most-picked item path was available.",
           })}
         </div>
@@ -522,6 +530,7 @@
     build,
     scope,
     canToggleScope,
+    completedLegendaryItemCount,
     emptyMessage,
   }) {
     const selections = getOrderedSelections(build?.selections);
@@ -550,7 +559,13 @@
       <section class="build-item-column build-item-column--${escapeAttribute(tone)}">
         ${header}
         <div class="build-item-list">
-          ${selections.map((selection, index) => renderItemCard(selection, index + 1)).join("")}
+          ${selections
+            .map((selection, index) =>
+              renderItemCard(selection, index + 1, {
+                completed: index < completedLegendaryItemCount,
+              }),
+            )
+            .join("")}
         </div>
       </section>
     `;
@@ -561,6 +576,11 @@
       highestWin: normalizeItemRecommendationScope(scopes?.highestWin),
       mostPicked: normalizeItemRecommendationScope(scopes?.mostPicked),
     };
+  }
+
+  function normalizeCompletedLegendaryItemCount(value) {
+    const count = Number(value);
+    return Number.isInteger(count) && count > 0 ? Math.min(count, 5) : 0;
   }
 
   function buildRuneRecommendationColumns({
@@ -807,11 +827,36 @@
     `;
   }
 
-  function renderItemCard(selection, orderNumber) {
+  function renderItemCard(selection, orderNumber, { completed = false } = {}) {
+    const alternative = selection?.alternative || null;
+    const itemNames = [selection?.name, alternative?.name].filter(Boolean);
+    const completionDescription = completed ? "Completed build row. " : "";
+
     return `
-      <article class="build-item-card" title="${escapeAttribute(selection?.name || "Item")}">
+      <article
+        class="build-item-card${completed ? " build-item-card--completed" : ""}"
+        title="${escapeAttribute(itemNames.join(" or ") || "Item")}"
+        aria-label="${escapeAttribute(
+          `${completionDescription}Build row ${orderNumber}: ${itemNames.join(" or ") || "unknown item"}.`,
+        )}"
+      >
+        <span class="build-item-card-order" aria-hidden="true">${escapeHtml(String(orderNumber))}</span>
+        <div class="build-item-card-options">
+          ${renderItemCardOption(selection, "A")}
+          ${
+            alternative
+              ? `<span class="build-item-card-or" aria-hidden="true">or</span>${renderItemCardOption(alternative, "B")}`
+              : ""
+          }
+        </div>
+      </article>
+    `;
+  }
+
+  function renderItemCardOption(selection, optionLabel) {
+    return `
+      <div class="build-item-card-option">
         <div class="build-item-card-media">
-          <span class="build-item-card-order">${escapeHtml(String(orderNumber))}</span>
           <img
             src="${escapeAttribute(selection?.icon || "")}"
             alt="${escapeAttribute(selection?.name || "Item")}"
@@ -820,14 +865,14 @@
           />
         </div>
         <div class="build-item-card-copy">
-          <strong>${escapeHtml(selection?.name || "Unknown")}</strong>
+          <strong><span class="sr-only">Option ${escapeHtml(optionLabel)}: </span>${escapeHtml(selection?.name || "Unknown")}</strong>
           <div class="build-item-card-stats">
             ${renderItemCardStat(formatPercent(selection?.winRate), "win", selection?.winRate)}
             ${renderItemCardStat(formatPercent(selection?.pickRate), "pick")}
             ${renderItemCardStat(formatMinute(selection?.purchaseMinute), "minute")}
           </div>
         </div>
-      </article>
+      </div>
     `;
   }
 

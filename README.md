@@ -33,7 +33,9 @@ The app supports at most five champions per team and never allows the same champ
 
 Rune pages are assembled element by element from the selected matchups. Automatic enemy lanes are unique and favor the champion with the higher lane probability; manual lane choices may duplicate. Bot and Support share a lane for weighting and lane-only builds.
 
-The **Counter Filter** selects which enemy matchups feed every build section. Removing the final portrait or clicking × restores all enemies. Highest-win and most-picked rune and item columns can switch independently between all enemies and lane opponents.
+The **Counter Filter** selects which enemy matchups feed every build section. Removing the final portrait or clicking × restores all enemies. Its hover toolbar can be horizontal or vertical; that orientation is saved locally and reused after closing the popup, for other champions, and in future games. In vertical mode, the reserved left rail shows the gold coin, enemy total, and ally total on separate rows without a colon. Highest-win and most-picked rune and item columns can switch independently between all enemies and lane opponents.
+
+Highest Win and Most Picked item paths remain five rows each. A row shows its primary item as option A and, when available, one unique runner-up as option B, for up to ten items per path without enlarging the popup. As the selected ally completes Legendary items, the first matching number of rows is greyed in both paths.
 
 ### Scores
 
@@ -54,15 +56,15 @@ During bans, the app shows one recommendation for each role:
 1. Counter the allied hover in that role when valid counter data exists.
 2. Otherwise use the role's highest eligible PBI champion.
 
-Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end. During a game, Auto Import replaces speculative picks with live participants and refreshes build-gold ranks every 15 seconds. Hidden enemies retain their last observed inventory value.
+Recommendations exclude allied pick intents, locked picks, and completed bans. The panel clears when bans end. During a game, Auto Import replaces speculative picks with live participants and refreshes item values and build-gold ranks near each 10-second mark of the in-game clock. A lightweight status check still runs every three seconds. Hidden enemies retain their last observed inventory value.
 
-The build popup also applies a live Counter Filter on each 15-second refresh:
+The build popup also applies a live Counter Filter on each complete live-game refresh:
 
 - Before the selected ally owns a Legendary item, non-Junglers include only same-lane enemies; Junglers include all enemies.
 - After the selected ally owns a Legendary item, only enemies ranked 1 through 5 in global build gold are included.
 - If no enemy is in that global top five, all enemies are included.
 
-Manual portrait changes last until the next live refresh. Unsupported queues and terminal game phases disable Auto Import without clearing manual picks; transitions and transient read failures retry.
+Manual portrait changes last until the next full live refresh. After a disconnect or game end, the popup keeps the last complete team item-gold totals and player ranks until an enemy champion-composition change or a new champion-select/live-game session invalidates them. Unsupported queues and terminal game phases disable Auto Import without clearing manual picks; transitions and transient read failures retry.
 
 Every build-popup request starts at Master+ and requires data for every enemy included by the Counter Filter, regardless of Auto Import status. If any included matchup is blank, PickBan retries the complete set at each lower rank tier until all included enemies succeed or All Ranks is reached. The popup shows the effective fallback tier when one is used.
 

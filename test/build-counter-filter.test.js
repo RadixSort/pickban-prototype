@@ -296,6 +296,13 @@ test("highest-ranked enemy uses the best enemy global rank, even when an ally is
     }),
     "",
   );
+  assert.equal(
+    resolveHighestRankedEnemyChampionKey(enemies, {
+      liveGameActive: false,
+      liveGameComplete: true,
+    }),
+    "799",
+  );
 });
 
 test("automatic filtering falls back to all enemies when live-game data is inactive or incomplete", () => {
@@ -391,7 +398,7 @@ test("automatic top-half filtering silently restores all enemies when none rank 
   );
 });
 
-test("build-gold ranks are visible only for complete live snapshots", () => {
+test("build-gold ranks remain visible for retained complete snapshots", () => {
   assert.equal(
     resolveVisibleBuildGoldRank(4, {
       liveGameActive: true,
@@ -411,7 +418,7 @@ test("build-gold ranks are visible only for complete live snapshots", () => {
       liveGameActive: false,
       liveGameComplete: true,
     }),
-    null,
+    4,
   );
 });
 
@@ -430,7 +437,7 @@ test("team build-gold scoreboard sums every player in a complete live snapshot",
   );
 });
 
-test("team build-gold scoreboard suppresses stale values without complete live data", () => {
+test("team build-gold scoreboard retains values after a complete live snapshot disconnects", () => {
   const allies = [{ buildGold: 12345 }];
   const enemies = [{ buildGold: 9876 }];
   const unavailable = {
@@ -444,7 +451,11 @@ test("team build-gold scoreboard suppresses stale values without complete live d
       liveGameActive: false,
       liveGameComplete: true,
     }),
-    unavailable,
+    {
+      available: true,
+      allyBuildGold: 12345,
+      enemyBuildGold: 9876,
+    },
   );
   assert.deepEqual(
     resolveBuildGoldScoreboard(allies, enemies, {

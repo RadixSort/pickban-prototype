@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 
 const champions = require("../public/champions.json");
 const {
@@ -8,10 +11,18 @@ const {
 const {
   buildLiveDraftImport,
   detectChampSelectPhase,
+  fetchLiveDraftImport,
   parseLeagueClientLockfile,
 } = require("../lib/riot-live-draft.js");
 
 const championByKey = new Map(champions.map((champion) => [String(champion.key), champion]));
+
+async function createMockLockfile() {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pickban-live-draft-lockfile-"));
+  const lockfilePath = path.join(directory, "lockfile");
+  await fs.writeFile(lockfilePath, "LeagueClientUx:1234:54321:secret:http", "utf8");
+  return lockfilePath;
+}
 
 test("parseLeagueClientLockfile extracts local League Client credentials", () => {
   assert.deepEqual(parseLeagueClientLockfile("LeagueClientUx:1234:54321:secret:https"), {
@@ -19,6 +30,81 @@ test("parseLeagueClientLockfile extracts local League Client credentials", () =>
     port: 54321,
     protocol: "https",
   });
+});
+
+test("live-game imports expose the game clock and completed Legendary count", async () => {
+  const lockfilePath = await createMockLockfile();
+  const payload = await fetchLiveDraftImport({
+    championByKey,
+    championByName: new Map(),
+    championBySlug: new Map(),
+    env: {
+      PICKBAN_RIOT_LOCKFILE_PATH: lockfilePath,
+    },
+    fetchLiveSnapshot: async () => ({
+      active: true,
+      complete: true,
+      metricsComplete: true,
+      fetchedAt: "2026-08-08T12:00:00.000Z",
+      gameTimeSeconds: 321.5,
+      totalPlayerCount: 2,
+      resolvedPlayerCount: 2,
+      omittedParticipantCount: 0,
+      allies: [
+        {
+          champion: "Ahri",
+          championKey: "103",
+          championId: "ahri",
+          icon: "https://example.test/ahri.webp",
+          role: "middle",
+          isLocalPlayer: true,
+          buildGold: 6000,
+          buildGoldRank: 1,
+          inventoryKnown: true,
+          completedLegendaryItemCount: 2,
+          hasCompletedFirstItem: true,
+        },
+      ],
+      enemies: [
+        {
+          champion: "Leona",
+          championKey: "89",
+          championId: "leona",
+          icon: "https://example.test/leona.webp",
+          role: "support",
+          isLocalPlayer: false,
+          buildGold: 2500,
+          buildGoldRank: 2,
+          inventoryKnown: true,
+          completedLegendaryItemCount: 0,
+          hasCompletedFirstItem: false,
+        },
+      ],
+    }),
+    normalizeRole,
+    platform: "darwin",
+    requestJson: async (_credentials, resourcePath) => {
+      if (resourcePath === "/lol-gameflow/v1/session") {
+        return {
+          phase: "InProgress",
+          gameData: {
+            gameId: 9876,
+            queue: { id: 0 },
+          },
+        };
+      }
+      if (resourcePath === "/lol-game-data/assets/v1/items.json") {
+        return [{ id: 6655, priceTotal: 3000, tier: "Legendary", inStore: true }];
+      }
+      throw new Error(`Unexpected resource: ${resourcePath}`);
+    },
+  });
+
+  assert.equal(payload.source, "live_game");
+  assert.equal(payload.liveGame.gameTimeSeconds, 321.5);
+  assert.equal(payload.allies[0].completedLegendaryItemCount, 2);
+  assert.equal(payload.allies[0].hasCompletedFirstItem, true);
+  assert.equal(payload.enemies[0].completedLegendaryItemCount, 0);
 });
 
 test("buildLiveDraftImport returns visible champ-select picks and the local assigned role", () => {

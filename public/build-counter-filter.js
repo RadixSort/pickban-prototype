@@ -213,11 +213,9 @@
 
   function resolveVisibleBuildGoldRank(
     value,
-    { liveGameActive = false, liveGameComplete = false } = {},
+    { liveGameComplete = false } = {},
   ) {
-    return liveGameActive === true && liveGameComplete === true
-      ? normalizeBuildGoldRank(value)
-      : null;
+    return liveGameComplete === true ? normalizeBuildGoldRank(value) : null;
   }
 
   /**
@@ -226,10 +224,9 @@
    */
   function resolveHighestRankedEnemyChampionKey(
     enemies = [],
-    { liveGameActive = false, liveGameComplete = false } = {},
+    { liveGameComplete = false } = {},
   ) {
     if (
-      liveGameActive !== true ||
       liveGameComplete !== true ||
       !Array.isArray(enemies) ||
       enemies.length === 0
@@ -257,15 +254,14 @@
   }
 
   /**
-   * Team build-gold totals are meaningful only when the browser has a complete
-   * live snapshot. Requiring a valid value for every roster participant also
-   * prevents stale metrics copied onto draft selections from leaking into the
-   * scoreboard during a game transition.
+   * Team build-gold totals are meaningful only after the browser has a complete
+   * live snapshot. That completeness remains true for a retained, disconnected
+   * snapshot until a roster invalidation explicitly clears it.
    */
   function resolveBuildGoldScoreboard(
     allies = [],
     enemies = [],
-    { liveGameActive = false, liveGameComplete = false } = {},
+    { liveGameComplete = false } = {},
   ) {
     const unavailable = {
       available: false,
@@ -274,7 +270,6 @@
     };
 
     if (
-      liveGameActive !== true ||
       liveGameComplete !== true ||
       !Array.isArray(allies) ||
       !Array.isArray(enemies) ||
@@ -322,6 +317,7 @@
     filterBuildCounterEnemies,
     formatBuildGoldThousands,
     normalizeBuildCounterFilterOrientation,
+    normalizeBuildGoldRank,
     resolveBuildGoldScoreboard,
     resolveAutomaticBuildCounterFilter,
     resolveHighestRankedEnemyChampionKey,

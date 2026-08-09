@@ -10,6 +10,7 @@ const {
   filterBuildCounterEnemies,
   formatBuildGoldThousands,
   normalizeBuildCounterFilterOrientation,
+  normalizeBuildGoldRank,
   resolveBuildGoldScoreboard,
   resolveAutomaticBuildCounterFilter,
   resolveHighestRankedEnemyChampionKey,
@@ -19,8 +20,14 @@ const {
 } = globalThis.buildCounterFilter;
 const {
   createInitialLiveGameState,
+  invalidateLiveGameStateIfEnemyCompositionChanged,
+  invalidateLiveGameStateIfSessionChanged,
+  markLiveGameDisconnected,
   reconcileLiveGameState,
 } = globalThis.liveGameState;
+const {
+  resolveLiveGamePollDelayMs,
+} = globalThis.liveGamePoll;
 const {
   completeBanSuggestionRequest,
   createInitialBanSuggestionState,
@@ -106,6 +113,8 @@ const {
 const LANE_OPPONENT_WEIGHTS = getLaneOpponentWeightOptions().map(
   (option) => option.value,
 );
+const BUILD_COUNTER_FILTER_ORIENTATION_STORAGE_KEY =
+  "pickban.buildCounterFilterOrientation";
 
 const state = {
   champions: [],
@@ -120,7 +129,7 @@ const state = {
   shuttingDown: false,
   canShutdown: false,
   shutdownToken: "",
-  version: "0.8.4",
+  version: "",
   resultsCache: {},
   selectedResultRole: DEFAULT_TARGET_ROLE,
   skillLevelSortMode: DEFAULT_SORT_MODE,
@@ -134,13 +143,13 @@ const state = {
   banSuggestionRequestsByKey: {},
   buildSuggestionCache: {},
   buildSuggestionRequestsByKey: {},
+  buildCounterFilterOrientation: loadBuildCounterFilterOrientation(),
   buildSuggestionModal: createInitialBuildSuggestionModalState(),
   lolalyticsDataWindowDays: 30,
   lolalyticsLifetimeAccessCount: 0,
 };
 
 const AUTO_IMPORT_POLL_INTERVAL_MS = 3000;
-const LIVE_GAME_POLL_INTERVAL_MS = 15 * 1000;
 const LOW_PROJECTED_WIN_RATE = 50;
 
 const limits = {
@@ -192,6 +201,7 @@ const sortSelect = document.getElementById("results-sort");
 const sortControl = document.getElementById("results-sort-control");
 const draftProjectionWrap = document.getElementById("draft-projection-wrap");
 const versionText = document.getElementById("app-version");
+const versionBadge = document.getElementById("app-version-badge");
 const buildSuggestionModal = document.getElementById("build-suggestion-modal");
 const buildSuggestionDialog = document.getElementById("build-suggestion-dialog");
 const buildSuggestionBackdrop = document.getElementById("build-suggestion-backdrop");
@@ -703,6 +713,44 @@ function createInitialBuildSuggestionModalState() {
   };
 }
 
+function loadBuildCounterFilterOrientation() {
+  try {
+    return normalizeBuildCounterFilterOrientation(
+      window.localStorage.getItem(BUILD_COUNTER_FILTER_ORIENTATION_STORAGE_KEY),
+    );
+  } catch (_error) {
+    return DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION;
+  }
+}
+
+function saveBuildCounterFilterOrientation(orientation) {
+  try {
+    window.localStorage.setItem(
+      BUILD_COUNTER_FILTER_ORIENTATION_STORAGE_KEY,
+      normalizeBuildCounterFilterOrientation(orientation),
+    );
+  } catch (_error) {
+    // The in-memory preference still lasts for the current app session.
+  }
+}
+
+function applyBuildCounterFilterSelection(
+  modalState,
+  {
+    automaticFilterApplied = false,
+    automaticFilterReason = "",
+    counterFilterMode = "automatic",
+    selectedCounterChampionKeys = [],
+  } = {},
+) {
+  modalState.selectedCounterChampionKeys = (
+    Array.isArray(selectedCounterChampionKeys) ? selectedCounterChampionKeys : []
+  ).map(String);
+  modalState.counterFilterMode = counterFilterMode;
+  modalState.automaticFilterApplied = automaticFilterApplied;
+  modalState.automaticFilterReason = automaticFilterReason;
+}
+
 function createDefaultItemRecommendationScopes() {
   return {
     highestWin: DEFAULT_ITEM_RECOMMENDATION_SCOPE,
@@ -749,6 +797,12 @@ function getLiveGameParticipant(selection) {
   return championKey ? state.liveGame.playersByChampionKey[championKey] || null : null;
 }
 
+function getLiveGameParticipants(championKeys = []) {
+  return (Array.isArray(championKeys) ? championKeys : []).map(
+    (championKey) => state.liveGame.playersByChampionKey[String(championKey)] || null,
+  );
+}
+
 function mergeLiveGameParticipant(selection) {
   const liveParticipant = getLiveGameParticipant(selection);
   if (!liveParticipant) {
@@ -773,11 +827,6 @@ function mergeLiveGameParticipantForAutomaticFilter(selection) {
     ...liveParticipant,
     role: normalizeRole(liveParticipant.role) || "",
   };
-}
-
-function normalizeBuildGoldRank(value) {
-  const rank = Number(value);
-  return Number.isInteger(rank) && rank >= 1 && rank <= 10 ? rank : null;
 }
 
 function getVisibleBuildGoldRank(participant) {
@@ -857,7 +906,7 @@ async function handleOpenBuildSuggestions(allyId) {
     enemies: enemySelections,
     selectedCounterChampionKeys: automaticFilter.selectedChampionKeys,
     counterFilterMode: "automatic",
-    counterFilterOrientation: DEFAULT_BUILD_COUNTER_FILTER_ORIENTATION,
+    counterFilterOrientation: state.buildCounterFilterOrientation,
     automaticFilterApplied: automaticFilter.applied,
     automaticFilterReason: automaticFilter.reason,
     payload: cachedPayload,
@@ -990,14 +1039,14 @@ function handleBuildCounterFilterToggle(championKey) {
     return;
   }
 
-  modalState.selectedCounterChampionKeys = toggleBuildCounterFilter(
-    modalState.selectedCounterChampionKeys,
-    championKey,
-    modalState.enemies.map((enemy) => enemy.key),
-  );
-  modalState.counterFilterMode = "manual";
-  modalState.automaticFilterApplied = false;
-  modalState.automaticFilterReason = "";
+  applyBuildCounterFilterSelection(modalState, {
+    counterFilterMode: "manual",
+    selectedCounterChampionKeys: toggleBuildCounterFilter(
+      modalState.selectedCounterChampionKeys,
+      championKey,
+      modalState.enemies.map((enemy) => enemy.key),
+    ),
+  });
   void loadBuildSuggestionForCurrentCounterFilter();
 }
 
@@ -1006,11 +1055,12 @@ function handleClearBuildCounterFilter() {
     return;
   }
 
-  state.buildSuggestionModal.selectedCounterChampionKeys =
-    state.buildSuggestionModal.enemies.map((enemy) => String(enemy.key));
-  state.buildSuggestionModal.counterFilterMode = "manual";
-  state.buildSuggestionModal.automaticFilterApplied = false;
-  state.buildSuggestionModal.automaticFilterReason = "";
+  applyBuildCounterFilterSelection(state.buildSuggestionModal, {
+    counterFilterMode: "manual",
+    selectedCounterChampionKeys: state.buildSuggestionModal.enemies.map(
+      (enemy) => enemy.key,
+    ),
+  });
   void loadBuildSuggestionForCurrentCounterFilter();
 }
 
@@ -1023,6 +1073,8 @@ function handleBuildCounterFilterOrientationToggle() {
   modalState.counterFilterOrientation = toggleBuildCounterFilterOrientation(
     modalState.counterFilterOrientation,
   );
+  state.buildCounterFilterOrientation = modalState.counterFilterOrientation;
+  saveBuildCounterFilterOrientation(state.buildCounterFilterOrientation);
   renderBuildSuggestionModal();
 }
 
@@ -1117,6 +1169,9 @@ async function addChampion(side, championId) {
 
   const selectedChampion = createSelectedChampion(champion, side);
   state[side].push(selectedChampion);
+  if (side === "enemies") {
+    invalidateLiveGameMetricsForCurrentEnemyComposition();
+  }
 
   let roleLikelihoodsByRole = null;
   if (side === "allies" || side === "enemies") {
@@ -1170,6 +1225,7 @@ function removeChampion(side, championId) {
 
   state[side] = state[side].filter((champion) => champion.id !== championId);
   if (side === "enemies") {
+    invalidateLiveGameMetricsForCurrentEnemyComposition();
     applyAutomaticEnemyRoleAssignments();
   }
   closeBuildSuggestionModal();
@@ -1549,6 +1605,10 @@ async function handleLiveDraftImportPayload(payload) {
 
   let shouldRefreshSuggestions = false;
   if (state.autoImport.source === "transition") {
+    state.liveGame = invalidateLiveGameStateIfSessionChanged(
+      state.liveGame,
+      state.autoImport.sessionId,
+    );
     return;
   }
 
@@ -1562,7 +1622,7 @@ async function handleLiveDraftImportPayload(payload) {
     });
     state.autoImport.lastAppliedSignature = nextSignature;
     await ensureEnemyRoleAssignmentsLoaded();
-    await refreshBuildSuggestionAutomaticFilter();
+    void refreshBuildSuggestionAutomaticFilter();
   } else {
     state.liveGame = createInitialLiveGameState();
     const draftChanged = Boolean(
@@ -1598,6 +1658,13 @@ function applyLiveGameState(payload) {
   state.liveGame = reconcileLiveGameState(state.liveGame, payload, { normalizeRole });
 }
 
+function invalidateLiveGameMetricsForCurrentEnemyComposition() {
+  state.liveGame = invalidateLiveGameStateIfEnemyCompositionChanged(
+    state.liveGame,
+    state.enemies,
+  );
+}
+
 async function refreshBuildSuggestionAutomaticFilter() {
   const modalState = state.buildSuggestionModal;
   if (!modalState.open) {
@@ -1615,10 +1682,11 @@ async function refreshBuildSuggestionAutomaticFilter() {
     ally,
     modalState.enemies,
   );
-  modalState.selectedCounterChampionKeys = automaticFilter.selectedChampionKeys;
-  modalState.counterFilterMode = "automatic";
-  modalState.automaticFilterApplied = automaticFilter.applied;
-  modalState.automaticFilterReason = automaticFilter.reason;
+  applyBuildCounterFilterSelection(modalState, {
+    automaticFilterApplied: automaticFilter.applied,
+    automaticFilterReason: automaticFilter.reason || "",
+    selectedCounterChampionKeys: automaticFilter.selectedChampionKeys,
+  });
   await loadBuildSuggestionForCurrentCounterFilter();
 }
 
@@ -1729,6 +1797,7 @@ function applyLiveDraftImport(
 
   state.allies = trimLiveDraftSelectionsToLimit(state.allies, limits.allies);
   state.enemies = trimLiveDraftSelectionsToLimit(state.enemies, limits.enemies);
+  invalidateLiveGameMetricsForCurrentEnemyComposition();
   clearManualRolesConflictingWithLiveRoles();
   const nextSuggestionCacheKey = getCurrentSuggestionCacheKey();
   const didChangeSuggestionDraft = nextSuggestionCacheKey !== previousSuggestionCacheKey;
@@ -1945,13 +2014,13 @@ function disableAutoImport(reason, message) {
   state.autoImport.reason = reason;
   state.autoImport.sessionId = "";
   state.autoImport.unavailableChampionKeys = [];
-  state.liveGame = createInitialLiveGameState();
+  state.liveGame = markLiveGameDisconnected(state.liveGame);
   if (state.buildSuggestionModal.open) {
-    state.buildSuggestionModal.selectedCounterChampionKeys =
-      state.buildSuggestionModal.enemies.map((enemy) => String(enemy.key));
-    state.buildSuggestionModal.counterFilterMode = "automatic";
-    state.buildSuggestionModal.automaticFilterApplied = false;
-    state.buildSuggestionModal.automaticFilterReason = "";
+    applyBuildCounterFilterSelection(state.buildSuggestionModal, {
+      selectedCounterChampionKeys: state.buildSuggestionModal.enemies.map(
+        (enemy) => enemy.key,
+      ),
+    });
     void loadBuildSuggestionForCurrentCounterFilter();
   }
   state.banSuggestions = reconcileBanSuggestionState(state.banSuggestions, {
@@ -1968,14 +2037,13 @@ function scheduleAutoImportPoll() {
 
   const useLiveGameCadence =
     state.autoImport.source === "live_game" && state.liveGame.rosterComplete;
-  const intervalMs = useLiveGameCadence
-    ? LIVE_GAME_POLL_INTERVAL_MS
+  const delayMs = useLiveGameCadence
+    ? resolveLiveGamePollDelayMs({
+        fetchedAt: state.liveGame.fetchedAt,
+        gameTimeSeconds: state.liveGame.gameTimeSeconds,
+        lastPollStartedAt: state.autoImport.lastPollStartedAt,
+      })
     : AUTO_IMPORT_POLL_INTERVAL_MS;
-  const elapsedMs =
-    useLiveGameCadence && state.autoImport.lastPollStartedAt > 0
-      ? Date.now() - state.autoImport.lastPollStartedAt
-      : 0;
-  const delayMs = Math.max(250, intervalMs - elapsedMs);
 
   state.autoImport.timerId = window.setTimeout(pollLiveDraftImport, delayMs);
   if (useLiveGameCadence) {
@@ -2159,6 +2227,7 @@ function handleResetDraft() {
 
   state.allies = [];
   state.enemies = [];
+  invalidateLiveGameMetricsForCurrentEnemyComposition();
   selectResultRole(DEFAULT_TARGET_ROLE);
   state.autoImport.lastAppliedSignature = "";
   pickers.allies.input.value = "";
@@ -2311,6 +2380,10 @@ function renderBuildSuggestionModal() {
     "build-counter-filter-orientation-toggle--vertical",
     counterFilterIsVertical,
   );
+  buildSuggestionScroll.classList.toggle(
+    "build-modal-scroll--counter-filter-vertical",
+    counterFilterIsVertical,
+  );
   buildSuggestionCounterFilterOrientationButton.setAttribute(
     "aria-label",
     counterFilterOrientationLabel,
@@ -2414,6 +2487,8 @@ function renderBuildSuggestionModal() {
       : modalState.error && !payload
         ? '<div class="build-empty-state">The build recommendation request failed.</div>'
         : renderBuildSuggestionBody(payload, modalState.activeTab, {
+            completedLegendaryItemCount:
+              displayedAlly?.completedLegendaryItemCount,
             itemRecommendationScopes: modalState.itemRecommendationScopes,
             runeRecommendationScopes: modalState.runeRecommendationScopes,
             runeImportStatesByPageKey: modalState.runeImportStatesByPageKey,
@@ -2441,14 +2516,14 @@ function renderBuildSuggestionCounterFilter(modalState) {
     liveGameVisibility,
   );
   const buildGoldScoreboard = resolveBuildGoldScoreboard(
-    state.allies.map(getLiveGameParticipant),
-    state.enemies.map(getLiveGameParticipant),
+    getLiveGameParticipants(state.liveGame.allyChampionKeys),
+    getLiveGameParticipants(state.liveGame.enemyChampionKeys),
     liveGameVisibility,
   );
   const allyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.allyBuildGold);
   const enemyBuildGold = formatBuildGoldThousands(buildGoldScoreboard.enemyBuildGold);
   const buildGoldScoreboardLabel = buildGoldScoreboard.available
-    ? `Team build gold. Enemies ${enemyBuildGold}; allies ${allyBuildGold}.`
+    ? `${state.liveGame.active ? "Team" : "Last known team"} item gold. Enemies ${enemyBuildGold}; allies ${allyBuildGold}.`
     : `Team build gold unavailable. Enemies ${enemyBuildGold}; allies ${allyBuildGold}.`;
   const availableKeys = enemies.map((enemy) => String(enemy.key));
   const availableKeySet = new Set(availableKeys);
@@ -2541,6 +2616,10 @@ function renderBuildSuggestionCounterFilter(modalState) {
       <div
         class="build-team-gold-scoreboard${
           buildGoldScoreboard.available ? "" : " build-team-gold-scoreboard--unavailable"
+        }${
+          buildGoldScoreboard.available && !state.liveGame.active
+            ? " build-team-gold-scoreboard--retained"
+            : ""
         }"
         role="group"
         aria-label="${escapeHtml(buildGoldScoreboardLabel)}"
@@ -3614,7 +3693,9 @@ function setLoading(loading) {
 }
 
 function renderVersion() {
-  versionText.textContent = formatVersion(state.version);
+  const hasVersion = Boolean(state.version);
+  versionText.textContent = hasVersion ? formatVersion(state.version) : "";
+  versionBadge.classList.toggle("hidden", !hasVersion);
 }
 
 function setError(message) {
